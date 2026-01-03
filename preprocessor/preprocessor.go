@@ -2,7 +2,6 @@ package preprocessor
 
 import (
 	"os"
-	"strings"
 	"zane/types"
 )
 
@@ -14,7 +13,7 @@ func NewFile(filename string) (* types.File, error) {
 
 	return &types.File {
 		Name:   filename,
-		Buffer: strings.Split(string(content), "\n"),
+		Buffer: string(content),
 	}, nil
 }
 

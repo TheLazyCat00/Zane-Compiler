@@ -5,7 +5,7 @@ import (
 	"os"
 	"zane/preprocessor"
     "zane/lexer"
-    "zane/parser"
+    // "zane/parser"
 )
 
 func main() {
@@ -24,9 +24,10 @@ func main() {
 
 	// Lexer
 	tokens := lexer.Tokenize(file.Buffer)
+	print(tokens)
 
 	// Parser
-	ast := parser.Parse(tokens)
+	// ast := parser.Parse(tokens)
 
 	// Do something with AST...
 }

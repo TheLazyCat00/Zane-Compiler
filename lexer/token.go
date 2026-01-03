@@ -2,28 +2,20 @@ package lexer
 
 import (
 	"fmt"
-	"strings"
 )
 
 type TokenType int
 
 const (
 	UNDETERMINED TokenType = iota
+	EOF
 
 	IDENTIFIER
 	NUMBER
 	STRING
 
-	PLUS
-	MINUS
-	STAR
-	SLASH
 	EQUAL
-	EQUALEQUAL
-	BANG
-	BANGEQUAL
-	LESS
-	GREATER
+	EQUALGREATERBANG
 	EQUALGREATER
 
 	LPAREN
@@ -42,30 +34,18 @@ const (
 	UNIT
 	AS
 	MAP
-
-	IRRELEVANT
 )
 
 type Token struct {
-	Type    TokenType
-	Value   string
-	Line    int
-	Column  int
+	Type   TokenType
+	Value  string
+	Line   int
+	Column int
 }
 
-
 var stringToToken = map[string]TokenType{
-	// Operators
-	"+":  PLUS,
-	"-":  MINUS,
-	"*":  STAR,
-	"/":  SLASH,
 	"=":  EQUAL,
-	"==": EQUALEQUAL,
-	"!":  BANG,
-	"!=": BANGEQUAL,
-	"<":  LESS,
-	">":  GREATER,
+	"=>!": EQUALGREATERBANG,
 	"=>": EQUALGREATER,
 
 	// Delimiters
@@ -77,28 +57,45 @@ var stringToToken = map[string]TokenType{
 	":": COLON,
 
 	// Keywords
-	"if":     IF,
-	"else":   ELSE,
+	"if":      IF,
+	"else":    ELSE,
 	"returns": RETURNS,
-	"struct": STRUCT,
-	"class": CLASS,
+	"struct":  STRUCT,
+	"class":   CLASS,
 	"generic": GENERIC,
-	"unit": UNIT,
-	"as": AS,
-	"map": MAP,
+	"unit":    UNIT,
+	"as":      AS,
+	"map":     MAP,
 }
 
-// Map from TokenType back to string (useful for debugging)
 var tokenToString = map[TokenType]string{}
 
 func init() {
-	// Automatically populate the reverse map to stay DRY
 	for s, t := range stringToToken {
 		tokenToString[t] = s
 	}
+	tokenToString[IDENTIFIER] = "IDENTIFIER"
+	tokenToString[NUMBER] = "NUMBER"
+	tokenToString[STRING] = "STRING"
+	tokenToString[EOF] = "EOF"
+	tokenToString[UNDETERMINED] = "UNDETERMINED"
 }
 
-// String allows fmt.Println(tokenType) to print the name instead of a number
+var delimiters []TokenType = []TokenType {
+	LPAREN,
+	RPAREN,
+	LBRACE,
+	RBRACE,
+	COMMA,
+	COLON,
+}
+
+var builtIns []TokenType = []TokenType {
+	EQUAL,
+	EQUALGREATER,
+	EQUALGREATERBANG,
+}
+
 func (t TokenType) String() string {
 	if s, ok := tokenToString[t]; ok {
 		return s
@@ -106,23 +103,9 @@ func (t TokenType) String() string {
 	return fmt.Sprintf("TokenType(%d)", t)
 }
 
-// LookupIdentifier checks if a string is a keyword; if not, it's an IDENTIFIER
 func LookupIdentifier(ident string) TokenType {
 	if tok, ok := stringToToken[ident]; ok {
 		return tok
 	}
 	return IDENTIFIER
-}
-
-func IsPossiblePrefix(window string) bool {
-	if window == "" {
-		return false
-	}
-
-	for key := range stringToToken {
-		if strings.HasPrefix(key, window) {
-			return true
-		}
-	}
-	return false
 }
