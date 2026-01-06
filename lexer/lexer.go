@@ -114,10 +114,10 @@ func (l *Lexer) scanString() {
 }
 
 func (l * Lexer) isBuiltIn(c string) bool {
+	index := 1
 	for _, builtIn := range builtIns {
 		stringRepresentation := tokenToString[builtIn]
 		if strings.HasPrefix(stringRepresentation, c) {
-			return 
 		}
 	}
 	return false
@@ -139,11 +139,7 @@ func (l *Lexer) peek() byte {
 	return l.source[l.current]
 }
 
-func (l * Lexer) peekPositions(positions int) byte {
-	if l.current + positions >= len(l.source) {
-		return 0
-	}
-	return l.source[l.current + positions]
+func (l * Lexer) peekTo(position int) byte {
 }
 
 func (l *Lexer) peekNext() byte {

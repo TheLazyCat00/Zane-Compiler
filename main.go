@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"os"
 	"zane/preprocessor"
-    "zane/lexer"
-    // "zane/parser"
+	"zane/lexer"
+	// "zane/parser"
 )
 
 func main() {
