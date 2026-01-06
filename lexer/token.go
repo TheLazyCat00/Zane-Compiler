@@ -43,6 +43,13 @@ type Token struct {
 	Column int
 }
 
+func (t Token) String() string {
+	if t.Value != "" {
+		return fmt.Sprintf("%s(%q) @ %d:%d", t.Type, t.Value, t.Line, t.Column)
+	}
+	return fmt.Sprintf("%s @ %d:%d", t.Type, t.Line, t.Column)
+}
+
 var stringToToken = map[string]TokenType{
 	"=":  EQUAL,
 	"=>!": EQUALGREATERBANG,

@@ -1,7 +1,6 @@
 package lexer
 
 import (
-	"strings"
 	"unicode"
 )
 
@@ -18,14 +17,14 @@ func Tokenize(buffer string) []Token {
 	l := &Lexer{
 		source: buffer,
 		line:   1,
-		column: 1,
+		column:  1,
 	}
 	return l.scan()
 }
 
 func (l *Lexer) scan() []Token {
 	for !l.isAtEnd() {
-		l.start = l.current
+		l.start = l. current
 		l.scanToken()
 	}
 	l.tokens = append(l.tokens, Token{Type: EOF, Line: l.line, Column: l.column})
@@ -37,13 +36,13 @@ func (l *Lexer) scanToken() {
 	cRune := rune(c)
 	cString := string(c)
 	
-	if unicode.IsSpace(cRune) {
-		return
-	}
-
 	if c == '\n' {
 		l.line++
 		l.column = 1
+		return
+	}
+
+	if unicode.IsSpace(cRune) {
 		return
 	}
 
@@ -59,17 +58,20 @@ func (l *Lexer) scanToken() {
 
 	if isDelimiter(cString) {
 		l.addToken(stringToToken[cString], "")
+		return
 	}
 
-	if l.isBuiltIn(c) {
-
+	found, token := l.isBuiltIn()
+	if found {
+		l.addToken(token, "")
+		return
 	}
 
 	l.scanIdentifier()
 }
 
 func (l *Lexer) scanIdentifier() {
-	for !l.isAtEnd()  {
+	for !l.isAtEnd() && isAlphaNumeric(l.peek()) {
 		l.advance()
 	}
 
@@ -113,14 +115,16 @@ func (l *Lexer) scanString() {
 	l.addToken(STRING, value)
 }
 
-func (l * Lexer) isBuiltIn(c string) bool {
-	index := 1
+func (l *Lexer) isBuiltIn() (bool, TokenType) {
 	for _, builtIn := range builtIns {
 		stringRepresentation := tokenToString[builtIn]
-		if strings.HasPrefix(stringRepresentation, c) {
+		correspondingWindow := l.peekWindow(len(stringRepresentation))
+		if correspondingWindow == stringRepresentation {
+			l. advanceSteps(len(stringRepresentation) - 1)
+			return true, builtIn
 		}
 	}
-	return false
+	return false, UNDETERMINED
 }
 
 // Helpers
@@ -132,6 +136,13 @@ func (l *Lexer) advance() byte {
 	return c
 }
 
+func (l *Lexer) advanceSteps(steps int) byte {
+	c := l.source[l. current]
+	l.current += steps
+	l.column += steps
+	return c
+}
+
 func (l *Lexer) peek() byte {
 	if l.isAtEnd() {
 		return 0
@@ -139,7 +150,17 @@ func (l *Lexer) peek() byte {
 	return l.source[l.current]
 }
 
-func (l * Lexer) peekTo(position int) byte {
+func (l *Lexer) peekWindow(size int) string {
+	if l.current >= len(l.source) {
+		return ""
+	}
+
+	end := l.current + size
+	if end > len(l.source) {
+		end = len(l.source)
+	}
+
+	return l. source[l.current:end]
 }
 
 func (l *Lexer) peekNext() byte {
@@ -166,10 +187,14 @@ func isDigit(c byte) bool {
 	return c >= '0' && c <= '9'
 }
 
+func isAlphaNumeric(c byte) bool {
+	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_'
+}
+
 func isDelimiter(c string) bool {
 	tokenType := stringToToken[c]
 	for _, delimiter := range delimiters {
-		if(delimiter == tokenType) {
+		if delimiter == tokenType {
 			return true
 		}
 	}

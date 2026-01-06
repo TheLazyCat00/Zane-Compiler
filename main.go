@@ -10,7 +10,7 @@ import (
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Println("Usage: zane <filepath>")
+		fmt. Println("Usage: zane <filepath>")
 		os.Exit(1)
 	}
 
@@ -20,11 +20,15 @@ func main() {
 		fmt.Println("Error:", err)
 		os.Exit(1)
 	}
-	preprocessor.Process(file)
+	preprocessor. Process(file)
 
 	// Lexer
 	tokens := lexer.Tokenize(file.Buffer)
-	print(tokens)
+	
+	// Print each token
+	for _, token := range tokens {
+		fmt.Println(token)
+	}
 
 	// Parser
 	// ast := parser.Parse(tokens)
