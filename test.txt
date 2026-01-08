@@ -1,1 +1,197 @@
-int foo = 1
+// the core idea of Zane is that functions may not have the same shape
+// the shape of a function is defined by its return type, parameter count and name
+// constructors in this regard are just functions with name "" (no name)
+// so functions have to differ in at least one of these characteristics to count as a different shape
+// only with one function per shape the compiler knows what function to call
+// otherwies it's ambiguous
+
+// this is the "syntax definition" defined in a simple example
+
+// comment
+/// lsp doc comment
+
+// for loop
+// note that a for loop is just a function
+// here we use : to pipe the callback to the second function parameter (the callback)
+for (3):(i) {
+	print(i)
+}
+
+// std types are PascalCase also
+List<Int> sizes = [1,2,3,4,5]
+
+Tuple<Int, String> getUser(Int randomNumber) {
+	// inline variable declaration possible via parameter type inference
+	returns (0 as id, "John" as name) // only returns once the function exits
+	defer {
+		// do something after the function has returned something
+	}
+
+	if (randomNumber == 1) {
+		name = "Peter"
+		// exits function
+		exit
+	}
+
+	if (randomNumber == 3) {
+		id = 3
+		// exits function
+		exit
+	}
+}
+
+// function types
+alias openBlock = Bool(Int)
+alias pureBlock = Bool(Int)=>
+alias strictBlock = Bool(Int)!
+
+// forEach
+List<U> forEach(List<T> list, U(T) callback) {
+	List<U> = for(list.length):(i) {
+		T element = list[i]
+		returns callback(element)
+	}
+}
+
+// => is auto pure (no side effects) and no stack allocation
+// pipe operator : used for unnesting arguments
+forEach(sizes):(element) => element * 2
+
+enum Axis2 {
+	X, Y
+
+	Map<Axis2, Axis2> _opposites = [
+		(Axis2.X, Axis2.Y),
+		(Axis2.Y, Axis2.X),
+	]
+
+	// enums and structs are const, immutable and valuetype and thus can have => and also access its members (state never changes)
+	Axis2 getOpposite(Axis2 axis) => _opposites[axis]
+}
+
+unit Pixel(Int)
+unit Cell(Int)
+
+// unit annotations in generics
+generic Foo(Int: Cell, Int: Pixel)
+generic Numeric(Float, Int, Double)
+
+// lets define a vector struct
+// structs are allocated on the stack
+struct Vector2<T: Numeric> map Axis2 {
+	T x as Axis2.X
+	T y as Axis2.y
+	Vector2<Numeric>(T x, T y){
+		this.x = x
+		this.y = y
+	}
+
+	// U is numeric because its defined in the struct itself (no annotation needed)
+	Vector2<T>(Vector2<U> other{x, y}) => (x, y)
+}
+
+// function determined over return type and parameter count
+Vector2<Float> foo = (1, 2)
+// is the same as Vector2<Float> foo = Vector2<Float>(1, 2)
+// except that the latter is not valid zane syntax
+
+// when theres only one parameter in the constructor, parentheses arent necessary
+Vector2<Int> bar = foo
+
+unit Dimensions(Vector2)
+unit Point(Vector2)
+
+// classes are reference types
+class Element {
+	Vector2<Float>: Dimensions dimensions
+
+	Element(Vector2<Float> dimensions) {
+		this.dimensions = dimensions
+	}
+
+	// this is unmoveable and always available
+	// methods can read and modify this properties
+	Void setDimensions(Vector2<Float>: Dimensions newDim) {
+		this.dimensions = newDim  // OK: modifying property
+	}
+
+	// can return copies of properties
+	Vector2<Float>: Dimensions getDimensions() => this.dimensions
+}
+
+// inheritance
+interface Name {
+	String getName()
+	String getId()
+}
+
+class Button {
+	// elevate means that members of the class will be directly accessable on class level
+	// classes with same method return type and parameter count may not be elevated simultaneously
+	elevate Element element
+	String name
+
+	// dart style direct assignment
+	Button(Vector2<Float> dimensions, this.name){
+		element = dimensions
+	}
+
+	// can be put anywhere, informs the language that it implements the methods
+	implement Name
+	// function return type needs to be defined because interfaces may have same name but different return type
+	// all 3 types of functions may be defined with a function body {} and returns or simple a single statement which automatically gets returned
+	String getName() name
+	String getId() getName
+}
+
+// top level functions need to specify (if needed) the generic in the return type
+T: Numeric triple(T x) => 3 * x
+T: Numeric addOne(T x) => 1 + x
+
+Int unfold = triple:addOne:1
+// is the same as
+Int unfold = triple(addOne(1))
+// gets compiled to
+int unfold = 3 * addOne(1)
+Int unfold = 3 * (1 + 1)
+// this can be optimized by the compiler
+
+// ! prohibits heap allocation and is used for fast real time processing
+// just like => but with side effects allowed
+interface Vst {
+	Void process(List<Float> samples)!
+	Void doMath()=>
+}
+
+// ownership model with give
+class Node {
+	String name
+	Node(String name) {
+		this.name = name
+	}
+}
+
+Void consumeAndGiveBack(Node node) {
+	give temp = node
+	print(temp.name)
+	give node = temp  // node is returned to caller
+}
+
+Void readOnly(Node node) {
+	print(node.name)  // just reading, no give needed
+}
+
+Void consumeOnly(Node node) {
+	give temp = node
+	print(temp.name)
+	// no give back needed
+}
+
+Void example(Node node) {
+	readOnly(node)              // node stays with caller
+	consumeAndGiveBack(node)    // node is moved and returned
+	print(node.name)            // still accessible
+	
+	consumeOnly(node)           // OK: node not used after
+	// print(node.name)         // ERROR: node was consumed, error at call site
+}
