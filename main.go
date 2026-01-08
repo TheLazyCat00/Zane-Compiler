@@ -78,7 +78,7 @@ func removeNulls(data interface{}) interface{} {
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt. Println("Usage: zane <filepath>")
+		fmt.Println("Usage: zane <filepath>")
 		os.Exit(1)
 	}
 
@@ -93,10 +93,13 @@ func main() {
 
 	// Pretty print the AST (remove nulls)
 	cleanedAST := removeNulls(ast)
-	jsonData, err := json.MarshalIndent(cleanedAST, "", "  ")
-	if err != nil {
+	
+	encoder := json.NewEncoder(os.Stdout)
+	encoder.SetEscapeHTML(false)
+	encoder.SetIndent("", "  ")
+	
+	if err := encoder.Encode(cleanedAST); err != nil {
 		fmt.Println("Error marshaling AST:", err)
 		os.Exit(1)
 	}
-	fmt.Println(string(jsonData))
 }
