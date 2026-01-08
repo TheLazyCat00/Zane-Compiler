@@ -123,8 +123,8 @@ type FunctionCall struct {
 type PrimitiveValue struct {
 	String *String `@@`
 	Number *Number `| @@`
-	FunctionCall *FunctionCall `| @@`
 	Object *string `| @Ident`
+	FunctionCall *FunctionCall `| @@`
 }
 
 type SingleOperatorValue struct {

@@ -1,1 +1,3 @@
-Int hello = (1+) * 2
+if (name == "Peter") {
+
+}
