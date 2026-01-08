@@ -13,6 +13,7 @@ type File struct {
 
 type Statement struct {
 	BlueprintDecl *BlueprintDecl `@@`
+	InterfaceDecl *InterfaceDecl `| @@`
 	VariableDecl *VariableDecl `| @@`
 	FunctionCall *FunctionCall `| @@`
 }
@@ -22,10 +23,15 @@ type FunctionBody struct {
 	SingleLineValue []*Value `| @@`
 }
 
-type FunctionDecl struct {
+type FunctionSignature struct {
 	ReturnType Type `@@`
 	Name string `@Ident`
 	Parameters []*Type `"("(@@ ("," @@)* )? ")"`
+	FunctionSignatureModifier string `@FunctionSignatureModifier?`
+}
+
+type FunctionDecl struct {
+	FunctionSignature FunctionSignature `@@`
 	FunctionBody FunctionBody `@@`
 }
 
@@ -38,9 +44,14 @@ type Elevate struct {
 	Name string `"elevate" @Ident`
 }
 
+type Implement struct {
+	Name string `"implement" @Ident`
+}
+
 type BlueprintBody struct {
 	Fields []*struct {
 		Elevate *Elevate `@@`
+		Implement *Implement `| @@`
 		Method *FunctionDecl `| @@`
 		Member *Member `| @@`
 	} `@@*`
@@ -67,6 +78,15 @@ type ExtendDecl struct {
 	Name string `"extend" @Ident`
 	GenericType *GenericType `("<" (@@`
 	Type *Type `| @@) ">")? ("map" Ident)?`
+}
+
+type InterfaceBody struct {
+	Methods []*FunctionSignature `@@*`
+}
+
+type InterfaceDecl struct {
+	Name string `"interface" @Ident`
+	InterfaceBody InterfaceBody `"{" @@ "}"`
 }
 
 type GenericType struct {
@@ -134,7 +154,8 @@ func zaneL() lexer.Definition {
 		{ Name: "String", Pattern: `"[^"]*"` },
 		{ Name: "Number", Pattern: `\d+\.?\d*` },
 		{ Name: "Arrow", Pattern: `=>` },
-		{ Name:"FunctionTypeModifier", Pattern:`->|=>|!>` },
+		{ Name:"FunctionSignatureModifier", Pattern:`!|=>` },
+		{ Name:"FunctionTypeModifier", Pattern:`->|!>|=>` },
 		{ Name: "Ident", Pattern:`[\p{L}_][\p{L}\p{N}_]*` },
 		{ Name: "Punct", Pattern: `[(){}\[\]=<>:,.+\-*/%|!]` },
 		{ Name: "Whitespace", Pattern: `\s+` },

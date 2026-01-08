@@ -1,9 +1,3 @@
-class Vector2<T::Alias>
-
-extend Vector2<Int> {
-	elevate Hello
-
-	Void hi() {
-
-	}
+interface Test {
+	Void bark()!
 }
