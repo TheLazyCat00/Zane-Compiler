@@ -12,7 +12,54 @@ type File struct {
 }
 
 type Statement struct {
-	VariableDecl * VariableDecl `@@`
+	BlueprintDecl *BlueprintDecl `@@`
+	VariableDecl *VariableDecl `| @@`
+	FunctionCall *FunctionCall `| @@`
+}
+
+type FunctionBody struct {
+	Statements []*Statement `("{" @@* "}")`
+	SingleLineValue []*Value `| @@`
+}
+
+type FunctionDecl struct {
+	ReturnType Type `@@`
+	Name string `@Ident`
+	Parameters []*Type `"("(@@ ("," @@)* )? ")"`
+	FunctionBody FunctionBody `@@`
+}
+
+type BlueprintBody struct {
+	Methods []*FunctionDecl `@@`
+}
+
+type BlueprintDecl struct {
+	ClassDecl *ClassDecl `@@`
+	StructDecl *StructDecl `| @@`
+	ExtendDecl *ExtendDecl `| @@`
+	BlueprintBody BlueprintBody `"{" @@ "}"`
+}
+
+type ClassDecl struct {
+	Name string `"class" @Ident`
+	Type *GenericType `("<" @@ ">")? ("map" Ident)?`
+}
+
+type StructDecl struct {
+	Name string `"struct" @Ident`
+	Type *GenericType `("<" @@ ">")? ("map" Ident)?`
+}
+
+type ExtendDecl struct {
+	Name string `"extend" @Ident`
+	GenericType *GenericType `("<" (@@`
+	Type *Type `| @@) ">")? ("map" Ident)?`
+}
+
+type GenericType struct {
+	Name string `@Ident":"":"`
+	PossibleTypes *[]*Type `("(" @@ ("," @@)* ")"`
+	SingleAlias *string `| @Ident)`
 }
 
 type String struct {
@@ -24,8 +71,14 @@ type Number struct {
 }
 
 type FunctionCall struct {
-	Name string `@Ident?`
-	Params *[]*Value `("(" ( @@ ( "," @@ )* )? ")")?`
+	NamedFunctionCall *struct {
+		Name string `@Ident`
+		Params *[]*Value `("(" ( @@ ( "," @@ )* )? ")")?`
+	} `(@@`
+
+	ConstructorCall *struct {
+		Params *[]*Value `"(" ( @@ ( "," @@ )* )? ")"`
+	} `| @@)`
 	Pipe *Value `(":"@@)?`
 }
 

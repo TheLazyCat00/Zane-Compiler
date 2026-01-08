@@ -1,1 +1,7 @@
-Node:Foo node = bla:bye
+class Vector2<T::Alias>
+
+extend Vector2<Int> {
+	Void sayHi() {
+		hello():()
+	}
+}
