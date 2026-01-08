@@ -2,6 +2,8 @@ package parsergen
 
 import (
 	"log"
+	"regexp"
+	"fmt"
 
 	"github.com/alecthomas/participle/v2"
 	"github.com/alecthomas/participle/v2/lexer"
@@ -12,14 +14,17 @@ type File struct {
 }
 
 type Statement struct {
-	BlueprintDecl *BlueprintDecl `@@`
+	AliasDecl *AliasDecl `@@`
+	UnitDecl *UnitDecl `| @@`
+	IfStatement *IfStatement `| @@`
+	BlueprintDecl *BlueprintDecl `| @@`
 	InterfaceDecl *InterfaceDecl `| @@`
 	VariableDecl *VariableDecl `| @@`
 	FunctionCall *FunctionCall `| @@`
 }
 
 type FunctionBody struct {
-	Statements []*Statement `("{" @@* "}")`
+	Statements []*Statement `"{" @@* "}"`
 	SingleLineValue []*Value `| @@`
 }
 
@@ -112,14 +117,32 @@ type FunctionCall struct {
 	ConstructorCall *struct {
 		Params *[]*Value `"(" ( @@ ( "," @@ )* )? ")"`
 	} `| @@)`
-	Pipe *Value `(":"@@)?`
+	Pipe *Value `(":" @@)?`
 }
 
-type Value struct {
+type PrimitiveValue struct {
 	String *String `@@`
 	Number *Number `| @@`
 	FunctionCall *FunctionCall `| @@`
-	Object string `@Ident`
+	Object *string `| @Ident`
+}
+
+type SingleOperatorValue struct {
+	OperatorLeft *string `(@Operator`
+	Value PrimitiveValue `@@) | (@@`
+	OperatorRight *string `@Operator)`
+}
+
+type MultiOperatorValue struct {
+	FirstValue PrimitiveValue `@@`
+	Operators []string `(@Operator`
+	Values []PrimitiveValue `@@)+`
+}
+
+type Value struct {
+	MultiOperatorValue *MultiOperatorValue `@@`
+	SingleOperatorValue *SingleOperatorValue `| @@`
+	PrimitiveValue *PrimitiveValue `| @@`
 }
 
 type VariableDecl struct {
@@ -145,7 +168,44 @@ type SimpleType struct {
 	Unit *string `( ":" @Ident )?`
 }
 
+type UnitDecl struct {
+	Name string `"unit" @Ident`
+	Types []*MultiType `"[" @@ ("," @@)* "]"`
+}
+
+type MultiType struct {
+	MultiOption *[]*MultiType `"[" @@ ("," @@)* "]"`
+	Type *Type `| @@`
+}
+
+type AliasDecl struct {
+	Name string `"alias" @Ident`
+	Type MultiType `"=" @@`
+}
+
+type IfStatement struct {
+	IfBlock IfBlock `@@`
+	ElifBlock []*ElifBlock `@@*`
+	ElseBlock *ElseBlock `@@?`
+}
+
+type IfBlock struct {
+	Condition Value `"if" "(" @@ ")"`
+	Statements []*Statement `"{" @@* "}"`
+}
+
+type ElifBlock struct {
+	Condition Value `"elif" "(" @@ ")"`
+	Statements []*Statement `"{" @@* "}"`
+}
+
+type ElseBlock struct {
+	Statements []*Statement `"else" "{" @@* "}"`
+}
+
 // === Lexer ===
+
+const operatorPool = `+*-/¦@#%&=|<>°§$£¬?€`
 
 func zaneL() lexer.Definition {
 	return lexer.MustSimple([]lexer.SimpleRule {
@@ -153,11 +213,11 @@ func zaneL() lexer.Definition {
 		{ Name: "Comment", Pattern: `//[^\n]*` },
 		{ Name: "String", Pattern: `"[^"]*"` },
 		{ Name: "Number", Pattern: `\d+\.?\d*` },
-		{ Name: "Arrow", Pattern: `=>` },
-		{ Name:"FunctionSignatureModifier", Pattern:`!|=>` },
-		{ Name:"FunctionTypeModifier", Pattern:`->|!>|=>` },
+		{ Name: "FunctionSignatureModifier", Pattern:`!|=>` },
+		{ Name: "FunctionTypeModifier", Pattern:`->|!>|=>` },
 		{ Name: "Ident", Pattern:`[\p{L}_][\p{L}\p{N}_]*` },
-		{ Name: "Punct", Pattern: `[(){}\[\]=<>:,.+\-*/%|!]` },
+		{ Name: "Operator", Pattern: fmt.Sprintf(`[%s]+`, regexp.QuoteMeta(operatorPool)) },
+		{ Name: "Punct", Pattern: `[(){}\[\]=<>:,.]` },
 		{ Name: "Whitespace", Pattern: `\s+` },
 	})
 }
@@ -165,7 +225,7 @@ func zaneL() lexer.Definition {
 func Process(content string) *File {
 	parser, err := participle.Build[File](
 		participle.Lexer(zaneL()),
-		participle.UseLookahead(2),
+		participle.UseLookahead(1),
 		participle.Elide("Whitespace", "Comment", "DocComment"),
 	)
 	if err != nil {
