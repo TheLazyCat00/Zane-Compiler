@@ -12,12 +12,43 @@ type File struct {
 }
 
 type Statement struct {
-	Type *Type `@@`
+	VariableDecl * VariableDecl `@@`
+}
+
+type String struct {
+	Value string `@String`
+}
+
+type Number struct {
+	Value string `@Number`
+}
+
+type FunctionCall struct {
+	Name string `@Ident?`
+	Params *[]*Value `("(" ( @@ ( "," @@ )* )? ")")?`
+	Pipe *Value `(":"@@)?`
+}
+
+type Variable struct {
+	Name string `@Ident`
+}
+
+type Value struct {
+	String *String `@@`
+	Number *Number `| @@`
+	FunctionCall *FunctionCall `| @@`
+	Variable *Variable `| @@`
+}
+
+type VariableDecl struct {
+	Type Type `@@`
+	Variable Variable `@@`
+	Value Value `"="@@`
 }
 
 type Type struct {
-	SimpleType SimpleType `@@`
-	FunctionType FunctionType `| @@`
+	SimpleType *SimpleType `@@`
+	FunctionType *FunctionType `| @@`
 }
 
 type FunctionType struct {
@@ -27,24 +58,24 @@ type FunctionType struct {
 }
 
 type SimpleType struct {
-	Name     string  `@Ident`
-	Generics []*Type `( "<" @@ ( "," @@ )* ">" )?`
-	Unit     string  `( ":" @Ident )?`
+	Name string `@Ident`
+	Generics *[]*Type `( "<" @@ ( "," @@ )* ">" )?`
+	Unit *string `( ":" @Ident )?`
 }
 
 // === Lexer ===
 
 func zaneL() lexer.Definition {
 	return lexer.MustSimple([]lexer.SimpleRule {
-		{Name: "DocComment", Pattern: `///[^\n]*`},
-		{Name: "Comment", Pattern: `//[^\n]*`},
-		{Name: "String", Pattern: `"[^"]*"`},
-		{Name: "Number", Pattern: `\d+\.?\d*`},
-		{Name: "Arrow", Pattern: `=>`},
-		{ Name:"FunctionTypeModifier", Pattern :`->|=>|!>`  },
-		{Name: "Ident", Pattern:`[\p{L}_][\p{L}\p{N}_]*`},
-		{Name: "Punct", Pattern: `[(){}\[\]=<>:,.+\-*/%|!]`},
-		{Name: "Whitespace", Pattern: `\s+`},
+		{ Name: "DocComment", Pattern: `///[^\n]*` },
+		{ Name: "Comment", Pattern: `//[^\n]*` },
+		{ Name: "String", Pattern: `"[^"]*"` },
+		{ Name: "Number", Pattern: `\d+\.?\d*` },
+		{ Name: "Arrow", Pattern: `=>` },
+		{ Name:"FunctionTypeModifier", Pattern:`->|=>|!>` },
+		{ Name: "Ident", Pattern:`[\p{L}_][\p{L}\p{N}_]*` },
+		{ Name: "Punct", Pattern: `[(){}\[\]=<>:,.+\-*/%|!]` },
+		{ Name: "Whitespace", Pattern: `\s+` },
 	})
 }
 
