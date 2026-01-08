@@ -29,8 +29,21 @@ type FunctionDecl struct {
 	FunctionBody FunctionBody `@@`
 }
 
+type Member struct {
+	Type Type `@@`
+	Name string `@Ident`
+}
+
+type Elevate struct {
+	Name string `"elevate" @Ident`
+}
+
 type BlueprintBody struct {
-	Methods []*FunctionDecl `@@`
+	Fields []*struct {
+		Elevate *Elevate `@@`
+		Method *FunctionDecl `| @@`
+		Member *Member `| @@`
+	} `@@*`
 }
 
 type BlueprintDecl struct {
@@ -82,20 +95,16 @@ type FunctionCall struct {
 	Pipe *Value `(":"@@)?`
 }
 
-type Variable struct {
-	Name string `@Ident`
-}
-
 type Value struct {
 	String *String `@@`
 	Number *Number `| @@`
 	FunctionCall *FunctionCall `| @@`
-	Variable *Variable `| @@`
+	Object string `@Ident`
 }
 
 type VariableDecl struct {
 	Type Type `@@`
-	Variable Variable `@@`
+	Name string `@Ident`
 	Value Value `"="@@`
 }
 
@@ -135,7 +144,7 @@ func zaneL() lexer.Definition {
 func Process(content string) *File {
 	parser, err := participle.Build[File](
 		participle.Lexer(zaneL()),
-		participle.UseLookahead(1),
+		participle.UseLookahead(2),
 		participle.Elide("Whitespace", "Comment", "DocComment"),
 	)
 	if err != nil {
