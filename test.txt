@@ -1,3 +1,2 @@
-if (name == "Peter") {
-
+class Foo map Other.Bar {
 }

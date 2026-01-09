@@ -53,36 +53,43 @@ type Implement struct {
 	Name string `"implement" @Ident`
 }
 
+type ConstructorDecl struct {
+	Type Type `@@`
+	Parameters []*Type `"(" (@@ ("," @@)* )? ")"`
+}
+
 type BlueprintBody struct {
 	Fields []*struct {
 		Elevate *Elevate `@@`
 		Implement *Implement `| @@`
 		Method *FunctionDecl `| @@`
+		ConstructorDecl *ConstructorDecl `| @@`
 		Member *Member `| @@`
 	} `@@*`
 }
 
 type BlueprintDecl struct {
-	ClassDecl *ClassDecl `@@`
+	ClassDecl *ClassDecl `(@@`
 	StructDecl *StructDecl `| @@`
-	ExtendDecl *ExtendDecl `| @@`
+	ExtendDecl *ExtendDecl `| @@)`
+	Map *string `("map" @Ident )?`
 	BlueprintBody BlueprintBody `"{" @@ "}"`
 }
 
 type ClassDecl struct {
 	Name string `"class" @Ident`
-	Type *GenericType `("<" @@ ">")? ("map" Ident)?`
+	Type *GenericType `("<" @@ ">")?`
 }
 
 type StructDecl struct {
 	Name string `"struct" @Ident`
-	Type *GenericType `("<" @@ ">")? ("map" Ident)?`
+	Type *GenericType `("<" @@ ">")?`
 }
 
 type ExtendDecl struct {
 	Name string `"extend" @Ident`
 	GenericType *GenericType `("<" (@@`
-	Type *Type `| @@) ">")? ("map" Ident)?`
+	Type *Type `| @@) ">")?`
 }
 
 type InterfaceBody struct {
@@ -215,6 +222,7 @@ func zaneL() lexer.Definition {
 		{ Name: "Number", Pattern: `\d+\.?\d*` },
 		{ Name: "FunctionSignatureModifier", Pattern:`!|=>` },
 		{ Name: "FunctionTypeModifier", Pattern:`->|!>|=>` },
+		// { Name: "IdentWithDot", Pattern:`[\p{L}_][\p{L}\p{N}_\.]*` },
 		{ Name: "Ident", Pattern:`[\p{L}_][\p{L}\p{N}_]*` },
 		{ Name: "Operator", Pattern: fmt.Sprintf(`[%s]+`, regexp.QuoteMeta(operatorPool)) },
 		{ Name: "Punct", Pattern: `[(){}\[\]=<>:,.]` },
