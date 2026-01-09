@@ -1,2 +1,1 @@
-class Foo map Other.Bar {
-}
+hi()()

@@ -72,7 +72,7 @@ type BlueprintDecl struct {
 	ClassDecl *ClassDecl `(@@`
 	StructDecl *StructDecl `| @@`
 	ExtendDecl *ExtendDecl `| @@)`
-	Map *string `("map" @Ident )?`
+	Map *string `("map" @Ident)?`
 	BlueprintBody BlueprintBody `"{" @@ "}"`
 }
 
@@ -115,16 +115,29 @@ type Number struct {
 	Value string `@Number`
 }
 
-type FunctionCall struct {
-	NamedFunctionCall *struct {
-		Name string `@Ident`
-		Params *[]*Value `("(" ( @@ ( "," @@ )* )? ")")?`
-	} `(@@`
-
-	ConstructorCall *struct {
+type FunctionCallHint struct {
+	Both *struct {
 		Params *[]*Value `"(" ( @@ ( "," @@ )* )? ")"`
-	} `| @@)`
-	Pipe *Value `(":" @@)?`
+		Pipe *Value `":" @@`
+	} `@@`
+	Params *struct {
+		Params *[]*Value `"(" ( @@ ( "," @@ )* )? ")"`
+	} `| @@`
+	Pipe *struct {
+		Pipe *Value `":" @@`
+	} `| @@`
+}
+
+type FunctionCall struct {
+	Value *struct {
+		Name string `@Ident`
+		FunctionCallHint1 FunctionCallHint `@@`
+		FunctionCallHint2 FunctionCallHint `@@`
+	} `@@`
+	Normal *struct {
+		Name string `@Ident`
+		FunctionCallHint1 FunctionCallHint `@@`
+	} `| @@`
 }
 
 type PrimitiveValue struct {
@@ -222,7 +235,6 @@ func zaneL() lexer.Definition {
 		{ Name: "Number", Pattern: `\d+\.?\d*` },
 		{ Name: "FunctionSignatureModifier", Pattern:`!|=>` },
 		{ Name: "FunctionTypeModifier", Pattern:`->|!>|=>` },
-		// { Name: "IdentWithDot", Pattern:`[\p{L}_][\p{L}\p{N}_\.]*` },
 		{ Name: "Ident", Pattern:`[\p{L}_][\p{L}\p{N}_]*` },
 		{ Name: "Operator", Pattern: fmt.Sprintf(`[%s]+`, regexp.QuoteMeta(operatorPool)) },
 		{ Name: "Punct", Pattern: `[(){}\[\]=<>:,.]` },
