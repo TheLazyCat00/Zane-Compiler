@@ -1,12 +1,9 @@
 package main
 
 import (
-	"encoding/json"
+	"github.com/antlr4-go/antlr/v4"
 	"fmt"
 	"os"
-	// "reflect"
-	"zane/parsergen"
-	"zane/preprocessor"
 )
 
 func main() {
@@ -15,21 +12,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Preprocessor
-	file, err := preprocessor.NewFile(os.Args[1])
-	if err != nil {
-		fmt.Println("Error:", err)
-		os.Exit(1)
-	}
-
-	ast := parsergen.Process(file.Buffer)
-
-	encoder := json.NewEncoder(os.Stdout)
-	encoder.SetEscapeHTML(false)
-	encoder.SetIndent("", "  ")
-	
-	if err := encoder.Encode(ast); err != nil {
-		fmt.Println("Error marshaling AST:", err)
-		os.Exit(1)
-	}
+	input, _ := antlr.NewFileStream(os.Args[1])
+	lexer := parser.NewJSONLexer(input)
+	stream := antlr.NewCommonTokenStream(lexer,0)
+	p := parser.NewJSONParser(stream)
+	p.AddErrorListener(antlr.NewDiagnosticErrorListener(true))
+	tree := p.Json()
+	antlr.ParseTreeWalkerDefault.Walk(NewTreeShapeListener(), tree)
 }
