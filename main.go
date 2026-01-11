@@ -1,22 +1,34 @@
 package main
 
 import (
-	"github.com/antlr4-go/antlr/v4"
+    "os"
+    "zane/generated_parser"
+    "github.com/antlr4-go/antlr/v4"
 	"fmt"
-	"os"
 )
 
-func main() {
-	if len(os.Args) < 2 {
-		fmt.Println("Usage: zane <filepath>")
-		os.Exit(1)
-	}
+type TreeShapeListener struct {
+    *parser.BaseZaneListener
+}
 
+func NewTreeShapeListener() *TreeShapeListener {
+    return new(TreeShapeListener)
+}
+
+func (this *TreeShapeListener) EnterEveryRule(ctx antlr.ParserRuleContext) {
+	ruleName := parser.ZaneParserStaticData.RuleNames[ctx.GetRuleIndex()]
+	fmt.Printf("Rule: %s, Text: %s\n", ruleName, ctx.GetText())
+}
+
+func main() {
 	input, _ := antlr.NewFileStream(os.Args[1])
-	lexer := parser.NewJSONLexer(input)
-	stream := antlr.NewCommonTokenStream(lexer,0)
-	p := parser.NewJSONParser(stream)
-	p.AddErrorListener(antlr.NewDiagnosticErrorListener(true))
-	tree := p.Json()
-	antlr.ParseTreeWalkerDefault.Walk(NewTreeShapeListener(), tree)
+	lexer := parser.NewZaneLexer(input)
+	stream := antlr.NewCommonTokenStream(lexer, 0)
+	p := parser.NewZaneParser(stream)
+
+	tree := p.Program()
+
+	// Walk the tree
+	listener := NewTreeShapeListener()
+	antlr.ParseTreeWalkerDefault.Walk(listener, tree)
 }
