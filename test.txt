@@ -1,1 +1,2 @@
-int bye = 1
+Int bye = 1
+Float foo = 2

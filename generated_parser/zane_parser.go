@@ -32,27 +32,30 @@ var ZaneParserStaticData struct {
 func zaneParserInit() {
 	staticData := &ZaneParserStaticData
 	staticData.LiteralNames = []string{
-		"", "'='",
+		"", "'='", "'()'",
 	}
 	staticData.SymbolicNames = []string{
-		"", "", "IDENTIFIER", "NUMBER", "WS",
+		"", "", "", "IDENTIFIER", "NUMBER", "WS",
 	}
 	staticData.RuleNames = []string{
 		"program", "statement", "identifier", "type", "value", "assignment",
+		"functionCall",
 	}
 	staticData.PredictionContextCache = antlr.NewPredictionContextCache()
 	staticData.serializedATN = []int32{
-		4, 1, 4, 31, 2, 0, 7, 0, 2, 1, 7, 1, 2, 2, 7, 2, 2, 3, 7, 3, 2, 4, 7, 4,
-		2, 5, 7, 5, 1, 0, 4, 0, 14, 8, 0, 11, 0, 12, 0, 15, 1, 1, 1, 1, 1, 2, 1,
-		2, 1, 3, 1, 3, 1, 4, 1, 4, 1, 5, 1, 5, 1, 5, 1, 5, 1, 5, 1, 5, 0, 0, 6,
-		0, 2, 4, 6, 8, 10, 0, 0, 25, 0, 13, 1, 0, 0, 0, 2, 17, 1, 0, 0, 0, 4, 19,
-		1, 0, 0, 0, 6, 21, 1, 0, 0, 0, 8, 23, 1, 0, 0, 0, 10, 25, 1, 0, 0, 0, 12,
-		14, 3, 2, 1, 0, 13, 12, 1, 0, 0, 0, 14, 15, 1, 0, 0, 0, 15, 13, 1, 0, 0,
-		0, 15, 16, 1, 0, 0, 0, 16, 1, 1, 0, 0, 0, 17, 18, 3, 10, 5, 0, 18, 3, 1,
-		0, 0, 0, 19, 20, 5, 2, 0, 0, 20, 5, 1, 0, 0, 0, 21, 22, 5, 2, 0, 0, 22,
-		7, 1, 0, 0, 0, 23, 24, 5, 3, 0, 0, 24, 9, 1, 0, 0, 0, 25, 26, 3, 6, 3,
-		0, 26, 27, 3, 4, 2, 0, 27, 28, 5, 1, 0, 0, 28, 29, 3, 8, 4, 0, 29, 11,
-		1, 0, 0, 0, 1, 15,
+		4, 1, 5, 38, 2, 0, 7, 0, 2, 1, 7, 1, 2, 2, 7, 2, 2, 3, 7, 3, 2, 4, 7, 4,
+		2, 5, 7, 5, 2, 6, 7, 6, 1, 0, 4, 0, 16, 8, 0, 11, 0, 12, 0, 17, 1, 1, 1,
+		1, 3, 1, 22, 8, 1, 1, 2, 1, 2, 1, 3, 1, 3, 1, 4, 1, 4, 1, 5, 1, 5, 1, 5,
+		1, 5, 1, 5, 1, 6, 1, 6, 1, 6, 1, 6, 0, 0, 7, 0, 2, 4, 6, 8, 10, 12, 0,
+		0, 32, 0, 15, 1, 0, 0, 0, 2, 21, 1, 0, 0, 0, 4, 23, 1, 0, 0, 0, 6, 25,
+		1, 0, 0, 0, 8, 27, 1, 0, 0, 0, 10, 29, 1, 0, 0, 0, 12, 34, 1, 0, 0, 0,
+		14, 16, 3, 2, 1, 0, 15, 14, 1, 0, 0, 0, 16, 17, 1, 0, 0, 0, 17, 15, 1,
+		0, 0, 0, 17, 18, 1, 0, 0, 0, 18, 1, 1, 0, 0, 0, 19, 22, 3, 10, 5, 0, 20,
+		22, 3, 12, 6, 0, 21, 19, 1, 0, 0, 0, 21, 20, 1, 0, 0, 0, 22, 3, 1, 0, 0,
+		0, 23, 24, 5, 3, 0, 0, 24, 5, 1, 0, 0, 0, 25, 26, 5, 3, 0, 0, 26, 7, 1,
+		0, 0, 0, 27, 28, 5, 4, 0, 0, 28, 9, 1, 0, 0, 0, 29, 30, 3, 6, 3, 0, 30,
+		31, 3, 4, 2, 0, 31, 32, 5, 1, 0, 0, 32, 33, 3, 8, 4, 0, 33, 11, 1, 0, 0,
+		0, 34, 35, 3, 4, 2, 0, 35, 36, 5, 2, 0, 0, 36, 13, 1, 0, 0, 0, 2, 17, 21,
 	}
 	deserializer := antlr.NewATNDeserializer(nil)
 	staticData.atn = deserializer.Deserialize(staticData.serializedATN)
@@ -92,19 +95,21 @@ func NewZaneParser(input antlr.TokenStream) *ZaneParser {
 const (
 	ZaneParserEOF        = antlr.TokenEOF
 	ZaneParserT__0       = 1
-	ZaneParserIDENTIFIER = 2
-	ZaneParserNUMBER     = 3
-	ZaneParserWS         = 4
+	ZaneParserT__1       = 2
+	ZaneParserIDENTIFIER = 3
+	ZaneParserNUMBER     = 4
+	ZaneParserWS         = 5
 )
 
 // ZaneParser rules.
 const (
-	ZaneParserRULE_program    = 0
-	ZaneParserRULE_statement  = 1
-	ZaneParserRULE_identifier = 2
-	ZaneParserRULE_type       = 3
-	ZaneParserRULE_value      = 4
-	ZaneParserRULE_assignment = 5
+	ZaneParserRULE_program      = 0
+	ZaneParserRULE_statement    = 1
+	ZaneParserRULE_identifier   = 2
+	ZaneParserRULE_type         = 3
+	ZaneParserRULE_value        = 4
+	ZaneParserRULE_assignment   = 5
+	ZaneParserRULE_functionCall = 6
 )
 
 // IProgramContext is an interface to support dynamic dispatch.
@@ -221,7 +226,7 @@ func (p *ZaneParser) Program() (localctx IProgramContext) {
 	var _la int
 
 	p.EnterOuterAlt(localctx, 1)
-	p.SetState(13)
+	p.SetState(15)
 	p.GetErrorHandler().Sync(p)
 	if p.HasError() {
 		goto errorExit
@@ -230,11 +235,11 @@ func (p *ZaneParser) Program() (localctx IProgramContext) {
 
 	for ok := true; ok; ok = _la == ZaneParserIDENTIFIER {
 		{
-			p.SetState(12)
+			p.SetState(14)
 			p.Statement()
 		}
 
-		p.SetState(15)
+		p.SetState(17)
 		p.GetErrorHandler().Sync(p)
 		if p.HasError() {
 			goto errorExit
@@ -264,6 +269,7 @@ type IStatementContext interface {
 
 	// Getter signatures
 	Assignment() IAssignmentContext
+	FunctionCall() IFunctionCallContext
 
 	// IsStatementContext differentiates from other interfaces.
 	IsStatementContext()
@@ -317,6 +323,22 @@ func (s *StatementContext) Assignment() IAssignmentContext {
 	return t.(IAssignmentContext)
 }
 
+func (s *StatementContext) FunctionCall() IFunctionCallContext {
+	var t antlr.RuleContext
+	for _, ctx := range s.GetChildren() {
+		if _, ok := ctx.(IFunctionCallContext); ok {
+			t = ctx.(antlr.RuleContext)
+			break
+		}
+	}
+
+	if t == nil {
+		return nil
+	}
+
+	return t.(IFunctionCallContext)
+}
+
 func (s *StatementContext) GetRuleContext() antlr.RuleContext {
 	return s
 }
@@ -340,10 +362,29 @@ func (s *StatementContext) ExitRule(listener antlr.ParseTreeListener) {
 func (p *ZaneParser) Statement() (localctx IStatementContext) {
 	localctx = NewStatementContext(p, p.GetParserRuleContext(), p.GetState())
 	p.EnterRule(localctx, 2, ZaneParserRULE_statement)
-	p.EnterOuterAlt(localctx, 1)
-	{
-		p.SetState(17)
-		p.Assignment()
+	p.SetState(21)
+	p.GetErrorHandler().Sync(p)
+	if p.HasError() {
+		goto errorExit
+	}
+
+	switch p.GetInterpreter().AdaptivePredict(p.BaseParser, p.GetTokenStream(), 1, p.GetParserRuleContext()) {
+	case 1:
+		p.EnterOuterAlt(localctx, 1)
+		{
+			p.SetState(19)
+			p.Assignment()
+		}
+
+	case 2:
+		p.EnterOuterAlt(localctx, 2)
+		{
+			p.SetState(20)
+			p.FunctionCall()
+		}
+
+	case antlr.ATNInvalidAltNumber:
+		goto errorExit
 	}
 
 errorExit:
@@ -434,7 +475,7 @@ func (p *ZaneParser) Identifier() (localctx IIdentifierContext) {
 	p.EnterRule(localctx, 4, ZaneParserRULE_identifier)
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(19)
+		p.SetState(23)
 		p.Match(ZaneParserIDENTIFIER)
 		if p.HasError() {
 			// Recognition error - abort rule
@@ -530,7 +571,7 @@ func (p *ZaneParser) Type_() (localctx ITypeContext) {
 	p.EnterRule(localctx, 6, ZaneParserRULE_type)
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(21)
+		p.SetState(25)
 		p.Match(ZaneParserIDENTIFIER)
 		if p.HasError() {
 			// Recognition error - abort rule
@@ -626,7 +667,7 @@ func (p *ZaneParser) Value() (localctx IValueContext) {
 	p.EnterRule(localctx, 8, ZaneParserRULE_value)
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(23)
+		p.SetState(27)
 		p.Match(ZaneParserNUMBER)
 		if p.HasError() {
 			// Recognition error - abort rule
@@ -768,15 +809,15 @@ func (p *ZaneParser) Assignment() (localctx IAssignmentContext) {
 	p.EnterRule(localctx, 10, ZaneParserRULE_assignment)
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(25)
+		p.SetState(29)
 		p.Type_()
 	}
 	{
-		p.SetState(26)
+		p.SetState(30)
 		p.Identifier()
 	}
 	{
-		p.SetState(27)
+		p.SetState(31)
 		p.Match(ZaneParserT__0)
 		if p.HasError() {
 			// Recognition error - abort rule
@@ -784,8 +825,120 @@ func (p *ZaneParser) Assignment() (localctx IAssignmentContext) {
 		}
 	}
 	{
-		p.SetState(28)
+		p.SetState(32)
 		p.Value()
+	}
+
+errorExit:
+	if p.HasError() {
+		v := p.GetError()
+		localctx.SetException(v)
+		p.GetErrorHandler().ReportError(p, v)
+		p.GetErrorHandler().Recover(p, v)
+		p.SetError(nil)
+	}
+	p.ExitRule()
+	return localctx
+	goto errorExit // Trick to prevent compiler error if the label is not used
+}
+
+// IFunctionCallContext is an interface to support dynamic dispatch.
+type IFunctionCallContext interface {
+	antlr.ParserRuleContext
+
+	// GetParser returns the parser.
+	GetParser() antlr.Parser
+
+	// Getter signatures
+	Identifier() IIdentifierContext
+
+	// IsFunctionCallContext differentiates from other interfaces.
+	IsFunctionCallContext()
+}
+
+type FunctionCallContext struct {
+	antlr.BaseParserRuleContext
+	parser antlr.Parser
+}
+
+func NewEmptyFunctionCallContext() *FunctionCallContext {
+	var p = new(FunctionCallContext)
+	antlr.InitBaseParserRuleContext(&p.BaseParserRuleContext, nil, -1)
+	p.RuleIndex = ZaneParserRULE_functionCall
+	return p
+}
+
+func InitEmptyFunctionCallContext(p *FunctionCallContext) {
+	antlr.InitBaseParserRuleContext(&p.BaseParserRuleContext, nil, -1)
+	p.RuleIndex = ZaneParserRULE_functionCall
+}
+
+func (*FunctionCallContext) IsFunctionCallContext() {}
+
+func NewFunctionCallContext(parser antlr.Parser, parent antlr.ParserRuleContext, invokingState int) *FunctionCallContext {
+	var p = new(FunctionCallContext)
+
+	antlr.InitBaseParserRuleContext(&p.BaseParserRuleContext, parent, invokingState)
+
+	p.parser = parser
+	p.RuleIndex = ZaneParserRULE_functionCall
+
+	return p
+}
+
+func (s *FunctionCallContext) GetParser() antlr.Parser { return s.parser }
+
+func (s *FunctionCallContext) Identifier() IIdentifierContext {
+	var t antlr.RuleContext
+	for _, ctx := range s.GetChildren() {
+		if _, ok := ctx.(IIdentifierContext); ok {
+			t = ctx.(antlr.RuleContext)
+			break
+		}
+	}
+
+	if t == nil {
+		return nil
+	}
+
+	return t.(IIdentifierContext)
+}
+
+func (s *FunctionCallContext) GetRuleContext() antlr.RuleContext {
+	return s
+}
+
+func (s *FunctionCallContext) ToStringTree(ruleNames []string, recog antlr.Recognizer) string {
+	return antlr.TreesStringTree(s, ruleNames, recog)
+}
+
+func (s *FunctionCallContext) EnterRule(listener antlr.ParseTreeListener) {
+	if listenerT, ok := listener.(ZaneListener); ok {
+		listenerT.EnterFunctionCall(s)
+	}
+}
+
+func (s *FunctionCallContext) ExitRule(listener antlr.ParseTreeListener) {
+	if listenerT, ok := listener.(ZaneListener); ok {
+		listenerT.ExitFunctionCall(s)
+	}
+}
+
+func (p *ZaneParser) FunctionCall() (localctx IFunctionCallContext) {
+	localctx = NewFunctionCallContext(p, p.GetParserRuleContext(), p.GetState())
+	p.EnterRule(localctx, 12, ZaneParserRULE_functionCall)
+	p.EnterOuterAlt(localctx, 1)
+	{
+		p.SetState(34)
+		p.Identifier()
+	}
+	{
+		p.SetState(35)
+		p.Match(ZaneParserT__1)
+		if p.HasError() {
+			// Recognition error - abort rule
+			goto errorExit
+		}
 	}
 
 errorExit:

@@ -55,3 +55,9 @@ func (s *BaseZaneListener) EnterAssignment(ctx *AssignmentContext) {}
 
 // ExitAssignment is called when production assignment is exited.
 func (s *BaseZaneListener) ExitAssignment(ctx *AssignmentContext) {}
+
+// EnterFunctionCall is called when production functionCall is entered.
+func (s *BaseZaneListener) EnterFunctionCall(ctx *FunctionCallContext) {}
+
+// ExitFunctionCall is called when production functionCall is exited.
+func (s *BaseZaneListener) ExitFunctionCall(ctx *FunctionCallContext) {}
