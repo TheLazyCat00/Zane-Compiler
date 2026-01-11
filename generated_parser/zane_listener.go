@@ -16,17 +16,23 @@ type ZaneListener interface {
 	// EnterIdentifier is called when entering the identifier production.
 	EnterIdentifier(c *IdentifierContext)
 
+	// EnterNumber is called when entering the number production.
+	EnterNumber(c *NumberContext)
+
+	// EnterString is called when entering the string production.
+	EnterString(c *StringContext)
+
 	// EnterType is called when entering the type production.
 	EnterType(c *TypeContext)
 
-	// EnterValue is called when entering the value production.
-	EnterValue(c *ValueContext)
+	// EnterConcreteValue is called when entering the concreteValue production.
+	EnterConcreteValue(c *ConcreteValueContext)
 
-	// EnterAssignment is called when entering the assignment production.
-	EnterAssignment(c *AssignmentContext)
+	// EnterExpression is called when entering the expression production.
+	EnterExpression(c *ExpressionContext)
 
-	// EnterFunctionCall is called when entering the functionCall production.
-	EnterFunctionCall(c *FunctionCallContext)
+	// EnterVarDec is called when entering the varDec production.
+	EnterVarDec(c *VarDecContext)
 
 	// ExitProgram is called when exiting the program production.
 	ExitProgram(c *ProgramContext)
@@ -37,15 +43,21 @@ type ZaneListener interface {
 	// ExitIdentifier is called when exiting the identifier production.
 	ExitIdentifier(c *IdentifierContext)
 
+	// ExitNumber is called when exiting the number production.
+	ExitNumber(c *NumberContext)
+
+	// ExitString is called when exiting the string production.
+	ExitString(c *StringContext)
+
 	// ExitType is called when exiting the type production.
 	ExitType(c *TypeContext)
 
-	// ExitValue is called when exiting the value production.
-	ExitValue(c *ValueContext)
+	// ExitConcreteValue is called when exiting the concreteValue production.
+	ExitConcreteValue(c *ConcreteValueContext)
 
-	// ExitAssignment is called when exiting the assignment production.
-	ExitAssignment(c *AssignmentContext)
+	// ExitExpression is called when exiting the expression production.
+	ExitExpression(c *ExpressionContext)
 
-	// ExitFunctionCall is called when exiting the functionCall production.
-	ExitFunctionCall(c *FunctionCallContext)
+	// ExitVarDec is called when exiting the varDec production.
+	ExitVarDec(c *VarDecContext)
 }

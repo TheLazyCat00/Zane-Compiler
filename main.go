@@ -32,7 +32,7 @@ func getNodeText(node antlr.Tree, depthThis int, depthCount int) string {
 
 		var res strings.Builder; res.WriteString(strings.Repeat("  ", depthThis))
 		if len(ruleChildren) == 0 {
-			res .WriteString("- " + ruleName + ": " + ctx.GetText())
+			res .WriteString(ruleName + ": " + ctx.GetText())
 		} else {
 			if len(ruleChildren) == 1 {
 				res .WriteString(ruleName + " > " + getNodeText(ruleChildren[0], 0, depthCount))

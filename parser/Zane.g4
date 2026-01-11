@@ -1,16 +1,22 @@
 grammar Zane;
 
-IDENTIFIER: [a-zA-Z_][a-zA-Z0-9_]*;
-NUMBER: [0-9]+;
-fragment EQUAL: '=';
+IDENTIFIER: [\p{L}_][\p{L}\p{N}_]*;
+STRING: '"' (~["\\\r\n] | '\\' .)* '"';
+
+fragment DIGIT: [0-9];
+NUMBER: DIGIT+('.'DIGIT+)?;
+MANAGED_NUMBER: DIGIT (DIGIT DIGIT?)? ('\'' DIGIT DIGIT DIGIT)* ('.' DIGIT (DIGIT DIGIT?)?)?;
 
 WS: [ \t\r\n]+ -> skip;
 
 program: statement+;
-statement: assignment|functionCall;
+statement: varDec;
 identifier: IDENTIFIER;
-type: IDENTIFIER;
-value: NUMBER;
-assignment: type identifier '=' value;
-functionCall: identifier '()';
+number: NUMBER|MANAGED_NUMBER;
+string: STRING;
+type: identifier ('<' type (',' type)* '>')?;
 
+concreteValue: number|string;
+expression: concreteValue;
+
+varDec: type identifier '=' expression;

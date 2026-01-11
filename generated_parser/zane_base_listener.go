@@ -38,26 +38,38 @@ func (s *BaseZaneListener) EnterIdentifier(ctx *IdentifierContext) {}
 // ExitIdentifier is called when production identifier is exited.
 func (s *BaseZaneListener) ExitIdentifier(ctx *IdentifierContext) {}
 
+// EnterNumber is called when production number is entered.
+func (s *BaseZaneListener) EnterNumber(ctx *NumberContext) {}
+
+// ExitNumber is called when production number is exited.
+func (s *BaseZaneListener) ExitNumber(ctx *NumberContext) {}
+
+// EnterString is called when production string is entered.
+func (s *BaseZaneListener) EnterString(ctx *StringContext) {}
+
+// ExitString is called when production string is exited.
+func (s *BaseZaneListener) ExitString(ctx *StringContext) {}
+
 // EnterType is called when production type is entered.
 func (s *BaseZaneListener) EnterType(ctx *TypeContext) {}
 
 // ExitType is called when production type is exited.
 func (s *BaseZaneListener) ExitType(ctx *TypeContext) {}
 
-// EnterValue is called when production value is entered.
-func (s *BaseZaneListener) EnterValue(ctx *ValueContext) {}
+// EnterConcreteValue is called when production concreteValue is entered.
+func (s *BaseZaneListener) EnterConcreteValue(ctx *ConcreteValueContext) {}
 
-// ExitValue is called when production value is exited.
-func (s *BaseZaneListener) ExitValue(ctx *ValueContext) {}
+// ExitConcreteValue is called when production concreteValue is exited.
+func (s *BaseZaneListener) ExitConcreteValue(ctx *ConcreteValueContext) {}
 
-// EnterAssignment is called when production assignment is entered.
-func (s *BaseZaneListener) EnterAssignment(ctx *AssignmentContext) {}
+// EnterExpression is called when production expression is entered.
+func (s *BaseZaneListener) EnterExpression(ctx *ExpressionContext) {}
 
-// ExitAssignment is called when production assignment is exited.
-func (s *BaseZaneListener) ExitAssignment(ctx *AssignmentContext) {}
+// ExitExpression is called when production expression is exited.
+func (s *BaseZaneListener) ExitExpression(ctx *ExpressionContext) {}
 
-// EnterFunctionCall is called when production functionCall is entered.
-func (s *BaseZaneListener) EnterFunctionCall(ctx *FunctionCallContext) {}
+// EnterVarDec is called when production varDec is entered.
+func (s *BaseZaneListener) EnterVarDec(ctx *VarDecContext) {}
 
-// ExitFunctionCall is called when production functionCall is exited.
-func (s *BaseZaneListener) ExitFunctionCall(ctx *FunctionCallContext) {}
+// ExitVarDec is called when production varDec is exited.
+func (s *BaseZaneListener) ExitVarDec(ctx *VarDecContext) {}
