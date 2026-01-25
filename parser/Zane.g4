@@ -4,19 +4,16 @@ IDENTIFIER: [\p{L}_][\p{L}\p{N}_]*;
 STRING: '"' (~["\\\r\n] | '\\' .)* '"';
 
 fragment DIGIT: [0-9];
-NUMBER: DIGIT+('.'DIGIT+)?;
-MANAGED_NUMBER: DIGIT (DIGIT DIGIT?)? ('\'' DIGIT DIGIT DIGIT)* ('.' DIGIT (DIGIT DIGIT?)?)?;
+fragment SIMPLE_NUMBER: DIGIT+('.'DIGIT+)?;
+fragment MANAGED_NUMBER: DIGIT (DIGIT DIGIT?)? ('\'' DIGIT DIGIT DIGIT)* ('.' DIGIT (DIGIT DIGIT?)?)?;
+NUMBER: SIMPLE_NUMBER|MANAGED_NUMBER;
 
 WS: [ \t\r\n]+ -> skip;
 
 program: statement+;
-statement: varDec;
-identifier: IDENTIFIER;
-number: NUMBER|MANAGED_NUMBER;
-string: STRING;
-type: identifier ('<' type (',' type)* '>')?;
+statement: functionCall;
 
-concreteValue: number|string;
-expression: concreteValue;
-
-varDec: type identifier '=' expression;
+value: STRING|NUMBER;
+type: name=IDENTIFIER ('<' type (',' type)* '>')?;
+arguments: value (',' value)*;
+functionCall: name=IDENTIFIER '(' arguments ')';

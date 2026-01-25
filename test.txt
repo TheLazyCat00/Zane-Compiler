@@ -1,2 +1,0 @@
-Int foo = 2'000.5
-String hi = "hi"

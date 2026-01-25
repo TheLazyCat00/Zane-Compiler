@@ -1,3 +1,1 @@
-#!/bin/bash
-
-watchfiles --ignore-paths ./generated_parser 'bash -c "clear && go generate ./... && go run main.go test.txt"' .
+watchfiles --ignore-paths ./src/parser/,./build,./.cache 'bash -c "clear && parser/generate.sh && cmake --build build --target run"' .
