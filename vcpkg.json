@@ -1,6 +1,0 @@
-{
-  "dependencies": [
-    "antlr4",
-    "llvm"
-  ]
-}
