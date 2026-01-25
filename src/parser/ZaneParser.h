@@ -18,8 +18,8 @@ public:
   };
 
   enum {
-    RuleProgram = 0, RuleStatement = 1, RuleValue = 2, RuleType = 3, RuleArguments = 4, 
-    RuleFunctionCall = 5
+    RuleProgram = 0, RuleString = 1, RuleNumber = 2, RuleStatement = 3, 
+    RuleValue = 4, RuleType = 5, RuleArguments = 6, RuleFunctionCall = 7
   };
 
   explicit ZaneParser(antlr4::TokenStream *input);
@@ -40,6 +40,8 @@ public:
 
 
   class ProgramContext;
+  class StringContext;
+  class NumberContext;
   class StatementContext;
   class ValueContext;
   class TypeContext;
@@ -55,10 +57,42 @@ public:
 
     virtual void enterRule(antlr4::tree::ParseTreeListener *listener) override;
     virtual void exitRule(antlr4::tree::ParseTreeListener *listener) override;
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
    
   };
 
   ProgramContext* program();
+
+  class  StringContext : public antlr4::ParserRuleContext {
+  public:
+    StringContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    virtual size_t getRuleIndex() const override;
+    antlr4::tree::TerminalNode *STRING();
+
+    virtual void enterRule(antlr4::tree::ParseTreeListener *listener) override;
+    virtual void exitRule(antlr4::tree::ParseTreeListener *listener) override;
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+   
+  };
+
+  StringContext* string();
+
+  class  NumberContext : public antlr4::ParserRuleContext {
+  public:
+    NumberContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    virtual size_t getRuleIndex() const override;
+    antlr4::tree::TerminalNode *NUMBER();
+
+    virtual void enterRule(antlr4::tree::ParseTreeListener *listener) override;
+    virtual void exitRule(antlr4::tree::ParseTreeListener *listener) override;
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+   
+  };
+
+  NumberContext* number();
 
   class  StatementContext : public antlr4::ParserRuleContext {
   public:
@@ -68,6 +102,8 @@ public:
 
     virtual void enterRule(antlr4::tree::ParseTreeListener *listener) override;
     virtual void exitRule(antlr4::tree::ParseTreeListener *listener) override;
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
    
   };
 
@@ -77,11 +113,13 @@ public:
   public:
     ValueContext(antlr4::ParserRuleContext *parent, size_t invokingState);
     virtual size_t getRuleIndex() const override;
-    antlr4::tree::TerminalNode *STRING();
-    antlr4::tree::TerminalNode *NUMBER();
+    StringContext *string();
+    NumberContext *number();
 
     virtual void enterRule(antlr4::tree::ParseTreeListener *listener) override;
     virtual void exitRule(antlr4::tree::ParseTreeListener *listener) override;
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
    
   };
 
@@ -98,6 +136,8 @@ public:
 
     virtual void enterRule(antlr4::tree::ParseTreeListener *listener) override;
     virtual void exitRule(antlr4::tree::ParseTreeListener *listener) override;
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
    
   };
 
@@ -112,6 +152,8 @@ public:
 
     virtual void enterRule(antlr4::tree::ParseTreeListener *listener) override;
     virtual void exitRule(antlr4::tree::ParseTreeListener *listener) override;
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
    
   };
 
@@ -127,6 +169,8 @@ public:
 
     virtual void enterRule(antlr4::tree::ParseTreeListener *listener) override;
     virtual void exitRule(antlr4::tree::ParseTreeListener *listener) override;
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
    
   };
 

@@ -11,9 +11,11 @@ NUMBER: SIMPLE_NUMBER|MANAGED_NUMBER;
 WS: [ \t\r\n]+ -> skip;
 
 program: statement+;
-statement: functionCall;
+string: STRING;
+number: NUMBER;
 
-value: STRING|NUMBER;
+statement: functionCall;
 type: name=IDENTIFIER ('<' type (',' type)* '>')?;
 arguments: value (',' value)*;
+value: string|number;
 functionCall: name=IDENTIFIER '(' arguments ')';

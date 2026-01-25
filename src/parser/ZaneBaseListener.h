@@ -21,6 +21,12 @@ public:
   virtual void enterProgram(ZaneParser::ProgramContext * /*ctx*/) override { }
   virtual void exitProgram(ZaneParser::ProgramContext * /*ctx*/) override { }
 
+  virtual void enterString(ZaneParser::StringContext * /*ctx*/) override { }
+  virtual void exitString(ZaneParser::StringContext * /*ctx*/) override { }
+
+  virtual void enterNumber(ZaneParser::NumberContext * /*ctx*/) override { }
+  virtual void exitNumber(ZaneParser::NumberContext * /*ctx*/) override { }
+
   virtual void enterStatement(ZaneParser::StatementContext * /*ctx*/) override { }
   virtual void exitStatement(ZaneParser::StatementContext * /*ctx*/) override { }
 

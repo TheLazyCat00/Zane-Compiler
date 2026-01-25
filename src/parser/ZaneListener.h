@@ -19,6 +19,12 @@ public:
   virtual void enterProgram(ZaneParser::ProgramContext *ctx) = 0;
   virtual void exitProgram(ZaneParser::ProgramContext *ctx) = 0;
 
+  virtual void enterString(ZaneParser::StringContext *ctx) = 0;
+  virtual void exitString(ZaneParser::StringContext *ctx) = 0;
+
+  virtual void enterNumber(ZaneParser::NumberContext *ctx) = 0;
+  virtual void exitNumber(ZaneParser::NumberContext *ctx) = 0;
+
   virtual void enterStatement(ZaneParser::StatementContext *ctx) = 0;
   virtual void exitStatement(ZaneParser::StatementContext *ctx) = 0;
 
