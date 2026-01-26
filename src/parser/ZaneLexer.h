@@ -13,8 +13,9 @@ namespace parser {
 class  ZaneLexer : public antlr4::Lexer {
 public:
   enum {
-    T__0 = 1, T__1 = 2, T__2 = 3, T__3 = 4, T__4 = 5, IDENTIFIER = 6, STRING = 7, 
-    NUMBER = 8, WS = 9
+    T__0 = 1, T__1 = 2, T__2 = 3, T__3 = 4, T__4 = 5, T__5 = 6, T__6 = 7, 
+    T__7 = 8, T__8 = 9, T__9 = 10, T__10 = 11, OPERATOR = 12, IDENTIFIER = 13, 
+    STRING = 14, NUMBER = 15, WS = 16
   };
 
   explicit ZaneLexer(antlr4::CharStream *input);

@@ -19,26 +19,71 @@ public:
   virtual void enterProgram(ZaneParser::ProgramContext *ctx) = 0;
   virtual void exitProgram(ZaneParser::ProgramContext *ctx) = 0;
 
-  virtual void enterString(ZaneParser::StringContext *ctx) = 0;
-  virtual void exitString(ZaneParser::StringContext *ctx) = 0;
+  virtual void enterDeclaration(ZaneParser::DeclarationContext *ctx) = 0;
+  virtual void exitDeclaration(ZaneParser::DeclarationContext *ctx) = 0;
 
-  virtual void enterNumber(ZaneParser::NumberContext *ctx) = 0;
-  virtual void exitNumber(ZaneParser::NumberContext *ctx) = 0;
+  virtual void enterAtom(ZaneParser::AtomContext *ctx) = 0;
+  virtual void exitAtom(ZaneParser::AtomContext *ctx) = 0;
+
+  virtual void enterOperation(ZaneParser::OperationContext *ctx) = 0;
+  virtual void exitOperation(ZaneParser::OperationContext *ctx) = 0;
+
+  virtual void enterStr(ZaneParser::StrContext *ctx) = 0;
+  virtual void exitStr(ZaneParser::StrContext *ctx) = 0;
+
+  virtual void enterCall(ZaneParser::CallContext *ctx) = 0;
+  virtual void exitCall(ZaneParser::CallContext *ctx) = 0;
+
+  virtual void enterNum(ZaneParser::NumContext *ctx) = 0;
+  virtual void exitNum(ZaneParser::NumContext *ctx) = 0;
+
+  virtual void enterId(ZaneParser::IdContext *ctx) = 0;
+  virtual void exitId(ZaneParser::IdContext *ctx) = 0;
+
+  virtual void enterGrouping(ZaneParser::GroupingContext *ctx) = 0;
+  virtual void exitGrouping(ZaneParser::GroupingContext *ctx) = 0;
+
+  virtual void enterCons(ZaneParser::ConsContext *ctx) = 0;
+  virtual void exitCons(ZaneParser::ConsContext *ctx) = 0;
+
+  virtual void enterFuncDef(ZaneParser::FuncDefContext *ctx) = 0;
+  virtual void exitFuncDef(ZaneParser::FuncDefContext *ctx) = 0;
+
+  virtual void enterFuncMod(ZaneParser::FuncModContext *ctx) = 0;
+  virtual void exitFuncMod(ZaneParser::FuncModContext *ctx) = 0;
+
+  virtual void enterStrict(ZaneParser::StrictContext *ctx) = 0;
+  virtual void exitStrict(ZaneParser::StrictContext *ctx) = 0;
+
+  virtual void enterPure(ZaneParser::PureContext *ctx) = 0;
+  virtual void exitPure(ZaneParser::PureContext *ctx) = 0;
+
+  virtual void enterFuncBody(ZaneParser::FuncBodyContext *ctx) = 0;
+  virtual void exitFuncBody(ZaneParser::FuncBodyContext *ctx) = 0;
+
+  virtual void enterArrowFunction(ZaneParser::ArrowFunctionContext *ctx) = 0;
+  virtual void exitArrowFunction(ZaneParser::ArrowFunctionContext *ctx) = 0;
+
+  virtual void enterBlockFunction(ZaneParser::BlockFunctionContext *ctx) = 0;
+  virtual void exitBlockFunction(ZaneParser::BlockFunctionContext *ctx) = 0;
 
   virtual void enterStatement(ZaneParser::StatementContext *ctx) = 0;
   virtual void exitStatement(ZaneParser::StatementContext *ctx) = 0;
 
-  virtual void enterValue(ZaneParser::ValueContext *ctx) = 0;
-  virtual void exitValue(ZaneParser::ValueContext *ctx) = 0;
+  virtual void enterFuncCall(ZaneParser::FuncCallContext *ctx) = 0;
+  virtual void exitFuncCall(ZaneParser::FuncCallContext *ctx) = 0;
+
+  virtual void enterConstructorCall(ZaneParser::ConstructorCallContext *ctx) = 0;
+  virtual void exitConstructorCall(ZaneParser::ConstructorCallContext *ctx) = 0;
+
+  virtual void enterCallSuffix(ZaneParser::CallSuffixContext *ctx) = 0;
+  virtual void exitCallSuffix(ZaneParser::CallSuffixContext *ctx) = 0;
 
   virtual void enterType(ZaneParser::TypeContext *ctx) = 0;
   virtual void exitType(ZaneParser::TypeContext *ctx) = 0;
 
-  virtual void enterArguments(ZaneParser::ArgumentsContext *ctx) = 0;
-  virtual void exitArguments(ZaneParser::ArgumentsContext *ctx) = 0;
-
-  virtual void enterFunctionCall(ZaneParser::FunctionCallContext *ctx) = 0;
-  virtual void exitFunctionCall(ZaneParser::FunctionCallContext *ctx) = 0;
+  virtual void enterCollection(ZaneParser::CollectionContext *ctx) = 0;
+  virtual void exitCollection(ZaneParser::CollectionContext *ctx) = 0;
 
 
 };
