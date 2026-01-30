@@ -1,62 +1,39 @@
-#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+#include <cstdio>
+#include <iostream>
+#include <filesystem>
+#include <iostream>
 
-#include <llvm/ExecutionEngine/Orc/LLJIT.h>
-#include <llvm/IR/IRBuilder.h>
-#include <llvm/IR/LLVMContext.h>
-#include <llvm/IR/Module.h>
-#include <llvm/Support/InitLLVM.h>
-#include <llvm/Support/TargetSelect.h>
-#include <llvm/Support/raw_ostream.h>
-#include <memory>
+#include <antlr4-runtime.h>
+#include "parser/ZaneLexer.h"
+#include "parser/ZaneParser.h"
+#include "parser/ZaneBaseListener.h"
 
-using namespace llvm;
-using namespace llvm::orc;
+namespace fs = std::filesystem;
+using namespace antlr4;
+using namespace parser;
 
-int main(int argc, char *argv[]) {
-	// 1. Initialize LLVM
-	InitLLVM X(argc, argv);
-	InitializeNativeTarget();
-	InitializeNativeTargetAsmPrinter();
+int main(int argc, char* argv[]) {
+	if (argc < 2) {
+		std::cout << "Usage: " << argv[0] << " <filename>\n";
+		return 1;
+	}
 
-	ExitOnError ExitOnErr;
+	auto filename = argv[1];
 
-	auto Context = std::make_unique<LLVMContext>();
-	auto M = std::make_unique<Module>("zane_jit", *Context);
-	IRBuilder<> Builder(*Context);
+	if (!fs::exists(filename)) {
+		printf("File %s doesn't exist", filename);
+		return 1;
+	}
 
-	// 2. Setup printf (Opaque Pointers for LLVM 18)
-	Type *Int8Ptr = PointerType::get(*Context, 0); 
-	FunctionType *PrintfType = FunctionType::get(Builder.getInt32Ty(), {Int8Ptr}, true);
-	FunctionCallee PrintfFunc = M->getOrInsertFunction("printf", PrintfType);
+	std::ifstream stream;
+	stream.open(filename);
+	ANTLRInputStream input(stream);
+	ZaneLexer lexer(&input);
+	CommonTokenStream tokens(&lexer);
+	ZaneParser parser(&tokens);
 
-	// 3. Create main function
-	FunctionType *MainType = FunctionType::get(Builder.getInt32Ty(), false);
-	Function *MainFunc = Function::Create(MainType, Function::ExternalLinkage, "main", M.get());
-	BasicBlock *Entry = BasicBlock::Create(*Context, "entry", MainFunc);
-	Builder.SetInsertPoint(Entry);
-
-	// 4. Logic
-	Value *HelloStr = Builder.CreateGlobalStringPtr("Hello from the Zane Compiler JIT!\n");
-	Builder.CreateCall(PrintfFunc, {HelloStr});
-	Builder.CreateRet(Builder.getInt32(0));
-
-	// 5. Build JIT
-	auto JIT = ExitOnErr(LLJITBuilder().create());
-
-	// Ensure the module matches the JIT target data layout
-	M->setDataLayout(JIT->getDataLayout());
-	ExitOnErr(JIT->addIRModule(ThreadSafeModule(std::move(M), std::move(Context))));
-
-	// 6. Lookup and Execute
-	// LLVM 18 lookup returns an ExecutorAddr
-	auto MainAddr = ExitOnErr(JIT->lookup("main"));
-
-	// Convert the address to a callable function pointer
-	auto MainPtr = MainAddr.toPtr<int (*)()>();
-
-	outs() << "--- JIT Execution Start ---\n";
-	MainPtr();
-	outs() << "--- JIT Execution End ---\n";
+	tree::ParseTree *tree = parser.program();
+	tree::ParseTreeWalker::DEFAULT.walk(&listener, tree);
 
 	return 0;
 }

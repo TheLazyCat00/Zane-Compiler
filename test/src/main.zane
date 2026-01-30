@@ -1,1 +1,3 @@
-puts("Hello")
+Void main() {
+	puts("Hello")
+}
