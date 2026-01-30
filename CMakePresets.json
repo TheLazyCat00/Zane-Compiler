@@ -25,10 +25,11 @@
 				"VCPKG_TARGET_TRIPLET": "x64-linux",
 				"CMAKE_TOOLCHAIN_FILE": "~/vcpkg/scripts/buildsystems/vcpkg.cmake",
 				"CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
-				"CMAKE_C_COMPILER": "clang-18",
-				"CMAKE_CXX_COMPILER": "clang++-18",
+				"CMAKE_C_COMPILER": "clang",
+				"CMAKE_CXX_COMPILER": "clang++",
 				"CMAKE_CXX_STANDARD": "23",
-				"LLVM_DIR": "/usr/lib/llvm-18/lib/cmake/llvm"
+				"LLVM_DIR": "/usr/lib/llvm-18/lib/cmake/llvm",
+				"VCPKG_MANIFEST_INSTALL": "OFF"
 			}
 		}
 	]

@@ -4,5 +4,5 @@ parser:
 init:
 	cmake --preset clang-ninja --fresh
 
-build:
-	cmake --build build
+run:
+	cmake --build build --target run
