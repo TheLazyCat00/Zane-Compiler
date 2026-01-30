@@ -66,8 +66,8 @@ public:
   virtual void enterArrowFunction(ZaneParser::ArrowFunctionContext * /*ctx*/) override { }
   virtual void exitArrowFunction(ZaneParser::ArrowFunctionContext * /*ctx*/) override { }
 
-  virtual void enterBlockFunction(ZaneParser::BlockFunctionContext * /*ctx*/) override { }
-  virtual void exitBlockFunction(ZaneParser::BlockFunctionContext * /*ctx*/) override { }
+  virtual void enterScope(ZaneParser::ScopeContext * /*ctx*/) override { }
+  virtual void exitScope(ZaneParser::ScopeContext * /*ctx*/) override { }
 
   virtual void enterStatement(ZaneParser::StatementContext * /*ctx*/) override { }
   virtual void exitStatement(ZaneParser::StatementContext * /*ctx*/) override { }

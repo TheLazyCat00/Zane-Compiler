@@ -55,7 +55,7 @@ void zaneParserInitialize() {
   auto staticData = std::make_unique<ZaneParserStaticData>(
     std::vector<std::string>{
       "program", "declaration", "value", "primary", "funcDef", "funcMod", 
-      "strict", "pure", "funcBody", "arrowFunction", "blockFunction", "statement", 
+      "strict", "pure", "funcBody", "arrowFunction", "scope", "statement", 
       "funcCall", "constructorCall", "callSuffix", "type", "collection"
     },
     std::vector<std::string>{
@@ -1026,8 +1026,8 @@ ZaneParser::ArrowFunctionContext* ZaneParser::FuncBodyContext::arrowFunction() {
   return getRuleContext<ZaneParser::ArrowFunctionContext>(0);
 }
 
-ZaneParser::BlockFunctionContext* ZaneParser::FuncBodyContext::blockFunction() {
-  return getRuleContext<ZaneParser::BlockFunctionContext>(0);
+ZaneParser::ScopeContext* ZaneParser::FuncBodyContext::scope() {
+  return getRuleContext<ZaneParser::ScopeContext>(0);
 }
 
 
@@ -1080,7 +1080,7 @@ ZaneParser::FuncBodyContext* ZaneParser::funcBody() {
       case ZaneParser::T__5: {
         enterOuterAlt(_localctx, 2);
         setState(91);
-        blockFunction();
+        scope();
         break;
       }
 
@@ -1161,48 +1161,48 @@ ZaneParser::ArrowFunctionContext* ZaneParser::arrowFunction() {
   return _localctx;
 }
 
-//----------------- BlockFunctionContext ------------------------------------------------------------------
+//----------------- ScopeContext ------------------------------------------------------------------
 
-ZaneParser::BlockFunctionContext::BlockFunctionContext(ParserRuleContext *parent, size_t invokingState)
+ZaneParser::ScopeContext::ScopeContext(ParserRuleContext *parent, size_t invokingState)
   : ParserRuleContext(parent, invokingState) {
 }
 
-std::vector<ZaneParser::StatementContext *> ZaneParser::BlockFunctionContext::statement() {
+std::vector<ZaneParser::StatementContext *> ZaneParser::ScopeContext::statement() {
   return getRuleContexts<ZaneParser::StatementContext>();
 }
 
-ZaneParser::StatementContext* ZaneParser::BlockFunctionContext::statement(size_t i) {
+ZaneParser::StatementContext* ZaneParser::ScopeContext::statement(size_t i) {
   return getRuleContext<ZaneParser::StatementContext>(i);
 }
 
 
-size_t ZaneParser::BlockFunctionContext::getRuleIndex() const {
-  return ZaneParser::RuleBlockFunction;
+size_t ZaneParser::ScopeContext::getRuleIndex() const {
+  return ZaneParser::RuleScope;
 }
 
-void ZaneParser::BlockFunctionContext::enterRule(tree::ParseTreeListener *listener) {
+void ZaneParser::ScopeContext::enterRule(tree::ParseTreeListener *listener) {
   auto parserListener = dynamic_cast<ZaneListener *>(listener);
   if (parserListener != nullptr)
-    parserListener->enterBlockFunction(this);
+    parserListener->enterScope(this);
 }
 
-void ZaneParser::BlockFunctionContext::exitRule(tree::ParseTreeListener *listener) {
+void ZaneParser::ScopeContext::exitRule(tree::ParseTreeListener *listener) {
   auto parserListener = dynamic_cast<ZaneListener *>(listener);
   if (parserListener != nullptr)
-    parserListener->exitBlockFunction(this);
+    parserListener->exitScope(this);
 }
 
 
-std::any ZaneParser::BlockFunctionContext::accept(tree::ParseTreeVisitor *visitor) {
+std::any ZaneParser::ScopeContext::accept(tree::ParseTreeVisitor *visitor) {
   if (auto parserVisitor = dynamic_cast<ZaneVisitor*>(visitor))
-    return parserVisitor->visitBlockFunction(this);
+    return parserVisitor->visitScope(this);
   else
     return visitor->visitChildren(this);
 }
 
-ZaneParser::BlockFunctionContext* ZaneParser::blockFunction() {
-  BlockFunctionContext *_localctx = _tracker.createInstance<BlockFunctionContext>(_ctx, getState());
-  enterRule(_localctx, 20, ZaneParser::RuleBlockFunction);
+ZaneParser::ScopeContext* ZaneParser::scope() {
+  ScopeContext *_localctx = _tracker.createInstance<ScopeContext>(_ctx, getState());
+  enterRule(_localctx, 20, ZaneParser::RuleScope);
   size_t _la = 0;
 
 #if __cplusplus > 201703L

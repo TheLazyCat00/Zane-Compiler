@@ -21,7 +21,7 @@ public:
   enum {
     RuleProgram = 0, RuleDeclaration = 1, RuleValue = 2, RulePrimary = 3, 
     RuleFuncDef = 4, RuleFuncMod = 5, RuleStrict = 6, RulePure = 7, RuleFuncBody = 8, 
-    RuleArrowFunction = 9, RuleBlockFunction = 10, RuleStatement = 11, RuleFuncCall = 12, 
+    RuleArrowFunction = 9, RuleScope = 10, RuleStatement = 11, RuleFuncCall = 12, 
     RuleConstructorCall = 13, RuleCallSuffix = 14, RuleType = 15, RuleCollection = 16
   };
 
@@ -52,7 +52,7 @@ public:
   class PureContext;
   class FuncBodyContext;
   class ArrowFunctionContext;
-  class BlockFunctionContext;
+  class ScopeContext;
   class StatementContext;
   class FuncCallContext;
   class ConstructorCallContext;
@@ -283,7 +283,7 @@ public:
     FuncBodyContext(antlr4::ParserRuleContext *parent, size_t invokingState);
     virtual size_t getRuleIndex() const override;
     ArrowFunctionContext *arrowFunction();
-    BlockFunctionContext *blockFunction();
+    ScopeContext *scope();
 
     virtual void enterRule(antlr4::tree::ParseTreeListener *listener) override;
     virtual void exitRule(antlr4::tree::ParseTreeListener *listener) override;
@@ -309,9 +309,9 @@ public:
 
   ArrowFunctionContext* arrowFunction();
 
-  class  BlockFunctionContext : public antlr4::ParserRuleContext {
+  class  ScopeContext : public antlr4::ParserRuleContext {
   public:
-    BlockFunctionContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    ScopeContext(antlr4::ParserRuleContext *parent, size_t invokingState);
     virtual size_t getRuleIndex() const override;
     std::vector<StatementContext *> statement();
     StatementContext* statement(size_t i);
@@ -323,7 +323,7 @@ public:
    
   };
 
-  BlockFunctionContext* blockFunction();
+  ScopeContext* scope();
 
   class  StatementContext : public antlr4::ParserRuleContext {
   public:

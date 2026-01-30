@@ -2,33 +2,51 @@
 
 #include <parser/ZaneBaseVisitor.h>
 #include <antlr4-runtime.h>
-#include <visitor/context.hpp>
+#include <memory>
+#include <ir/nodes.hpp>
 
 using namespace parser;
 
 class Visitor : public ZaneBaseVisitor {
 private:
-	VisitorContext& globalCtx;
-public:
-	Visitor(VisitorContext& context) : globalCtx(context) {}
+	std::shared_ptr<ir::FileScope> currentFileScope;
+	std::shared_ptr<ir::LocalScope> currentLocalScope;
+	std::shared_ptr<ir::Program> program;
 
-	std::any visitProgram(ZaneParser::ProgramContext *ctx) override {
-		return visitChildren(ctx);
+public:
+	Visitor() : program(std::make_shared<ir::Program>()) {
+		currentFileScope = program;
+		currentLocalScope = nullptr;
 	}
 
-	std::any visitStr(ZaneParser::StrContext *ctx) override {
-		std::string value = ctx->STRING()->getText();
+	std::any visitProgram(ZaneParser::ProgramContext *ctx) override {
+		visitChildren(ctx);
+		return program;
+	}
 
-		if (value.length() >= 2 && value.front() == '"' && value.back() == '"') {
-			value = value.substr(1, value.length() - 2);
-		}
+	std::any visitFuncDef(ZaneParser::FuncDefContext *ctx) override {
+		auto funcDef = std::make_shared<ir::FuncDef>();
+		funcDef->name = ctx->IDENTIFIER()->getText();
+		funcDef->scope = std::make_shared<ir::LocalScope>();
+		funcDef->scope->parent = currentLocalScope;
 
-		globalCtx.staticStrings.push_back(ctx);
-		return visitChildren(ctx);
+		currentFileScope->functions[funcDef->name] = funcDef;
+		currentFileScope->body.push_back(funcDef);
+
+		auto prevLocalScope = currentLocalScope;
+		currentLocalScope = funcDef->scope;
+		visitChildren(ctx);
+		currentLocalScope = prevLocalScope;
+
+		return funcDef;
 	}
 
 	std::any visitStatement(ZaneParser::StatementContext *ctx) override {
-		globalCtx.statements.push_back(ctx);
-		return visitChildren(ctx);
+		visitChildren(ctx);
+		return nullptr;
+	}
+
+	std::shared_ptr<ir::Program> getProgram() const {
+		return program;
 	}
 };

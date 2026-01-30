@@ -52,7 +52,7 @@ public:
 
     virtual std::any visitArrowFunction(ZaneParser::ArrowFunctionContext *context) = 0;
 
-    virtual std::any visitBlockFunction(ZaneParser::BlockFunctionContext *context) = 0;
+    virtual std::any visitScope(ZaneParser::ScopeContext *context) = 0;
 
     virtual std::any visitStatement(ZaneParser::StatementContext *context) = 0;
 

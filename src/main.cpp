@@ -8,7 +8,8 @@
 #include <parser/ZaneParser.h>
 #include <parser/ZaneBaseListener.h>
 
-#include "visitor/visitor.hpp"
+#include <visitor/visitor.hpp>
+#include <codegen/llvm.hpp>
 
 namespace fs = std::filesystem;
 using namespace antlr4;
@@ -35,10 +36,13 @@ int main(int argc, char* argv[]) {
 	ZaneParser parser(&tokens);
 
 	tree::ParseTree *tree = parser.program();
-	VisitorContext context;
-	Visitor visitor(context);
+	Visitor visitor;
 	visitor.visit(tree);
-	context.print();
+	auto irProgram = visitor.getProgram();
+
+	llvm::LLVMContext context;
+	LLVMCodeGen codegen(context);
+	codegen.generate(irProgram);
 
 	return 0;
 }

@@ -64,8 +64,8 @@ public:
   virtual void enterArrowFunction(ZaneParser::ArrowFunctionContext *ctx) = 0;
   virtual void exitArrowFunction(ZaneParser::ArrowFunctionContext *ctx) = 0;
 
-  virtual void enterBlockFunction(ZaneParser::BlockFunctionContext *ctx) = 0;
-  virtual void exitBlockFunction(ZaneParser::BlockFunctionContext *ctx) = 0;
+  virtual void enterScope(ZaneParser::ScopeContext *ctx) = 0;
+  virtual void exitScope(ZaneParser::ScopeContext *ctx) = 0;
 
   virtual void enterStatement(ZaneParser::StatementContext *ctx) = 0;
   virtual void exitStatement(ZaneParser::StatementContext *ctx) = 0;

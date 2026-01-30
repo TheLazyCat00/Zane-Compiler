@@ -81,7 +81,7 @@ public:
     return visitChildren(ctx);
   }
 
-  virtual std::any visitBlockFunction(ZaneParser::BlockFunctionContext *ctx) override {
+  virtual std::any visitScope(ZaneParser::ScopeContext *ctx) override {
     return visitChildren(ctx);
   }
 

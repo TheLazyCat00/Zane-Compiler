@@ -41,9 +41,9 @@ funcMod: strict | pure;
 strict: 'strict';
 pure: 'pure';
 
-funcBody: arrowFunction | blockFunction;
+funcBody: arrowFunction | scope;
 arrowFunction: '=>' value;
-blockFunction: '{' statement* '}';
+scope: '{' statement* '}';
 
 // Statements
 statement
