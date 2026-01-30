@@ -4,9 +4,11 @@
 #include <iostream>
 
 #include <antlr4-runtime.h>
-#include "parser/ZaneLexer.h"
-#include "parser/ZaneParser.h"
-#include "parser/ZaneBaseListener.h"
+#include <parser/ZaneLexer.h>
+#include <parser/ZaneParser.h>
+#include <parser/ZaneBaseListener.h>
+
+#include "visitor/visitor.hpp"
 
 namespace fs = std::filesystem;
 using namespace antlr4;
@@ -33,7 +35,8 @@ int main(int argc, char* argv[]) {
 	ZaneParser parser(&tokens);
 
 	tree::ParseTree *tree = parser.program();
-	tree::ParseTreeWalker::DEFAULT.walk(&listener, tree);
+    Visitor visitor;
+    visitor.visit(tree);
 
 	return 0;
 }
