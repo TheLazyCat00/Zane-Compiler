@@ -35,8 +35,10 @@ int main(int argc, char* argv[]) {
 	ZaneParser parser(&tokens);
 
 	tree::ParseTree *tree = parser.program();
-    Visitor visitor;
-    visitor.visit(tree);
+	VisitorContext context;
+	Visitor visitor(context);
+	visitor.visit(tree);
+	context.print();
 
 	return 0;
 }

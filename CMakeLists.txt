@@ -26,11 +26,16 @@ file(GLOB ANTLR_SOURCES generated-parser/parser/*.cpp)
 add_library(zane_parser STATIC ${ANTLR_SOURCES})
 target_include_directories(zane_parser PUBLIC
 	${CMAKE_CURRENT_SOURCE_DIR}/generated-parser
+	${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 target_link_libraries(zane_parser PUBLIC antlr4_static)
 
 add_executable(${CMAKE_PROJECT_NAME}
 	src/main.cpp
+)
+
+target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
+	${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
 target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE
