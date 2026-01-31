@@ -18,8 +18,8 @@ namespace parser {
 class  ZaneBaseListener : public ZaneListener {
 public:
 
-  virtual void enterProgram(ZaneParser::ProgramContext * /*ctx*/) override { }
-  virtual void exitProgram(ZaneParser::ProgramContext * /*ctx*/) override { }
+  virtual void enterGlobalScope(ZaneParser::GlobalScopeContext * /*ctx*/) override { }
+  virtual void exitGlobalScope(ZaneParser::GlobalScopeContext * /*ctx*/) override { }
 
   virtual void enterDeclaration(ZaneParser::DeclarationContext * /*ctx*/) override { }
   virtual void exitDeclaration(ZaneParser::DeclarationContext * /*ctx*/) override { }
@@ -50,6 +50,12 @@ public:
 
   virtual void enterFuncDef(ZaneParser::FuncDefContext * /*ctx*/) override { }
   virtual void exitFuncDef(ZaneParser::FuncDefContext * /*ctx*/) override { }
+
+  virtual void enterParam(ZaneParser::ParamContext * /*ctx*/) override { }
+  virtual void exitParam(ZaneParser::ParamContext * /*ctx*/) override { }
+
+  virtual void enterParams(ZaneParser::ParamsContext * /*ctx*/) override { }
+  virtual void exitParams(ZaneParser::ParamsContext * /*ctx*/) override { }
 
   virtual void enterFuncMod(ZaneParser::FuncModContext * /*ctx*/) override { }
   virtual void exitFuncMod(ZaneParser::FuncModContext * /*ctx*/) override { }

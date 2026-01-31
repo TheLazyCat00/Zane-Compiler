@@ -14,7 +14,7 @@ NUMBER: SIMPLE_NUMBER | MANAGED_NUMBER;
 WS: [ \t\r\n]+ -> skip;
 
 // --- Parser Rules ---
-program: declaration+ EOF;
+globalScope: declaration+ EOF;
 
 declaration: funcDef;
 
@@ -35,7 +35,9 @@ primary
 	;
 
 // Functions
-funcDef: type name=IDENTIFIER '(' arguments=collection ')' funcMod? funcBody;
+funcDef: type name=IDENTIFIER '(' params? ')' funcMod? funcBody;
+param: type name=IDENTIFIER;
+params: param (',' param)*;
 
 funcMod: strict | pure;
 strict: 'strict';

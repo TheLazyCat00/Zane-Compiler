@@ -13,21 +13,25 @@ enum class VisitResult {
 
 class IRNode;
 class FuncDef;
-class FileScope;
-class LocalScope;
+class GlobalScope;
+class Scope;
 class FuncCall;
 class StringLiteral;
 class Identifier;
+class Type;
+class Parameter;
 
 class IRVisitor {
 public:
 	virtual ~IRVisitor() = default;
 	virtual VisitResult visit(FuncDef* node) = 0;
-	virtual VisitResult visit(FileScope* node) = 0;
-	virtual VisitResult visit(LocalScope* node) = 0;
+	virtual VisitResult visit(GlobalScope* node) = 0;
+	virtual VisitResult visit(Scope* node) = 0;
 	virtual VisitResult visit(FuncCall* node) = 0;
 	virtual VisitResult visit(StringLiteral* node) = 0;
 	virtual VisitResult visit(Identifier* node) = 0;
+	virtual VisitResult visit(Type* node) = 0;
+	virtual VisitResult visit(Parameter* node) = 0;
 };
 
 struct IRNode {

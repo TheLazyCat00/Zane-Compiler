@@ -19,10 +19,11 @@ public:
   };
 
   enum {
-    RuleProgram = 0, RuleDeclaration = 1, RuleValue = 2, RulePrimary = 3, 
-    RuleFuncDef = 4, RuleFuncMod = 5, RuleStrict = 6, RulePure = 7, RuleFuncBody = 8, 
-    RuleArrowFunction = 9, RuleScope = 10, RuleStatement = 11, RuleFuncCall = 12, 
-    RuleConstructorCall = 13, RuleCallSuffix = 14, RuleType = 15, RuleCollection = 16
+    RuleGlobalScope = 0, RuleDeclaration = 1, RuleValue = 2, RulePrimary = 3, 
+    RuleFuncDef = 4, RuleParam = 5, RuleParams = 6, RuleFuncMod = 7, RuleStrict = 8, 
+    RulePure = 9, RuleFuncBody = 10, RuleArrowFunction = 11, RuleScope = 12, 
+    RuleStatement = 13, RuleFuncCall = 14, RuleConstructorCall = 15, RuleCallSuffix = 16, 
+    RuleType = 17, RuleCollection = 18
   };
 
   explicit ZaneParser(antlr4::TokenStream *input);
@@ -42,11 +43,13 @@ public:
   antlr4::atn::SerializedATNView getSerializedATN() const override;
 
 
-  class ProgramContext;
+  class GlobalScopeContext;
   class DeclarationContext;
   class ValueContext;
   class PrimaryContext;
   class FuncDefContext;
+  class ParamContext;
+  class ParamsContext;
   class FuncModContext;
   class StrictContext;
   class PureContext;
@@ -60,9 +63,9 @@ public:
   class TypeContext;
   class CollectionContext; 
 
-  class  ProgramContext : public antlr4::ParserRuleContext {
+  class  GlobalScopeContext : public antlr4::ParserRuleContext {
   public:
-    ProgramContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    GlobalScopeContext(antlr4::ParserRuleContext *parent, size_t invokingState);
     virtual size_t getRuleIndex() const override;
     antlr4::tree::TerminalNode *EOF();
     std::vector<DeclarationContext *> declaration();
@@ -75,7 +78,7 @@ public:
    
   };
 
-  ProgramContext* program();
+  GlobalScopeContext* globalScope();
 
   class  DeclarationContext : public antlr4::ParserRuleContext {
   public:
@@ -216,13 +219,12 @@ public:
   class  FuncDefContext : public antlr4::ParserRuleContext {
   public:
     antlr4::Token *name = nullptr;
-    ZaneParser::CollectionContext *arguments = nullptr;
     FuncDefContext(antlr4::ParserRuleContext *parent, size_t invokingState);
     virtual size_t getRuleIndex() const override;
     TypeContext *type();
     FuncBodyContext *funcBody();
     antlr4::tree::TerminalNode *IDENTIFIER();
-    CollectionContext *collection();
+    ParamsContext *params();
     FuncModContext *funcMod();
 
     virtual void enterRule(antlr4::tree::ParseTreeListener *listener) override;
@@ -233,6 +235,39 @@ public:
   };
 
   FuncDefContext* funcDef();
+
+  class  ParamContext : public antlr4::ParserRuleContext {
+  public:
+    antlr4::Token *name = nullptr;
+    ParamContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    virtual size_t getRuleIndex() const override;
+    TypeContext *type();
+    antlr4::tree::TerminalNode *IDENTIFIER();
+
+    virtual void enterRule(antlr4::tree::ParseTreeListener *listener) override;
+    virtual void exitRule(antlr4::tree::ParseTreeListener *listener) override;
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+   
+  };
+
+  ParamContext* param();
+
+  class  ParamsContext : public antlr4::ParserRuleContext {
+  public:
+    ParamsContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    virtual size_t getRuleIndex() const override;
+    std::vector<ParamContext *> param();
+    ParamContext* param(size_t i);
+
+    virtual void enterRule(antlr4::tree::ParseTreeListener *listener) override;
+    virtual void exitRule(antlr4::tree::ParseTreeListener *listener) override;
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+   
+  };
+
+  ParamsContext* params();
 
   class  FuncModContext : public antlr4::ParserRuleContext {
   public:

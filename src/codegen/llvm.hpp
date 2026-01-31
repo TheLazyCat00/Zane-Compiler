@@ -19,19 +19,19 @@ public:
 	LLVMCodeGen(llvm::LLVMContext& ctx)
 		: context(ctx), module("zane", ctx), builder(ctx), typeMapper(ctx) {}
 
-	void generate(std::shared_ptr<ir::Program> program) {
-		for (const auto& [name, funcDef] : program->functionDefs) {
+	void generate(std::shared_ptr<ir::GlobalScope> globalScope) {
+		for (const auto& [name, funcDef] : globalScope->functionDefs) {
 			generateFunction(funcDef.get());
 		}
 	}
 
 private:
 	void generateFunction(ir::FuncDef* funcDef) {
-		llvm::Type* returnType = toLLVMType(funcDef->returnType);
+		llvm::Type* returnType = toLLVMType(*funcDef->returnType);
 		
 		std::vector<llvm::Type*> paramTypes;
 		for (const auto& param : funcDef->parameters) {
-			paramTypes.push_back(toLLVMType(param.type));
+			paramTypes.push_back(toLLVMType(*param.type));
 		}
 		
 		llvm::FunctionType* funcType = llvm::FunctionType::get(
@@ -56,11 +56,38 @@ private:
 		}
 	}
 
-	void generateScope(ir::LocalScope* scope) {
+	void generateScope(ir::Scope* scope) {
 		for (const auto& stmt : scope->statements) {
-			// Generate code for each statement
-			// TODO: implement statement code generation
+			if (auto funcCall = dynamic_cast<ir::FuncCall*>(stmt.get())) {
+				generateFuncCall(funcCall);
+			}
 		}
+	}
+
+	void generateFuncCall(ir::FuncCall* funcCall) {
+		if (auto identifier = dynamic_cast<ir::Identifier*>(funcCall->valueBeingCalledOn.get())) {
+			llvm::Function* callee = module.getFunction(identifier->name);
+			if (!callee) {
+				return;
+			}
+
+			std::vector<llvm::Value*> args;
+			for (const auto& arg : funcCall->arguments) {
+				llvm::Value* argValue = generateValue(arg.get());
+				if (argValue) {
+					args.push_back(argValue);
+				}
+			}
+
+			builder.CreateCall(callee, args);
+		}
+	}
+
+	llvm::Value* generateValue(ir::IRNode* node) {
+		if (auto stringLit = dynamic_cast<ir::StringLiteral*>(node)) {
+			return builder.CreateGlobalStringPtr(stringLit->value);
+		}
+		return nullptr;
 	}
 
 	llvm::Type* toLLVMType(const ir::Type& type) {

@@ -8,17 +8,33 @@
 
 namespace ir {
 
-struct Type {
+struct Type : public IRNode {
 	std::string name;
-	std::vector<Type> generics;
+	std::vector<std::shared_ptr<Type>> generics;
+
+	VisitResult accept(IRVisitor* visitor) override {
+		return visitor->visit(this);
+	}
+
+	std::string getNodeName() const override {
+		return "Type(" + name + ")";
+	}
 };
 
-struct Parameter {
-	Type type;
+struct Parameter : public IRNode {
+	std::shared_ptr<Type> type;
 	std::string name;
+
+	VisitResult accept(IRVisitor* visitor) override {
+		return visitor->visit(this);
+	}
+
+	std::string getNodeName() const override {
+		return "Parameter(" + name + ")";
+	}
 };
 
-struct FileScope : public IRNode {
+struct GlobalScope : public IRNode {
 	std::unordered_map<std::string, std::shared_ptr<FuncDef>> functionDefs;
 	std::vector<std::shared_ptr<IRNode>> body;
 
@@ -33,7 +49,7 @@ struct FileScope : public IRNode {
 	}
 };
 
-struct LocalScope : public IRNode {
+struct Scope : public IRNode {
 	std::shared_ptr<IRNode> parent;
 	std::unordered_map<std::string, std::shared_ptr<FuncDef>> functionDefs;
 	std::vector<std::shared_ptr<IRNode>> statements;
@@ -51,9 +67,9 @@ struct LocalScope : public IRNode {
 
 struct FuncDef : public IRNode {
 	std::string name;
-	Type returnType;
+	std::shared_ptr<Type> returnType;
 	std::vector<Parameter> parameters;
-	std::shared_ptr<LocalScope> scope;
+	std::shared_ptr<Scope> scope;
 
 	VisitResult accept(IRVisitor* visitor) override { return visitor->visit(this); }
 
@@ -110,10 +126,6 @@ struct StringLiteral : public IRNode {
 	std::string getNodeName() const override {
 		return "StringLiteral(\"" + value + "\")";
 	}
-	// No printChildren override needed (Leaf node)
-};
-
-struct Program : public FileScope {
 };
 
 } // namespace ir

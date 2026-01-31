@@ -20,7 +20,7 @@ public:
   /**
    * Visit parse trees produced by ZaneParser.
    */
-    virtual std::any visitProgram(ZaneParser::ProgramContext *context) = 0;
+    virtual std::any visitGlobalScope(ZaneParser::GlobalScopeContext *context) = 0;
 
     virtual std::any visitDeclaration(ZaneParser::DeclarationContext *context) = 0;
 
@@ -41,6 +41,10 @@ public:
     virtual std::any visitCons(ZaneParser::ConsContext *context) = 0;
 
     virtual std::any visitFuncDef(ZaneParser::FuncDefContext *context) = 0;
+
+    virtual std::any visitParam(ZaneParser::ParamContext *context) = 0;
+
+    virtual std::any visitParams(ZaneParser::ParamsContext *context) = 0;
 
     virtual std::any visitFuncMod(ZaneParser::FuncModContext *context) = 0;
 

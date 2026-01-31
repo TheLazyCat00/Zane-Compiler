@@ -17,7 +17,7 @@ namespace parser {
 class  ZaneBaseVisitor : public ZaneVisitor {
 public:
 
-  virtual std::any visitProgram(ZaneParser::ProgramContext *ctx) override {
+  virtual std::any visitGlobalScope(ZaneParser::GlobalScopeContext *ctx) override {
     return visitChildren(ctx);
   }
 
@@ -58,6 +58,14 @@ public:
   }
 
   virtual std::any visitFuncDef(ZaneParser::FuncDefContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitParam(ZaneParser::ParamContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitParams(ZaneParser::ParamsContext *ctx) override {
     return visitChildren(ctx);
   }
 

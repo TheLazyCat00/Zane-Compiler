@@ -16,8 +16,8 @@ namespace parser {
 class  ZaneListener : public antlr4::tree::ParseTreeListener {
 public:
 
-  virtual void enterProgram(ZaneParser::ProgramContext *ctx) = 0;
-  virtual void exitProgram(ZaneParser::ProgramContext *ctx) = 0;
+  virtual void enterGlobalScope(ZaneParser::GlobalScopeContext *ctx) = 0;
+  virtual void exitGlobalScope(ZaneParser::GlobalScopeContext *ctx) = 0;
 
   virtual void enterDeclaration(ZaneParser::DeclarationContext *ctx) = 0;
   virtual void exitDeclaration(ZaneParser::DeclarationContext *ctx) = 0;
@@ -48,6 +48,12 @@ public:
 
   virtual void enterFuncDef(ZaneParser::FuncDefContext *ctx) = 0;
   virtual void exitFuncDef(ZaneParser::FuncDefContext *ctx) = 0;
+
+  virtual void enterParam(ZaneParser::ParamContext *ctx) = 0;
+  virtual void exitParam(ZaneParser::ParamContext *ctx) = 0;
+
+  virtual void enterParams(ZaneParser::ParamsContext *ctx) = 0;
+  virtual void exitParams(ZaneParser::ParamsContext *ctx) = 0;
 
   virtual void enterFuncMod(ZaneParser::FuncModContext *ctx) = 0;
   virtual void exitFuncMod(ZaneParser::FuncModContext *ctx) = 0;

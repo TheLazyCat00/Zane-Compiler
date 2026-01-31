@@ -10,6 +10,7 @@
 
 #include <visitor/visitor.hpp>
 #include <codegen/llvm.hpp>
+#include <utils/notify.hpp>
 
 namespace fs = std::filesystem;
 using namespace antlr4;
@@ -35,12 +36,12 @@ int main(int argc, char* argv[]) {
 	CommonTokenStream tokens(&lexer);
 	ZaneParser parser(&tokens);
 
-	tree::ParseTree *tree = parser.program();
+	tree::ParseTree *tree = parser.globalScope();
 	Visitor visitor;
 	visitor.visit(tree);
-	auto irProgram = visitor.getProgram();
+	auto irProgram = visitor.getGlobalScope();
+	notify(irProgram->toString());
 
-	std::cout << irProgram->toString();
 	// llvm::LLVMContext context;
 	// LLVMCodeGen codegen(context);
 	// codegen.generate(irProgram);
