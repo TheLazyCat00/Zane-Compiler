@@ -7,6 +7,7 @@
 #include <llvm/IR/BasicBlock.h>
 #include <llvm/IR/Type.h>
 #include <codegen/type_mapper.hpp>
+#include <utils/notify.hpp>
 
 class LLVMCodeGen {
 private:

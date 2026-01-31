@@ -40,11 +40,10 @@ int main(int argc, char* argv[]) {
 	Visitor visitor;
 	visitor.visit(tree);
 	auto irProgram = visitor.getGlobalScope();
-	notify(irProgram->toString());
 
-	// llvm::LLVMContext context;
-	// LLVMCodeGen codegen(context);
-	// codegen.generate(irProgram);
+	llvm::LLVMContext context;
+	LLVMCodeGen codegen(context);
+	codegen.generate(irProgram);
 
 	return 0;
 }
