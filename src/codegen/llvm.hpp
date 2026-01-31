@@ -36,8 +36,14 @@ public:
 	void generate(std::shared_ptr<ir::GlobalScope> globalScope) {
 		setupBuiltins();
 		
+		// First pass: declare all functions
 		for (const auto& [name, funcDef] : globalScope->functionDefs) {
-			generateFunction(funcDef.get());
+			declareFunctionSignature(funcDef.get());
+		}
+		
+		// Second pass: generate function bodies
+		for (const auto& [name, funcDef] : globalScope->functionDefs) {
+			generateFunctionBody(funcDef.get());
 		}
 	}
 
@@ -128,7 +134,7 @@ private:
 		module.getOrInsertFunction("puts", putsType);
 	}
 
-	void generateFunction(ir::FuncDef* funcDef) {
+	llvm::Function* declareFunctionSignature(ir::FuncDef* funcDef) {
 		llvm::Type* returnType = toLLVMType(*funcDef->returnType);
 		
 		std::vector<llvm::Type*> paramTypes;
@@ -144,6 +150,13 @@ private:
 		llvm::Function* func = llvm::Function::Create(
 			funcType, llvm::Function::ExternalLinkage, 
 			funcDef->name, module);
+		
+		return func;
+	}
+
+	void generateFunctionBody(ir::FuncDef* funcDef) {
+		llvm::Function* func = module.getFunction(funcDef->name);
+		if (!func) return;
 
 		llvm::BasicBlock* entryBlock = llvm::BasicBlock::Create(
 			context, "entry", func);
@@ -153,7 +166,7 @@ private:
 			generateScope(funcDef->scope.get());
 		}
 
-		if (returnType->isVoidTy()) {
+		if (func->getReturnType()->isVoidTy()) {
 			builder.CreateRetVoid();
 		}
 	}

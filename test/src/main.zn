@@ -1,4 +1,9 @@
+Void greet() {
+	puts("Hi")
+}
+
 Void main() {
 	puts("Hello")
 	puts("Bye")
+	greet()
 }
