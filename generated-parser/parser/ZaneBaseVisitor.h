@@ -41,11 +41,11 @@ public:
     return visitChildren(ctx);
   }
 
-  virtual std::any visitNum(ZaneParser::NumContext *ctx) override {
+  virtual std::any visitIdentifier(ZaneParser::IdentifierContext *ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual std::any visitId(ZaneParser::IdContext *ctx) override {
+  virtual std::any visitNum(ZaneParser::NumContext *ctx) override {
     return visitChildren(ctx);
   }
 

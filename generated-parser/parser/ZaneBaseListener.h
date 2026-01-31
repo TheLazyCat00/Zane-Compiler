@@ -36,11 +36,11 @@ public:
   virtual void enterCall(ZaneParser::CallContext * /*ctx*/) override { }
   virtual void exitCall(ZaneParser::CallContext * /*ctx*/) override { }
 
+  virtual void enterIdentifier(ZaneParser::IdentifierContext * /*ctx*/) override { }
+  virtual void exitIdentifier(ZaneParser::IdentifierContext * /*ctx*/) override { }
+
   virtual void enterNum(ZaneParser::NumContext * /*ctx*/) override { }
   virtual void exitNum(ZaneParser::NumContext * /*ctx*/) override { }
-
-  virtual void enterId(ZaneParser::IdContext * /*ctx*/) override { }
-  virtual void exitId(ZaneParser::IdContext * /*ctx*/) override { }
 
   virtual void enterGrouping(ZaneParser::GroupingContext * /*ctx*/) override { }
   virtual void exitGrouping(ZaneParser::GroupingContext * /*ctx*/) override { }

@@ -20,6 +20,9 @@ class IRNode;
 class FuncDef;
 class FileScope;
 class LocalScope;
+class FuncCall;
+class StringLiteral;
+class Identifier;
 
 class IRVisitor {
 public:
@@ -27,6 +30,9 @@ public:
 	virtual VisitResult visit(FuncDef* node) = 0;
 	virtual VisitResult visit(FileScope* node) = 0;
 	virtual VisitResult visit(LocalScope* node) = 0;
+	virtual VisitResult visit(FuncCall* node) = 0;
+	virtual VisitResult visit(StringLiteral* node) = 0;
+	virtual VisitResult visit(Identifier* node) = 0;
 };
 
 } // namespace ir

@@ -167,22 +167,22 @@ public:
     virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
   };
 
-  class  NumContext : public PrimaryContext {
+  class  IdentifierContext : public PrimaryContext {
   public:
-    NumContext(PrimaryContext *ctx);
+    IdentifierContext(PrimaryContext *ctx);
 
-    antlr4::tree::TerminalNode *NUMBER();
+    antlr4::tree::TerminalNode *IDENTIFIER();
     virtual void enterRule(antlr4::tree::ParseTreeListener *listener) override;
     virtual void exitRule(antlr4::tree::ParseTreeListener *listener) override;
 
     virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
   };
 
-  class  IdContext : public PrimaryContext {
+  class  NumContext : public PrimaryContext {
   public:
-    IdContext(PrimaryContext *ctx);
+    NumContext(PrimaryContext *ctx);
 
-    antlr4::tree::TerminalNode *IDENTIFIER();
+    antlr4::tree::TerminalNode *NUMBER();
     virtual void enterRule(antlr4::tree::ParseTreeListener *listener) override;
     virtual void exitRule(antlr4::tree::ParseTreeListener *listener) override;
 

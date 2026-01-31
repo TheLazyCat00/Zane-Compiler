@@ -40,9 +40,10 @@ int main(int argc, char* argv[]) {
 	visitor.visit(tree);
 	auto irProgram = visitor.getProgram();
 
-	llvm::LLVMContext context;
-	LLVMCodeGen codegen(context);
-	codegen.generate(irProgram);
+	std::cout << irProgram->toString();
+	// llvm::LLVMContext context;
+	// LLVMCodeGen codegen(context);
+	// codegen.generate(irProgram);
 
 	return 0;
 }

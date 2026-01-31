@@ -19,7 +19,7 @@ struct Parameter {
 };
 
 struct FileScope : public IRNode {
-	std::unordered_map<std::string, std::shared_ptr<FuncDef>> functions;
+	std::unordered_map<std::string, std::shared_ptr<FuncDef>> functionDefs;
 	std::vector<std::shared_ptr<IRNode>> body;
 
 	VisitResult accept(IRVisitor* visitor) override {
@@ -36,8 +36,8 @@ struct FileScope : public IRNode {
 };
 
 struct LocalScope : public IRNode {
-	std::shared_ptr<LocalScope> parent;
-	std::unordered_map<std::string, std::shared_ptr<IRNode>> variables;
+	std::shared_ptr<IRNode> parent;
+	std::unordered_map<std::string, std::shared_ptr<FuncDef>> functionDefs;
 	std::vector<std::shared_ptr<IRNode>> statements;
 
 	VisitResult accept(IRVisitor* visitor) override {
@@ -69,6 +69,43 @@ struct FuncDef : public IRNode {
 			result += "├─ " + scope->toString();
 		}
 		return result;
+	}
+};
+
+struct Identifier : public IRNode {
+	std::string name;
+
+	VisitResult accept(IRVisitor* visitor) override {
+		return visitor->visit(this);
+	}
+
+	std::string toString() const override {
+		return name;
+	}
+};
+
+struct FuncCall : public IRNode {
+	std::shared_ptr<IRNode> valueBeingCalledOn;
+	std::vector<std::shared_ptr<IRNode>> arguments;
+
+	VisitResult accept(IRVisitor* visitor) override {
+		return visitor->visit(this);
+	}
+
+	std::string toString() const override {
+		return "FunctionCall(" + valueBeingCalledOn->toString() + ")\n";
+	}
+};
+
+struct StringLiteral : public IRNode {
+	std::string value;
+
+	VisitResult accept(IRVisitor* visitor) override {
+		return visitor->visit(this);
+	}
+
+	std::string toString() const override {
+		return "StringLiteral(\"" + value + "\")\n";
 	}
 };
 

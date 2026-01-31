@@ -34,11 +34,11 @@ public:
   virtual void enterCall(ZaneParser::CallContext *ctx) = 0;
   virtual void exitCall(ZaneParser::CallContext *ctx) = 0;
 
+  virtual void enterIdentifier(ZaneParser::IdentifierContext *ctx) = 0;
+  virtual void exitIdentifier(ZaneParser::IdentifierContext *ctx) = 0;
+
   virtual void enterNum(ZaneParser::NumContext *ctx) = 0;
   virtual void exitNum(ZaneParser::NumContext *ctx) = 0;
-
-  virtual void enterId(ZaneParser::IdContext *ctx) = 0;
-  virtual void exitId(ZaneParser::IdContext *ctx) = 0;
 
   virtual void enterGrouping(ZaneParser::GroupingContext *ctx) = 0;
   virtual void exitGrouping(ZaneParser::GroupingContext *ctx) = 0;

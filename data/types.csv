@@ -1,2 +1,2 @@
-Name,LlvmType
-U8,i8
+Name, LlvmType
+Void, void

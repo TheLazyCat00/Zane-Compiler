@@ -32,9 +32,9 @@ public:
 
     virtual std::any visitCall(ZaneParser::CallContext *context) = 0;
 
-    virtual std::any visitNum(ZaneParser::NumContext *context) = 0;
+    virtual std::any visitIdentifier(ZaneParser::IdentifierContext *context) = 0;
 
-    virtual std::any visitId(ZaneParser::IdContext *context) = 0;
+    virtual std::any visitNum(ZaneParser::NumContext *context) = 0;
 
     virtual std::any visitGrouping(ZaneParser::GroupingContext *context) = 0;
 

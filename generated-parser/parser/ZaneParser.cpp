@@ -509,6 +509,31 @@ std::any ZaneParser::CallContext::accept(tree::ParseTreeVisitor *visitor) {
   else
     return visitor->visitChildren(this);
 }
+//----------------- IdentifierContext ------------------------------------------------------------------
+
+tree::TerminalNode* ZaneParser::IdentifierContext::IDENTIFIER() {
+  return getToken(ZaneParser::IDENTIFIER, 0);
+}
+
+ZaneParser::IdentifierContext::IdentifierContext(PrimaryContext *ctx) { copyFrom(ctx); }
+
+void ZaneParser::IdentifierContext::enterRule(tree::ParseTreeListener *listener) {
+  auto parserListener = dynamic_cast<ZaneListener *>(listener);
+  if (parserListener != nullptr)
+    parserListener->enterIdentifier(this);
+}
+void ZaneParser::IdentifierContext::exitRule(tree::ParseTreeListener *listener) {
+  auto parserListener = dynamic_cast<ZaneListener *>(listener);
+  if (parserListener != nullptr)
+    parserListener->exitIdentifier(this);
+}
+
+std::any ZaneParser::IdentifierContext::accept(tree::ParseTreeVisitor *visitor) {
+  if (auto parserVisitor = dynamic_cast<ZaneVisitor*>(visitor))
+    return parserVisitor->visitIdentifier(this);
+  else
+    return visitor->visitChildren(this);
+}
 //----------------- NumContext ------------------------------------------------------------------
 
 tree::TerminalNode* ZaneParser::NumContext::NUMBER() {
@@ -531,31 +556,6 @@ void ZaneParser::NumContext::exitRule(tree::ParseTreeListener *listener) {
 std::any ZaneParser::NumContext::accept(tree::ParseTreeVisitor *visitor) {
   if (auto parserVisitor = dynamic_cast<ZaneVisitor*>(visitor))
     return parserVisitor->visitNum(this);
-  else
-    return visitor->visitChildren(this);
-}
-//----------------- IdContext ------------------------------------------------------------------
-
-tree::TerminalNode* ZaneParser::IdContext::IDENTIFIER() {
-  return getToken(ZaneParser::IDENTIFIER, 0);
-}
-
-ZaneParser::IdContext::IdContext(PrimaryContext *ctx) { copyFrom(ctx); }
-
-void ZaneParser::IdContext::enterRule(tree::ParseTreeListener *listener) {
-  auto parserListener = dynamic_cast<ZaneListener *>(listener);
-  if (parserListener != nullptr)
-    parserListener->enterId(this);
-}
-void ZaneParser::IdContext::exitRule(tree::ParseTreeListener *listener) {
-  auto parserListener = dynamic_cast<ZaneListener *>(listener);
-  if (parserListener != nullptr)
-    parserListener->exitId(this);
-}
-
-std::any ZaneParser::IdContext::accept(tree::ParseTreeVisitor *visitor) {
-  if (auto parserVisitor = dynamic_cast<ZaneVisitor*>(visitor))
-    return parserVisitor->visitId(this);
   else
     return visitor->visitChildren(this);
 }
@@ -658,7 +658,7 @@ ZaneParser::PrimaryContext* ZaneParser::primary(int precedence) {
     }
 
     case 3: {
-      _localctx = _tracker.createInstance<IdContext>(_localctx);
+      _localctx = _tracker.createInstance<IdentifierContext>(_localctx);
       _ctx = _localctx;
       previousContext = _localctx;
       setState(57);

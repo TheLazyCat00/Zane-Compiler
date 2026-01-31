@@ -28,7 +28,7 @@ value
 primary
 	: STRING                  # str
 	| NUMBER                  # num
-	| IDENTIFIER              # id
+	| IDENTIFIER              # identifier
 	| constructorCall         # cons
 	| '(' value ')'           # grouping
 	| primary callSuffix      # call
