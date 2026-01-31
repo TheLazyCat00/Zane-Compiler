@@ -18,7 +18,11 @@ private:
 		if (result.type() == typeid(std::shared_ptr<ir::IRNode>)) {
 			return std::any_cast<std::shared_ptr<ir::IRNode>>(result);
 		}
-		throw std::runtime_error("not IRNode");
+		// Check for nullptr/empty any just in case
+		if (!result.has_value()) {
+			throw std::runtime_error("Visitor returned empty value");
+		}
+		throw std::runtime_error("not IRNode (Type mismatch in std::any)");
 	}
 
 public:
@@ -46,18 +50,19 @@ public:
 		visitChildren(ctx);
 		currentLocalScope = prevLocalScope;
 
-		return funcDef;
+		return std::static_pointer_cast<ir::IRNode>(funcDef);
 	}
 
 	std::any visitFuncCall(ZaneParser::FuncCallContext *ctx) override {
 		auto funcCall = std::make_shared<ir::FuncCall>();
+
 		funcCall->valueBeingCalledOn = toIRNode(visit(ctx->primary()));
 
-		// Visit arguments via callSuffix
 		if (auto callSuffixCtx = ctx->callSuffix()) {
 			auto collectionCtx = callSuffixCtx->collection();
 			if (collectionCtx) {
 				for (auto valueCtx : collectionCtx->value()) {
+					// This will now work because visitStr/etc return IRNode
 					funcCall->arguments.push_back(toIRNode(visit(valueCtx)));
 				}
 			}
@@ -66,24 +71,26 @@ public:
 		if (currentLocalScope) {
 			currentLocalScope->statements.push_back(funcCall);
 		}
-		return funcCall;
+
+		return std::static_pointer_cast<ir::IRNode>(funcCall);
 	}
 
 	std::any visitStr(ZaneParser::StrContext *ctx) override {
 		auto stringLit = std::make_shared<ir::StringLiteral>();
 		stringLit->value = ctx->getText();
-		return stringLit;
+
+		return std::static_pointer_cast<ir::IRNode>(stringLit);
 	}
 
 	std::any visitIdentifier(ZaneParser::IdentifierContext *ctx) override {
 		auto identifier = std::make_shared<ir::Identifier>();
 		identifier->name = ctx->getText();
-		return identifier;
+
+		return std::static_pointer_cast<ir::IRNode>(identifier);
 	}
 
 	std::any visitStatement(ZaneParser::StatementContext *ctx) override {
-		auto result = visitChildren(ctx);
-		return result;
+		return visitChildren(ctx);
 	}
 
 	std::shared_ptr<ir::Program> getProgram() const {
