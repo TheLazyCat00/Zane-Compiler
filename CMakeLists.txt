@@ -44,7 +44,7 @@ target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE
 )
 
 add_custom_target(run
-	COMMAND ${CMAKE_PROJECT_NAME} src/main.zane
+	COMMAND ${CMAKE_PROJECT_NAME} src/main.zn
 	DEPENDS ${CMAKE_PROJECT_NAME}
 	WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/test
 )

@@ -22,16 +22,14 @@ struct FileScope : public IRNode {
 	std::unordered_map<std::string, std::shared_ptr<FuncDef>> functionDefs;
 	std::vector<std::shared_ptr<IRNode>> body;
 
-	VisitResult accept(IRVisitor* visitor) override {
-		return visitor->visit(this);
+	VisitResult accept(IRVisitor* visitor) override { return visitor->visit(this); }
+
+	std::string getNodeName() const override {
+		return "FileScope";
 	}
 
-	std::string toString() const override {
-		std::string result = "FileScope\n";
-		for (const auto& node : body) {
-			result += "├─ " + node->toString();
-		}
-		return result;
+	std::string printChildren(const std::string& prefix) const override {
+		return printNodeVector(body, prefix);
 	}
 };
 
@@ -40,16 +38,14 @@ struct LocalScope : public IRNode {
 	std::unordered_map<std::string, std::shared_ptr<FuncDef>> functionDefs;
 	std::vector<std::shared_ptr<IRNode>> statements;
 
-	VisitResult accept(IRVisitor* visitor) override {
-		return visitor->visit(this);
+	VisitResult accept(IRVisitor* visitor) override { return visitor->visit(this); }
+
+	std::string getNodeName() const override {
+		return "LocalScope";
 	}
 
-	std::string toString() const override {
-		std::string result = "LocalScope\n";
-		for (const auto& stmt : statements) {
-			result += "├─ " + stmt->toString();
-		}
-		return result;
+	std::string printChildren(const std::string& prefix) const override {
+		return printNodeVector(statements, prefix);
 	}
 };
 
@@ -59,28 +55,27 @@ struct FuncDef : public IRNode {
 	std::vector<Parameter> parameters;
 	std::shared_ptr<LocalScope> scope;
 
-	VisitResult accept(IRVisitor* visitor) override {
-		return visitor->visit(this);
+	VisitResult accept(IRVisitor* visitor) override { return visitor->visit(this); }
+
+	std::string getNodeName() const override {
+		return "FuncDef(" + name + ")";
 	}
 
-	std::string toString() const override {
-		std::string result = "FuncDef(" + name + ")\n";
+	std::string printChildren(const std::string& prefix) const override {
 		if (scope) {
-			result += "├─ " + scope->toString();
+			return scope->printTree(prefix, true);
 		}
-		return result;
+		return "";
 	}
 };
 
 struct Identifier : public IRNode {
 	std::string name;
 
-	VisitResult accept(IRVisitor* visitor) override {
-		return visitor->visit(this);
-	}
+	VisitResult accept(IRVisitor* visitor) override { return visitor->visit(this); }
 
-	std::string toString() const override {
-		return name;
+	std::string getNodeName() const override {
+		return "Identifier(" + name + ")";
 	}
 };
 
@@ -88,25 +83,34 @@ struct FuncCall : public IRNode {
 	std::shared_ptr<IRNode> valueBeingCalledOn;
 	std::vector<std::shared_ptr<IRNode>> arguments;
 
-	VisitResult accept(IRVisitor* visitor) override {
-		return visitor->visit(this);
+	VisitResult accept(IRVisitor* visitor) override { return visitor->visit(this); }
+
+	std::string getNodeName() const override {
+		return "FunctionCall";
 	}
 
-	std::string toString() const override {
-		return "FunctionCall(" + valueBeingCalledOn->toString() + ")\n";
+	std::string printChildren(const std::string& prefix) const override {
+		std::string result;
+		bool isValueLast = arguments.empty();
+		if (valueBeingCalledOn) {
+			result += valueBeingCalledOn->printTree(prefix, isValueLast);
+		}
+
+		result += printNodeVector(arguments, prefix);
+
+		return result;
 	}
 };
 
 struct StringLiteral : public IRNode {
 	std::string value;
 
-	VisitResult accept(IRVisitor* visitor) override {
-		return visitor->visit(this);
-	}
+	VisitResult accept(IRVisitor* visitor) override { return visitor->visit(this); }
 
-	std::string toString() const override {
-		return "StringLiteral(\"" + value + "\")\n";
+	std::string getNodeName() const override {
+		return "StringLiteral(\"" + value + "\")";
 	}
+	// No printChildren override needed (Leaf node)
 };
 
 struct Program : public FileScope {
