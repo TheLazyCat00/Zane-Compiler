@@ -44,6 +44,9 @@ int main(int argc, char* argv[]) {
 	llvm::LLVMContext context;
 	LLVMCodeGen codegen(context);
 	codegen.generate(irProgram);
+	
+	std::cout << "--- JIT Execution ---\n";
+	codegen.executeJIT();
 
 	return 0;
 }

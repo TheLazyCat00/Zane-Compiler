@@ -6,8 +6,21 @@
 #include <llvm/IR/Function.h>
 #include <llvm/IR/BasicBlock.h>
 #include <llvm/IR/Type.h>
+#include <llvm/IR/LegacyPassManager.h>
+#include <llvm/ExecutionEngine/Orc/LLJIT.h>
+#include <llvm/Support/TargetSelect.h>
+#include <llvm/Support/Error.h>
+#include <llvm/Support/raw_ostream.h>
+#include <llvm/Support/FileSystem.h>
+#include <llvm/TargetParser/Host.h>
+#include <llvm/Target/TargetMachine.h>
+#include <llvm/Target/TargetOptions.h>
+#include <llvm/MC/TargetRegistry.h>
+#include <llvm/Transforms/Utils/Cloning.h>
 #include <codegen/type_mapper.hpp>
 #include <utils/notify.hpp>
+#include <memory>
+#include <fstream>
 
 class LLVMCodeGen {
 private:
@@ -21,12 +34,100 @@ public:
 		: context(ctx), module("zane", ctx), builder(ctx), typeMapper(ctx) {}
 
 	void generate(std::shared_ptr<ir::GlobalScope> globalScope) {
+		setupBuiltins();
+		
 		for (const auto& [name, funcDef] : globalScope->functionDefs) {
 			generateFunction(funcDef.get());
 		}
 	}
 
+	void executeJIT() {
+		llvm::InitializeNativeTarget();
+		llvm::InitializeNativeTargetAsmPrinter();
+
+		llvm::ExitOnError ExitOnErr;
+		auto JIT = ExitOnErr(llvm::orc::LLJITBuilder().create());
+
+		// We need to transfer ownership, so create new context and clone module
+		auto TSM = llvm::orc::ThreadSafeModule(
+			llvm::CloneModule(module),
+			std::make_unique<llvm::LLVMContext>()
+		);
+		
+		TSM.withModuleDo([&](llvm::Module& M) {
+			M.setDataLayout(JIT->getDataLayout());
+		});
+
+		ExitOnErr(JIT->addIRModule(std::move(TSM)));
+
+		auto MainAddr = ExitOnErr(JIT->lookup("main"));
+		auto MainPtr = MainAddr.toPtr<void (*)()>();
+		MainPtr();
+	}
+
+	void writeLLVMIR(const std::string& filename) {
+		std::error_code EC;
+		llvm::raw_fd_ostream file(filename, EC);
+		
+		if (EC) {
+			llvm::errs() << "Error opening file: " << EC.message() << "\n";
+			return;
+		}
+		
+		module.print(file, nullptr);
+	}
+
+	void writeBinary(const std::string& filename) {
+		llvm::InitializeNativeTarget();
+		llvm::InitializeNativeTargetAsmPrinter();
+
+		auto targetTriple = llvm::sys::getDefaultTargetTriple();
+		module.setTargetTriple(targetTriple);
+
+		std::string error;
+		auto target = llvm::TargetRegistry::lookupTarget(targetTriple, error);
+		if (!target) {
+			llvm::errs() << "Error: " << error << "\n";
+			return;
+		}
+
+		auto CPU = "generic";
+		auto features = "";
+		llvm::TargetOptions opt;
+		auto targetMachine = target->createTargetMachine(
+			targetTriple, CPU, features, opt, llvm::Reloc::PIC_);
+
+		module.setDataLayout(targetMachine->createDataLayout());
+
+		std::error_code EC;
+		llvm::raw_fd_ostream dest(filename, EC, llvm::sys::fs::OF_None);
+		if (EC) {
+			llvm::errs() << "Could not open file: " << EC.message() << "\n";
+			return;
+		}
+
+		llvm::legacy::PassManager pass;
+		if (targetMachine->addPassesToEmitFile(pass, dest, nullptr, 
+			llvm::CodeGenFileType::ObjectFile)) {
+			llvm::errs() << "TargetMachine can't emit object file\n";
+			return;
+		}
+
+		pass.run(module);
+		dest.flush();
+	}
+
 private:
+	void setupBuiltins() {
+		// Setup puts function (simpler than printf for strings)
+		llvm::Type* i8Ptr = llvm::PointerType::get(context, 0);
+		llvm::FunctionType* putsType = llvm::FunctionType::get(
+			builder.getInt32Ty(),
+			{i8Ptr},
+			false);
+		module.getOrInsertFunction("puts", putsType);
+	}
+
 	void generateFunction(ir::FuncDef* funcDef) {
 		llvm::Type* returnType = toLLVMType(*funcDef->returnType);
 		
