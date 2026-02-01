@@ -1,5 +1,6 @@
 #pragma once
 
+#include <map>
 #include <memory>
 #include <unordered_map>
 #include <vector>
@@ -70,11 +71,37 @@ struct Scope : public IRNode {
 	}
 };
 
+struct FuncMod {
+	enum Value {
+		Open,
+		Strict,
+		Pure
+	};
+
+	FuncMod() = default;
+	FuncMod(Value mod) : value(mod) { }
+	FuncMod(std::string mod) : value(getByString(mod)) { }
+
+	Value getByString(std::string mod) {
+		return stringToEnum[mod];
+	}
+
+private:
+	std::map<std::string, Value> stringToEnum = {
+		{ "open", Open },
+		{ "strict", Strict },
+		{ "pure", Pure },
+	};
+
+	Value value;
+};
+
 struct FuncDef : public IRNode {
 	std::string name;
 	std::shared_ptr<Type> returnType;
 	std::vector<Parameter> parameters;
 	std::shared_ptr<Scope> scope;
+	FuncMod mod;
 
 	std::any accept(IRVisitor* visitor) override {
 		return visitor->visitFuncDef(this);

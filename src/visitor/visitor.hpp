@@ -66,6 +66,10 @@ public:
 		funcDef->name = ctx->name->getText();
 		funcDef->scope = get<ir::Scope>(ctx->funcBody()->scope());
 		funcDef->returnType = get<ir::Type>(ctx->type());
+		
+		if (ctx->funcMod()) {
+			funcDef->mod = ir::FuncMod(ctx->funcMod()->getText());
+		}
 
 		if (ctx->params()) {
 			for (auto paramCtx : ctx->params()->param()) {

@@ -17,6 +17,9 @@ public:
 	}
 
 	llvm::Type* toLLVMType(const std::string& irTypeName) {
+		if (irTypeName == "String") {
+			return llvm::PointerType::get(context, 0);
+		}
 		auto it = typeCache.find(irTypeName);
 		if (it != typeCache.end()) {
 			return it->second;

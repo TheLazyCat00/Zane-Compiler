@@ -13,6 +13,7 @@ private:
 	llvm::IRBuilder<>& builder;
 	llvm::Module& module;
 	TypeMapper typeMapper;
+	std::unordered_map<std::string, llvm::AllocaInst*> namedValues;
 
 	template<typename T>
 	T get(ir::IRNode* node) {
@@ -46,6 +47,19 @@ public:
 		llvm::BasicBlock* entry = llvm::BasicBlock::Create(context, "entry", func);
 		builder.SetInsertPoint(entry);
 
+		namedValues.clear();
+		unsigned idx = 0;
+		for (auto& arg : func->args()) {
+			std::string argName = node->parameters[idx].name;
+			arg.setName(argName);
+
+			llvm::AllocaInst* alloca = builder.CreateAlloca(arg.getType(), nullptr, argName);
+			builder.CreateStore(&arg, alloca);
+			namedValues[argName] = alloca;
+
+			idx++;
+		}
+
 		if (node->scope) {
 			visit(node->scope.get());
 		}
@@ -65,7 +79,10 @@ public:
 
 	std::any visitFuncCall(ir::FuncCall* node) override {
 		// Resolve the callee using the identifier's visit result
-		auto callee = get<llvm::Function*>(node->valueBeingCalledOn.get());
+		auto calleeVal = get<llvm::Value*>(node->valueBeingCalledOn.get());
+		if (!calleeVal) return {};
+
+		llvm::Function* callee = llvm::dyn_cast<llvm::Function>(calleeVal);
 		if (!callee) return {};
 
 		std::vector<llvm::Value*> args;
@@ -81,14 +98,32 @@ public:
 	}
 
 	std::any visitIdentifier(ir::Identifier* node) override {
+		if (namedValues.count(node->name)) {
+			llvm::AllocaInst* alloca = namedValues[node->name];
+			return (llvm::Value*)builder.CreateLoad(alloca->getAllocatedType(), alloca, node->name);
+		}
 		// Look up the function in the module
-		return (llvm::Function*)module.getFunction(node->name);
+		return (llvm::Value*)module.getFunction(node->name);
 	}
 
 	// Nodes that don't produce values in the code-gen pass
 	std::any visitType(ir::Type* node) override { return {}; }
 	std::any visitParameter(ir::Parameter* node) override { return {}; }
-	std::any visitVarDef(ir::VarDef* node) override { return {}; }
+	std::any visitVarDef(ir::VarDef* node) override {
+		llvm::Type* type = typeMapper.toLLVMType(node->type->name);
+		if (!type) return {};
+
+		llvm::AllocaInst* alloca = builder.CreateAlloca(type, nullptr, node->name);
+		namedValues[node->name] = alloca;
+
+		if (node->value) {
+			auto val = get<llvm::Value*>(node->value.get());
+			if (val) {
+				builder.CreateStore(val, alloca);
+			}
+		}
+		return {};
+	}
 
 private:
 	void declareSignature(ir::FuncDef* node) {
