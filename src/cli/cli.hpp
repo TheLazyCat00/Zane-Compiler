@@ -1,65 +1,61 @@
 #pragma once
 
-#include <vector>
 #include <string>
 #include <iostream>
-#include <filesystem>
 #include <fstream>
+#include <nlohmann/json.hpp>
 
 #include <antlr4-runtime.h>
 #include <parser/ZaneLexer.h>
 #include <parser/ZaneParser.h>
 #include <visitor/visitor.hpp>
 #include <codegen/llvm.hpp>
+#include <cli/commands.hpp>
 
-namespace fs = std::filesystem;
-using namespace antlr4;
-using namespace parser;
+using json = nlohmann::json;
 
 class CLI {
+private:
+	manifest::Manifest manifest;
+
 public:
-	int run(int argc, char* argv[]) {
-		if (argc < 2) {
-			std::cout << "Usage: " << argv[0] << " <filename>\n";
-			return 1;
+	CLI() {
+		std::ifstream file(commands::MANIFEST_PATH);
+		if (!file.is_open()) {
+			std::cerr << "Could not open file!\n";
 		}
 
-		auto filename = argv[1];
-		auto mode = argc > 2 ? std::string(argv[2]) : "";
+		json j;
+		file >> j;
+		file.close();
 
-		return execute(filename, mode);
+		manifest.name = j["name"];
+		manifest.version = manifest::SemVer(j["version"]);
+		manifest.type = manifest::Type(std::string(j["type"]));
+		for (const auto& dep : j["dependencies"]) {
+			manifest::Dependency dependency;
+			dependency.name = dep["name"];
+			dependency.version = manifest::SemVer(dep["version"]);
+			manifest.dependencies.push_back(dependency);
+		}
+
+		auto targets = j["targets"];
+		for (auto& [key, value] : targets.items()) {
+			manifest::Target target;
+			target.buildDir = value["build_dir"];
+			target.objectFiles = value["object_files"];
+			manifest.targets[key] = target;
+		}
 	}
 
-private:
-	int execute(const std::string& filename, const std::string& mode) {
-		if (!fs::exists(filename)) {
-			std::cout << "File " << filename << " doesn't exist\n";
+	int run(int argc, char* argv[]) {
+		if (argc < 2) {
+			std::cout << "Usage: " << argv[0] << " <cmd>\n";
 			return 1;
 		}
 
-		std::ifstream stream;
-		stream.open(filename);
-		ANTLRInputStream input(stream);
-		ZaneLexer lexer(&input);
-		CommonTokenStream tokens(&lexer);
-		ZaneParser parser(&tokens);
-
-		tree::ParseTree *tree = parser.globalScope();
-		Visitor visitor;
-		visitor.visit(tree);
-		auto irProgram = visitor.getGlobalScope();
-
-		if (mode == "debug") {
-			std::cout << irProgram->toString();
-		}
-		else {
-			llvm::LLVMContext context;
-			LLVMCodeGen codegen(context);
-			codegen.generate(irProgram);
-
-			std::cout << "--- JIT Execution ---\n";
-			codegen.executeJIT();
-		}
+		const char* cmd = argv[1];
+		commands::dispatch(cmd, argc - 2, argv + 2, manifest);
 
 		return 0;
 	}

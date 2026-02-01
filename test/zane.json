@@ -2,11 +2,9 @@
 	"name": "test",
 	"version": "0.1.0",
 	"type": "library",
-	"source": "src",
 	"dependencies": [],
 	"targets": {
 		"x86_64-linux-gnu": {
-			"opt": "debug",
 			"build_dir": "build/x86_64-linux-gnu",
 			"object_files": ["test.o"]
 		}

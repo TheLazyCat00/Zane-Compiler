@@ -5,6 +5,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(antlr4-runtime CONFIG REQUIRED)
+find_package(nlohmann_json CONFIG REQUIRED)
 find_package(LLVM REQUIRED CONFIG)
 
 message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
@@ -56,18 +57,19 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
 )
 
 target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE
+	nlohmann_json::nlohmann_json
 	zane_parser
 	${llvm_libs}
 )
 
 add_custom_target(run
-	COMMAND ${CMAKE_PROJECT_NAME} src/main.zn
+	COMMAND ${CMAKE_PROJECT_NAME} run
 	DEPENDS ${CMAKE_PROJECT_NAME}
 	WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/test
 )
 
 add_custom_target(debug
-	COMMAND ${CMAKE_PROJECT_NAME} src/main.zn debug
+	COMMAND ${CMAKE_PROJECT_NAME} debug
 	DEPENDS ${CMAKE_PROJECT_NAME}
 	WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/test
 )

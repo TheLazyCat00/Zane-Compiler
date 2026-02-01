@@ -1,5 +1,6 @@
 {
   "dependencies": [
-    "antlr4"
+    "antlr4",
+    "nlohmann-json"
   ]
 }
