@@ -6,3 +6,6 @@ init:
 
 run:
 	cmake --build build --target run
+
+debug:
+	cmake --build build --target debug

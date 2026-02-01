@@ -65,3 +65,9 @@ add_custom_target(run
 	DEPENDS ${CMAKE_PROJECT_NAME}
 	WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/test
 )
+
+add_custom_target(debug
+	COMMAND ${CMAKE_PROJECT_NAME} src/main.zn debug
+	DEPENDS ${CMAKE_PROJECT_NAME}
+	WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/test
+)

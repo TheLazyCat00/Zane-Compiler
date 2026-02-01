@@ -25,6 +25,14 @@ public:
     return visitChildren(ctx);
   }
 
+  virtual std::any visitType(ZaneParser::TypeContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitCollection(ZaneParser::CollectionContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
   virtual std::any visitAtom(ZaneParser::AtomContext *ctx) override {
     return visitChildren(ctx);
   }
@@ -93,10 +101,6 @@ public:
     return visitChildren(ctx);
   }
 
-  virtual std::any visitStatement(ZaneParser::StatementContext *ctx) override {
-    return visitChildren(ctx);
-  }
-
   virtual std::any visitFuncCall(ZaneParser::FuncCallContext *ctx) override {
     return visitChildren(ctx);
   }
@@ -109,11 +113,11 @@ public:
     return visitChildren(ctx);
   }
 
-  virtual std::any visitType(ZaneParser::TypeContext *ctx) override {
+  virtual std::any visitVarDef(ZaneParser::VarDefContext *ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual std::any visitCollection(ZaneParser::CollectionContext *ctx) override {
+  virtual std::any visitStatement(ZaneParser::StatementContext *ctx) override {
     return visitChildren(ctx);
   }
 

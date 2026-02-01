@@ -16,7 +16,13 @@ WS: [ \t\r\n]+ -> skip;
 // --- Parser Rules ---
 globalScope: declaration+ EOF;
 
-declaration: funcDef;
+declaration
+	: funcDef
+	| varDef
+	;
+
+type: name=IDENTIFIER ('<' type (',' type)* '>')?;
+collection: (value (',' value)*)?;
 
 // Expressions & Values
 // ANTLR 4 handles the left-recursion here to allow infinite chaining of operations
@@ -47,18 +53,19 @@ funcBody: arrowFunction | scope;
 arrowFunction: '=>' value;
 scope: '{' statement* '}';
 
-// Statements
-statement
-	: funcCall
-	| constructorCall;
-
 funcCall: primary callSuffix;
-
 constructorCall: '(' collection ')';
 
 callSuffix
 	: '(' collection ')'
 	| ':' value;
 
-type: name=IDENTIFIER ('<' type (',' type)* '>')?;
-collection: (value (',' value)*)?;
+// Variables
+varDef: type name=IDENTIFIER '=' value;
+
+// Statements
+statement
+	: funcCall
+	| constructorCall
+	| varDef
+	;

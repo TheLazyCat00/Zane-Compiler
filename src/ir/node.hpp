@@ -1,18 +1,15 @@
 #pragma once
 
+#include <any>
 #include <memory>
 #include <string>
 #include <vector>
 
 namespace ir {
 
-enum class VisitResult {
-	Success,
-	Error,
-};
-
 class IRNode;
 class FuncDef;
+class VarDef;
 class GlobalScope;
 class Scope;
 class FuncCall;
@@ -24,20 +21,23 @@ class Parameter;
 class IRVisitor {
 public:
 	virtual ~IRVisitor() = default;
-	virtual VisitResult visit(FuncDef* node) = 0;
-	virtual VisitResult visit(GlobalScope* node) = 0;
-	virtual VisitResult visit(Scope* node) = 0;
-	virtual VisitResult visit(FuncCall* node) = 0;
-	virtual VisitResult visit(StringLiteral* node) = 0;
-	virtual VisitResult visit(Identifier* node) = 0;
-	virtual VisitResult visit(Type* node) = 0;
-	virtual VisitResult visit(Parameter* node) = 0;
+	virtual std::any visit(IRNode* node);
+
+	virtual std::any visitFuncDef(FuncDef* node) = 0;
+	virtual std::any visitGlobalScope(GlobalScope* node) = 0;
+	virtual std::any visitScope(Scope* node) = 0;
+	virtual std::any visitFuncCall(FuncCall* node) = 0;
+	virtual std::any visitStringLiteral(StringLiteral* node) = 0;
+	virtual std::any visitIdentifier(Identifier* node) = 0;
+	virtual std::any visitType(Type* node) = 0;
+	virtual std::any visitParameter(Parameter* node) = 0;
+	virtual std::any visitVarDef(VarDef* node) = 0;
 };
 
 struct IRNode {
 	virtual ~IRNode() = default;
 	virtual std::string getNodeName() const = 0;
-	virtual VisitResult accept(IRVisitor* visitor) = 0;
+	virtual std::any accept(IRVisitor* visitor) = 0;
 	virtual std::string toString() const {
 		return printTree("", true);
 	}
@@ -67,5 +67,12 @@ protected:
 		return result;
 	}
 };
+
+inline std::any IRVisitor::visit(IRNode* node) {
+	if (node) {
+		return node->accept(this);
+	}
+	return {};
+}
 
 } // namespace ir

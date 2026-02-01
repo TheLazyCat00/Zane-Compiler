@@ -14,8 +14,8 @@ class  ZaneLexer : public antlr4::Lexer {
 public:
   enum {
     T__0 = 1, T__1 = 2, T__2 = 3, T__3 = 4, T__4 = 5, T__5 = 6, T__6 = 7, 
-    T__7 = 8, T__8 = 9, T__9 = 10, T__10 = 11, OPERATOR = 12, IDENTIFIER = 13, 
-    STRING = 14, NUMBER = 15, WS = 16
+    T__7 = 8, T__8 = 9, T__9 = 10, T__10 = 11, T__11 = 12, OPERATOR = 13, 
+    IDENTIFIER = 14, STRING = 15, NUMBER = 16, WS = 17
   };
 
   explicit ZaneLexer(antlr4::CharStream *input);

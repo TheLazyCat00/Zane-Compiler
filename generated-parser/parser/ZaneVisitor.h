@@ -24,6 +24,10 @@ public:
 
     virtual std::any visitDeclaration(ZaneParser::DeclarationContext *context) = 0;
 
+    virtual std::any visitType(ZaneParser::TypeContext *context) = 0;
+
+    virtual std::any visitCollection(ZaneParser::CollectionContext *context) = 0;
+
     virtual std::any visitAtom(ZaneParser::AtomContext *context) = 0;
 
     virtual std::any visitOperation(ZaneParser::OperationContext *context) = 0;
@@ -58,17 +62,15 @@ public:
 
     virtual std::any visitScope(ZaneParser::ScopeContext *context) = 0;
 
-    virtual std::any visitStatement(ZaneParser::StatementContext *context) = 0;
-
     virtual std::any visitFuncCall(ZaneParser::FuncCallContext *context) = 0;
 
     virtual std::any visitConstructorCall(ZaneParser::ConstructorCallContext *context) = 0;
 
     virtual std::any visitCallSuffix(ZaneParser::CallSuffixContext *context) = 0;
 
-    virtual std::any visitType(ZaneParser::TypeContext *context) = 0;
+    virtual std::any visitVarDef(ZaneParser::VarDefContext *context) = 0;
 
-    virtual std::any visitCollection(ZaneParser::CollectionContext *context) = 0;
+    virtual std::any visitStatement(ZaneParser::StatementContext *context) = 0;
 
 
 };

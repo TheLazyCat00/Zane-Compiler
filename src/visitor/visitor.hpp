@@ -5,6 +5,7 @@
 #include <memory>
 #include <ir/nodes.hpp>
 #include <stdexcept>
+#include <tree/ParseTree.h>
 
 using namespace parser;
 
@@ -36,6 +37,11 @@ private:
 		);
 	}
 
+	template<typename T>
+	std::shared_ptr<T> get(antlr4::tree::ParseTree * tree) {
+		return toIRNode<T>(visit(tree));
+	}
+
 public:
 	Visitor() : globalScope(std::make_shared<ir::GlobalScope>()) {}
 
@@ -49,7 +55,7 @@ public:
 		auto type = std::make_shared<ir::Type>();
 		type->name = ctx->name->getText();
 		for (auto generic : ctx->type()) {
-			type->generics.push_back(toIRNode<ir::Type>(visit(generic)));
+			type->generics.push_back(get<ir::Type>(generic));
 		}
 
 		return std::static_pointer_cast<ir::IRNode>(type);
@@ -58,14 +64,14 @@ public:
 	std::any visitFuncDef(ZaneParser::FuncDefContext *ctx) override {
 		auto funcDef = std::make_shared<ir::FuncDef>();
 		funcDef->name = ctx->name->getText();
-		funcDef->scope = toIRNode<ir::Scope>(visit(ctx->funcBody()->scope()));
-		funcDef->returnType = toIRNode<ir::Type>(visit(ctx->type()));
+		funcDef->scope = get<ir::Scope>(ctx->funcBody()->scope());
+		funcDef->returnType = get<ir::Type>(ctx->type());
 
 		if (ctx->params()) {
 			for (auto paramCtx : ctx->params()->param()) {
 				ir::Parameter p;
 				p.name = paramCtx->name->getText();
-				p.type = toIRNode<ir::Type>(visit(paramCtx->type()));
+				p.type = get<ir::Type>(paramCtx->type());
 				funcDef->parameters.push_back(p);
 			}
 		}
@@ -83,17 +89,25 @@ public:
 		return std::static_pointer_cast<ir::IRNode>(funcDef);
 	}
 
+	std::any visitVarDef(ZaneParser::VarDefContext *ctx) override {
+		auto varDef = std::make_shared<ir::VarDef>();
+		varDef->value = get<ir::IRNode>(ctx->value());
+		varDef->type = get<ir::Type>(ctx->type());
+		varDef->name = ctx->name->getText();
+
+		return std::static_pointer_cast<ir::IRNode>(varDef);
+	}
+
 	std::any visitFuncCall(ZaneParser::FuncCallContext *ctx) override {
 		auto funcCall = std::make_shared<ir::FuncCall>();
-
-		funcCall->valueBeingCalledOn = toIRNode<ir::IRNode>(visit(ctx->primary()));
+		funcCall->valueBeingCalledOn = get<ir::IRNode>(ctx->primary());
 
 		auto callSuffixCtx = ctx->callSuffix();
 		auto collectionCtx = callSuffixCtx->collection();
 		if (collectionCtx) {
 			for (auto valueCtx : collectionCtx->value()) {
 				// This will now work because visitStr/etc return IRNode
-				funcCall->arguments.push_back(toIRNode<ir::IRNode>(visit(valueCtx)));
+				funcCall->arguments.push_back(get<ir::IRNode>(valueCtx));
 			}
 		}
 		
@@ -116,7 +130,7 @@ public:
 
 	void processStatement(ZaneParser::StatementContext *statement, std::shared_ptr<ir::Scope> scope) {
 		if (auto funcCall = statement->funcCall()) {
-			auto irNode = toIRNode<ir::FuncCall>(visit(funcCall));
+			auto irNode = get<ir::FuncCall>(funcCall);
 			scope->statements.push_back(irNode);
 
 			return;
@@ -124,6 +138,13 @@ public:
 
 		if (auto constructorCall = statement->constructorCall()) {
 			// TODO: needs implementation
+			return;
+		}
+
+		if (auto varDef = statement->varDef()) {
+			auto irNode = get<ir::VarDef>(varDef);
+			scope->statements.push_back(irNode);
+
 			return;
 		}
 	}

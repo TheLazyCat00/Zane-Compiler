@@ -24,6 +24,12 @@ public:
   virtual void enterDeclaration(ZaneParser::DeclarationContext * /*ctx*/) override { }
   virtual void exitDeclaration(ZaneParser::DeclarationContext * /*ctx*/) override { }
 
+  virtual void enterType(ZaneParser::TypeContext * /*ctx*/) override { }
+  virtual void exitType(ZaneParser::TypeContext * /*ctx*/) override { }
+
+  virtual void enterCollection(ZaneParser::CollectionContext * /*ctx*/) override { }
+  virtual void exitCollection(ZaneParser::CollectionContext * /*ctx*/) override { }
+
   virtual void enterAtom(ZaneParser::AtomContext * /*ctx*/) override { }
   virtual void exitAtom(ZaneParser::AtomContext * /*ctx*/) override { }
 
@@ -75,9 +81,6 @@ public:
   virtual void enterScope(ZaneParser::ScopeContext * /*ctx*/) override { }
   virtual void exitScope(ZaneParser::ScopeContext * /*ctx*/) override { }
 
-  virtual void enterStatement(ZaneParser::StatementContext * /*ctx*/) override { }
-  virtual void exitStatement(ZaneParser::StatementContext * /*ctx*/) override { }
-
   virtual void enterFuncCall(ZaneParser::FuncCallContext * /*ctx*/) override { }
   virtual void exitFuncCall(ZaneParser::FuncCallContext * /*ctx*/) override { }
 
@@ -87,11 +90,11 @@ public:
   virtual void enterCallSuffix(ZaneParser::CallSuffixContext * /*ctx*/) override { }
   virtual void exitCallSuffix(ZaneParser::CallSuffixContext * /*ctx*/) override { }
 
-  virtual void enterType(ZaneParser::TypeContext * /*ctx*/) override { }
-  virtual void exitType(ZaneParser::TypeContext * /*ctx*/) override { }
+  virtual void enterVarDef(ZaneParser::VarDefContext * /*ctx*/) override { }
+  virtual void exitVarDef(ZaneParser::VarDefContext * /*ctx*/) override { }
 
-  virtual void enterCollection(ZaneParser::CollectionContext * /*ctx*/) override { }
-  virtual void exitCollection(ZaneParser::CollectionContext * /*ctx*/) override { }
+  virtual void enterStatement(ZaneParser::StatementContext * /*ctx*/) override { }
+  virtual void exitStatement(ZaneParser::StatementContext * /*ctx*/) override { }
 
 
   virtual void enterEveryRule(antlr4::ParserRuleContext * /*ctx*/) override { }

@@ -8,6 +8,7 @@
 #include <parser/ZaneParser.h>
 #include <parser/ZaneBaseListener.h>
 
+#include <string>
 #include <visitor/visitor.hpp>
 #include <codegen/llvm.hpp>
 #include <utils/notify.hpp>
@@ -23,6 +24,7 @@ int main(int argc, char* argv[]) {
 	}
 
 	auto filename = argv[1];
+	auto mode = argc > 2 ? std::string(argv[2]) : "";
 
 	if (!fs::exists(filename)) {
 		printf("File %s doesn't exist", filename);
@@ -41,12 +43,17 @@ int main(int argc, char* argv[]) {
 	visitor.visit(tree);
 	auto irProgram = visitor.getGlobalScope();
 
-	llvm::LLVMContext context;
-	LLVMCodeGen codegen(context);
-	codegen.generate(irProgram);
-	
-	std::cout << "--- JIT Execution ---\n";
-	codegen.executeJIT();
+	if (mode == "debug") {
+		std::cout << irProgram->toString();
+	}
+	else {
+		llvm::LLVMContext context;
+		LLVMCodeGen codegen(context);
+		codegen.generate(irProgram);
+
+		std::cout << "--- JIT Execution ---\n";
+		codegen.executeJIT();
+	}
 
 	return 0;
 }

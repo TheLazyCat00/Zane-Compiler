@@ -14,16 +14,16 @@ class  ZaneParser : public antlr4::Parser {
 public:
   enum {
     T__0 = 1, T__1 = 2, T__2 = 3, T__3 = 4, T__4 = 5, T__5 = 6, T__6 = 7, 
-    T__7 = 8, T__8 = 9, T__9 = 10, T__10 = 11, OPERATOR = 12, IDENTIFIER = 13, 
-    STRING = 14, NUMBER = 15, WS = 16
+    T__7 = 8, T__8 = 9, T__9 = 10, T__10 = 11, T__11 = 12, OPERATOR = 13, 
+    IDENTIFIER = 14, STRING = 15, NUMBER = 16, WS = 17
   };
 
   enum {
-    RuleGlobalScope = 0, RuleDeclaration = 1, RuleValue = 2, RulePrimary = 3, 
-    RuleFuncDef = 4, RuleParam = 5, RuleParams = 6, RuleFuncMod = 7, RuleStrict = 8, 
-    RulePure = 9, RuleFuncBody = 10, RuleArrowFunction = 11, RuleScope = 12, 
-    RuleStatement = 13, RuleFuncCall = 14, RuleConstructorCall = 15, RuleCallSuffix = 16, 
-    RuleType = 17, RuleCollection = 18
+    RuleGlobalScope = 0, RuleDeclaration = 1, RuleType = 2, RuleCollection = 3, 
+    RuleValue = 4, RulePrimary = 5, RuleFuncDef = 6, RuleParam = 7, RuleParams = 8, 
+    RuleFuncMod = 9, RuleStrict = 10, RulePure = 11, RuleFuncBody = 12, 
+    RuleArrowFunction = 13, RuleScope = 14, RuleFuncCall = 15, RuleConstructorCall = 16, 
+    RuleCallSuffix = 17, RuleVarDef = 18, RuleStatement = 19
   };
 
   explicit ZaneParser(antlr4::TokenStream *input);
@@ -45,6 +45,8 @@ public:
 
   class GlobalScopeContext;
   class DeclarationContext;
+  class TypeContext;
+  class CollectionContext;
   class ValueContext;
   class PrimaryContext;
   class FuncDefContext;
@@ -56,12 +58,11 @@ public:
   class FuncBodyContext;
   class ArrowFunctionContext;
   class ScopeContext;
-  class StatementContext;
   class FuncCallContext;
   class ConstructorCallContext;
   class CallSuffixContext;
-  class TypeContext;
-  class CollectionContext; 
+  class VarDefContext;
+  class StatementContext; 
 
   class  GlobalScopeContext : public antlr4::ParserRuleContext {
   public:
@@ -85,6 +86,7 @@ public:
     DeclarationContext(antlr4::ParserRuleContext *parent, size_t invokingState);
     virtual size_t getRuleIndex() const override;
     FuncDefContext *funcDef();
+    VarDefContext *varDef();
 
     virtual void enterRule(antlr4::tree::ParseTreeListener *listener) override;
     virtual void exitRule(antlr4::tree::ParseTreeListener *listener) override;
@@ -94,6 +96,40 @@ public:
   };
 
   DeclarationContext* declaration();
+
+  class  TypeContext : public antlr4::ParserRuleContext {
+  public:
+    antlr4::Token *name = nullptr;
+    TypeContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    virtual size_t getRuleIndex() const override;
+    antlr4::tree::TerminalNode *IDENTIFIER();
+    std::vector<TypeContext *> type();
+    TypeContext* type(size_t i);
+
+    virtual void enterRule(antlr4::tree::ParseTreeListener *listener) override;
+    virtual void exitRule(antlr4::tree::ParseTreeListener *listener) override;
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+   
+  };
+
+  TypeContext* type();
+
+  class  CollectionContext : public antlr4::ParserRuleContext {
+  public:
+    CollectionContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    virtual size_t getRuleIndex() const override;
+    std::vector<ValueContext *> value();
+    ValueContext* value(size_t i);
+
+    virtual void enterRule(antlr4::tree::ParseTreeListener *listener) override;
+    virtual void exitRule(antlr4::tree::ParseTreeListener *listener) override;
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+   
+  };
+
+  CollectionContext* collection();
 
   class  ValueContext : public antlr4::ParserRuleContext {
   public:
@@ -360,22 +396,6 @@ public:
 
   ScopeContext* scope();
 
-  class  StatementContext : public antlr4::ParserRuleContext {
-  public:
-    StatementContext(antlr4::ParserRuleContext *parent, size_t invokingState);
-    virtual size_t getRuleIndex() const override;
-    FuncCallContext *funcCall();
-    ConstructorCallContext *constructorCall();
-
-    virtual void enterRule(antlr4::tree::ParseTreeListener *listener) override;
-    virtual void exitRule(antlr4::tree::ParseTreeListener *listener) override;
-
-    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
-   
-  };
-
-  StatementContext* statement();
-
   class  FuncCallContext : public antlr4::ParserRuleContext {
   public:
     FuncCallContext(antlr4::ParserRuleContext *parent, size_t invokingState);
@@ -423,14 +443,14 @@ public:
 
   CallSuffixContext* callSuffix();
 
-  class  TypeContext : public antlr4::ParserRuleContext {
+  class  VarDefContext : public antlr4::ParserRuleContext {
   public:
     antlr4::Token *name = nullptr;
-    TypeContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    VarDefContext(antlr4::ParserRuleContext *parent, size_t invokingState);
     virtual size_t getRuleIndex() const override;
+    TypeContext *type();
+    ValueContext *value();
     antlr4::tree::TerminalNode *IDENTIFIER();
-    std::vector<TypeContext *> type();
-    TypeContext* type(size_t i);
 
     virtual void enterRule(antlr4::tree::ParseTreeListener *listener) override;
     virtual void exitRule(antlr4::tree::ParseTreeListener *listener) override;
@@ -439,14 +459,15 @@ public:
    
   };
 
-  TypeContext* type();
+  VarDefContext* varDef();
 
-  class  CollectionContext : public antlr4::ParserRuleContext {
+  class  StatementContext : public antlr4::ParserRuleContext {
   public:
-    CollectionContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    StatementContext(antlr4::ParserRuleContext *parent, size_t invokingState);
     virtual size_t getRuleIndex() const override;
-    std::vector<ValueContext *> value();
-    ValueContext* value(size_t i);
+    FuncCallContext *funcCall();
+    ConstructorCallContext *constructorCall();
+    VarDefContext *varDef();
 
     virtual void enterRule(antlr4::tree::ParseTreeListener *listener) override;
     virtual void exitRule(antlr4::tree::ParseTreeListener *listener) override;
@@ -455,7 +476,7 @@ public:
    
   };
 
-  CollectionContext* collection();
+  StatementContext* statement();
 
 
   bool sempred(antlr4::RuleContext *_localctx, size_t ruleIndex, size_t predicateIndex) override;

@@ -5,6 +5,7 @@
 #include <vector>
 #include <string>
 #include <ir/node.hpp>
+#include <any>
 
 namespace ir {
 
@@ -12,8 +13,8 @@ struct Type : public IRNode {
 	std::string name;
 	std::vector<std::shared_ptr<Type>> generics;
 
-	VisitResult accept(IRVisitor* visitor) override {
-		return visitor->visit(this);
+	std::any accept(IRVisitor* visitor) override {
+		return visitor->visitType(this);
 	}
 
 	std::string getNodeName() const override {
@@ -25,8 +26,8 @@ struct Parameter : public IRNode {
 	std::shared_ptr<Type> type;
 	std::string name;
 
-	VisitResult accept(IRVisitor* visitor) override {
-		return visitor->visit(this);
+	std::any accept(IRVisitor* visitor) override {
+		return visitor->visitParameter(this);
 	}
 
 	std::string getNodeName() const override {
@@ -38,7 +39,9 @@ struct GlobalScope : public IRNode {
 	std::unordered_map<std::string, std::shared_ptr<FuncDef>> functionDefs;
 	std::vector<std::shared_ptr<IRNode>> body;
 
-	VisitResult accept(IRVisitor* visitor) override { return visitor->visit(this); }
+	std::any accept(IRVisitor* visitor) override {
+		return visitor->visitGlobalScope(this);
+	}
 
 	std::string getNodeName() const override {
 		return "FileScope";
@@ -54,7 +57,9 @@ struct Scope : public IRNode {
 	std::unordered_map<std::string, std::shared_ptr<FuncDef>> functionDefs;
 	std::vector<std::shared_ptr<IRNode>> statements;
 
-	VisitResult accept(IRVisitor* visitor) override { return visitor->visit(this); }
+	std::any accept(IRVisitor* visitor) override {
+		return visitor->visitScope(this);
+	}
 
 	std::string getNodeName() const override {
 		return "LocalScope";
@@ -71,7 +76,9 @@ struct FuncDef : public IRNode {
 	std::vector<Parameter> parameters;
 	std::shared_ptr<Scope> scope;
 
-	VisitResult accept(IRVisitor* visitor) override { return visitor->visit(this); }
+	std::any accept(IRVisitor* visitor) override {
+		return visitor->visitFuncDef(this);
+	}
 
 	std::string getNodeName() const override {
 		return "FuncDef(" + name + ")";
@@ -85,10 +92,26 @@ struct FuncDef : public IRNode {
 	}
 };
 
+struct VarDef : public IRNode {
+	std::string name;
+	std::shared_ptr<Type> type;
+	std::shared_ptr<IRNode> value;
+
+	std::any accept(IRVisitor* visitor) override {
+		return visitor->visitVarDef(this);
+	}
+
+	std::string getNodeName() const override {
+		return "VarDef(" + name + ")";
+	}
+};
+
 struct Identifier : public IRNode {
 	std::string name;
 
-	VisitResult accept(IRVisitor* visitor) override { return visitor->visit(this); }
+	std::any accept(IRVisitor* visitor) override {
+		return visitor->visitIdentifier(this);
+	}
 
 	std::string getNodeName() const override {
 		return "Identifier(" + name + ")";
@@ -99,7 +122,9 @@ struct FuncCall : public IRNode {
 	std::shared_ptr<IRNode> valueBeingCalledOn;
 	std::vector<std::shared_ptr<IRNode>> arguments;
 
-	VisitResult accept(IRVisitor* visitor) override { return visitor->visit(this); }
+	std::any accept(IRVisitor* visitor) override {
+		return visitor->visitFuncCall(this);
+	}
 
 	std::string getNodeName() const override {
 		return "FunctionCall";
@@ -121,7 +146,9 @@ struct FuncCall : public IRNode {
 struct StringLiteral : public IRNode {
 	std::string value;
 
-	VisitResult accept(IRVisitor* visitor) override { return visitor->visit(this); }
+	std::any accept(IRVisitor* visitor) override { 
+		return visitor->visitStringLiteral(this);
+	}
 
 	std::string getNodeName() const override {
 		return "StringLiteral(\"" + value + "\")";

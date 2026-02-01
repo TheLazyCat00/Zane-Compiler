@@ -22,6 +22,12 @@ public:
   virtual void enterDeclaration(ZaneParser::DeclarationContext *ctx) = 0;
   virtual void exitDeclaration(ZaneParser::DeclarationContext *ctx) = 0;
 
+  virtual void enterType(ZaneParser::TypeContext *ctx) = 0;
+  virtual void exitType(ZaneParser::TypeContext *ctx) = 0;
+
+  virtual void enterCollection(ZaneParser::CollectionContext *ctx) = 0;
+  virtual void exitCollection(ZaneParser::CollectionContext *ctx) = 0;
+
   virtual void enterAtom(ZaneParser::AtomContext *ctx) = 0;
   virtual void exitAtom(ZaneParser::AtomContext *ctx) = 0;
 
@@ -73,9 +79,6 @@ public:
   virtual void enterScope(ZaneParser::ScopeContext *ctx) = 0;
   virtual void exitScope(ZaneParser::ScopeContext *ctx) = 0;
 
-  virtual void enterStatement(ZaneParser::StatementContext *ctx) = 0;
-  virtual void exitStatement(ZaneParser::StatementContext *ctx) = 0;
-
   virtual void enterFuncCall(ZaneParser::FuncCallContext *ctx) = 0;
   virtual void exitFuncCall(ZaneParser::FuncCallContext *ctx) = 0;
 
@@ -85,11 +88,11 @@ public:
   virtual void enterCallSuffix(ZaneParser::CallSuffixContext *ctx) = 0;
   virtual void exitCallSuffix(ZaneParser::CallSuffixContext *ctx) = 0;
 
-  virtual void enterType(ZaneParser::TypeContext *ctx) = 0;
-  virtual void exitType(ZaneParser::TypeContext *ctx) = 0;
+  virtual void enterVarDef(ZaneParser::VarDefContext *ctx) = 0;
+  virtual void exitVarDef(ZaneParser::VarDefContext *ctx) = 0;
 
-  virtual void enterCollection(ZaneParser::CollectionContext *ctx) = 0;
-  virtual void exitCollection(ZaneParser::CollectionContext *ctx) = 0;
+  virtual void enterStatement(ZaneParser::StatementContext *ctx) = 0;
+  virtual void exitStatement(ZaneParser::StatementContext *ctx) = 0;
 
 
 };
