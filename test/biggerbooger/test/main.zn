@@ -1,5 +1,0 @@
-import a
-
-Void main() {
-	a.greet()
-}
