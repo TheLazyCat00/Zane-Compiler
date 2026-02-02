@@ -154,7 +154,7 @@ const std::map<std::string, void(*)(int, char*[])> commands = {
 	{ "init", init},
 };
 
-inline void dispatch(std::string cmd, int argc, char* argv[]){
+inline void dispatch(const std::string& cmd, int argc, char* argv[]){
 	auto it = commands.find(cmd);
 	if (it != commands.end()) {
 		it->second(argc, argv);

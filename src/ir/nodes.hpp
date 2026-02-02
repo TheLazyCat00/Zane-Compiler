@@ -80,14 +80,14 @@ struct FuncMod {
 
 	FuncMod() = default;
 	FuncMod(Value mod) : value(mod) { }
-	FuncMod(std::string mod) : value(getByString(mod)) { }
+	FuncMod(const std::string& mod) : value(getByString(mod)) { }
 
-	Value getByString(std::string mod) {
-		return stringToEnum[mod];
+	Value getByString(const std::string& mod) {
+		return stringToEnum.at(mod);
 	}
 
 private:
-	std::map<std::string, Value> stringToEnum = {
+	static inline const std::map<std::string, Value> stringToEnum = {
 		{ "open", Open },
 		{ "strict", Strict },
 		{ "pure", Pure },

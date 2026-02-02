@@ -29,9 +29,7 @@ struct SemVer {
 	}
 
 	SemVer(const std::string& s) {
-		std::string tmp = s;
-
-		std::stringstream ss(tmp);
+		std::stringstream ss(s);
 		std::string part;
 		std::getline(ss, part, '.'); major = std::stoi(part);
 		std::getline(ss, part, '.'); minor = std::stoi(part);
@@ -64,14 +62,14 @@ struct Type {
 
 	Type() = default;
 	Type(Value type) : value(type) {}
-	Type(std::string type) : value(getByString(type)) { }
+	Type(const std::string& type) : value(getByString(type)) { }
 
-	Value getByString(std::string type) {
-		return stringToEnum[type];
+	Value getByString(const std::string& type) {
+		return stringToEnum.at(type);
 	}
 
-	std::string toString() {
-		return enumToString[this->value];
+	std::string toString() const {
+		return enumToString.at(this->value);
 	}
 
 	bool operator==(const Value& other) const {
@@ -79,12 +77,12 @@ struct Type {
     }
 
 private:
-	std::map<std::string, Value> stringToEnum = {
+	static inline const std::map<std::string, Value> stringToEnum = {
 		{ "library", Library },
 		{ "executable", Executable },
 	};
 
-	std::map<Value, std::string> enumToString = {
+	static inline const std::map<Value, std::string> enumToString = {
 		{ Library, "library" },
 		{ Executable,"executable" },
 	};
@@ -100,7 +98,7 @@ inline void to_json(ordered_json& j, const Dependency& d) {
 	j = json{{"name", d.name}, {"version", d.version}};
 }
 
-inline void to_json(ordered_json& j, std::map<std::string, Target> targets) {
+inline void to_json(ordered_json& j, const std::map<std::string, Target>& targets) {
 	if (targets.size() == 0) {
 		j = json::object();
 	}
@@ -143,7 +141,7 @@ struct Manifest {
 		}
 	}
 
-	Manifest(std::map<std::string, std::any> m) {
+	Manifest(const std::map<std::string, std::any>& m) {
 		for (auto& [key, value] : m) {
 			if (key == "name") {
 				name = std::any_cast<std::string>(value);
@@ -154,7 +152,7 @@ struct Manifest {
 		}
 	}
 
-	void save(std::string dir) {
+	void save(const std::string& dir) const {
 		ordered_json j;
 		j["name"] = name;
 		j["version"] = version.toString();

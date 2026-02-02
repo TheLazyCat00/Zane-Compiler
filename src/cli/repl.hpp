@@ -37,7 +37,7 @@ struct OpenQuestion : Question {
 
 	std::string prompt;
 
-	OpenQuestion(std::string name, std::string prompt) {
+	OpenQuestion(const std::string& name, const std::string& prompt) {
 		this->name = name;
 		this->prompt = prompt;
 	}
@@ -60,7 +60,7 @@ struct ChoiceQuestion : Question {
 	std::string prompt;
 	std::map<std::string, T> choices;
 
-	ChoiceQuestion(std::string n, std::string p, std::map<std::string, T> c) {
+	ChoiceQuestion(const std::string& n, const std::string& p, const std::map<std::string, T>& c) {
 		name = n;
 		prompt = p;
 		choices = c;

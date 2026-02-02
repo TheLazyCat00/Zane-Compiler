@@ -6,7 +6,7 @@
 
 namespace templ {
 
-inline void createLibrary(std::string dir, std::string libraryName) {
+inline void createLibrary(const std::string& dir, const std::string& libraryName) {
 	auto file = dir + constants::library::ENTRY;
 	auto content = constants::library::getEntryContent(libraryName);
 	writeFile(file, content);
@@ -16,13 +16,13 @@ inline void createLibrary(std::string dir, std::string libraryName) {
 	writeFile(file, content);
 }
 
-inline void createExecutable(std::string dir) {
+inline void createExecutable(const std::string& dir) {
 	auto file = dir + constants::library::ENTRY;
 	auto content = constants::executable::getEntryContent();
 	writeFile(file, content);
 }
 
-inline void create(manifest::Manifest manifest, std::string dir) {
+inline void create(const manifest::Manifest& manifest, const std::string& dir) {
 	manifest.save(dir);
 
 	if (manifest.type == manifest::Type::Library) {

@@ -18,7 +18,7 @@ namespace library {
 	constexpr char ENTRY[] = "test/main.zn";
 	constexpr char LIBRARY[] = "src/main.zn";
 
-	inline std::string getEntryContent(std::string libraryName) {
+	inline std::string getEntryContent(const std::string& libraryName) {
 		return
 			"import " + libraryName + "\n"
 			"\n"
@@ -27,7 +27,7 @@ namespace library {
 			"}";
 	}
 
-	inline std::string getLibraryContent(std::string libraryName) {
+	inline std::string getLibraryContent(const std::string& libraryName) {
 		return
 			"package " + libraryName + "\n"
 			"\n"
