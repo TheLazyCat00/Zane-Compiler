@@ -24,7 +24,8 @@ declaration
 pkgDef: 'package' name=IDENTIFIER;
 pkgImport: 'import' name=IDENTIFIER;
 
-type: name=IDENTIFIER ('<' type (',' type)* '>')?;
+attribute: name=IDENTIFIER | attribute '.' name=IDENTIFIER;
+type: attribute ('<' type (',' type)* '>')?;
 collection: (value (',' value)*)?;
 
 // Expressions & Values
@@ -37,9 +38,9 @@ value
 primary
 	: STRING                  # str
 	| NUMBER                  # num
-	| IDENTIFIER              # identifier
+	| attribute               # attr
 	| constructorCall         # cons
-	| '(' value ')'           # grouping
+	| '(' value ')'           # tuple
 	| primary callSuffix      # call
 	;
 
