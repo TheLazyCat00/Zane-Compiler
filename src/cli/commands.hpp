@@ -6,7 +6,7 @@
 #include "cli/repl.hpp"
 #include "cli/constants.hpp"
 #include "cli/template.hpp"
-#include "utils/print.hpp"
+#include "utils/utils.hpp"
 
 #include <cstdio>
 #include <memory>
@@ -109,9 +109,9 @@ inline void debug(int argc, char* argv[]) {
 }
 
 inline bool directoryIsEmpty(const std::filesystem::path& dir) {
-	return std::filesystem::is_directory(dir) &&
-			std::filesystem::directory_iterator(dir) ==
-			std::filesystem::directory_iterator{};
+	return
+		std::filesystem::directory_iterator(dir) ==
+		std::filesystem::directory_iterator{};
 }
 
 inline void init(int argc, char* argv[]) {
@@ -120,7 +120,11 @@ inline void init(int argc, char* argv[]) {
 		dir = argv[0];
 	}
 
-	if (!directoryIsEmpty(dir)) {
+	dir = dir + "/";
+	if (!std::filesystem::is_directory(dir)) {
+		std::filesystem::create_directories(dir);
+	}
+	else if (!directoryIsEmpty(dir)) {
 		print("Directory " + dir + " isn't empty.");
 		return;
 	}

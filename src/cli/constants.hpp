@@ -11,7 +11,7 @@ namespace executable {
 		return
 			"Void main() {\n"
 			"\tputs(\"Hello world!\")\n"
-			"})";
+			"}";
 	}
 }
 namespace library {
@@ -24,7 +24,7 @@ namespace library {
 			"\n"
 			"Void main() {\n"
 			"\t" + libraryName + ".greet()\n"
-			"})";
+			"}";
 	}
 
 	inline std::string getLibraryContent(std::string libraryName) {
@@ -32,8 +32,8 @@ namespace library {
 			"package " + libraryName + "\n"
 			"\n"
 			"Void greet() {\n"
-			"\tputs(\"Hello " + libraryName + "\")\n"
-			"})";
+			"\tputs(\"Hello " + libraryName + "!\")\n"
+			"}";
 	}
 }
 

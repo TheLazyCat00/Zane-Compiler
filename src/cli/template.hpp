@@ -1,43 +1,28 @@
+#pragma once
+
 #include "cli/manifest.hpp"
 #include "cli/constants.hpp"
-
-#include <filesystem>
+#include "utils/utils.hpp"
 
 namespace templ {
 
 inline void createLibrary(std::string dir, std::string libraryName) {
-	std::ofstream entryFile(dir + constants::library::ENTRY);
-	if (!entryFile) {
-		std::cout << "Error creating file!" << std::endl;
-		return;
-	}
+	auto file = dir + constants::library::ENTRY;
+	auto content = constants::library::getEntryContent(libraryName);
+	writeFile(file, content);
 
-	entryFile << constants::library::getEntryContent(libraryName);
-	entryFile.close();
-
-	std::ofstream libraryFile(dir + constants::library::LIBRARY);
-	if (!libraryFile) {
-		std::cout << "Error creating file!" << std::endl;
-		return;
-	}
-
-	libraryFile << constants::library::getLibraryContent(libraryName);
-	libraryFile.close();
+	file = dir + constants::library::LIBRARY;
+	content = constants::library::getLibraryContent(libraryName);
+	writeFile(file, content);
 }
 
 inline void createExecutable(std::string dir) {
-	std::ofstream entryFile(dir + constants::executable::ENTRY);
-	if (!entryFile) {
-		std::cout << "Error creating file!" << std::endl;
-		return;
-	}
-
-	entryFile << constants::executable::getEntryContent();
-	entryFile.close();
+	auto file = dir + constants::library::ENTRY;
+	auto content = constants::executable::getEntryContent();
+	writeFile(file, content);
 }
 
 inline void create(manifest::Manifest manifest, std::string dir) {
-	std::filesystem::create_directories(dir);
 	manifest.save(dir);
 
 	if (manifest.type == manifest::Type::Library) {

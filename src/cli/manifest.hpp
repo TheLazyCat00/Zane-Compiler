@@ -1,6 +1,7 @@
 #pragma once
 
 #include "cli/constants.hpp"
+#include "utils/utils.hpp"
 
 #include <iostream>
 #include <nlohmann/json_fwd.hpp>
@@ -161,14 +162,7 @@ struct Manifest {
 		j["dependencies"] = dependencies;
 		j["targets"] = targets;
 
-		std::ofstream manifestFile(dir + constants::MANIFEST_PATH);
-		if (!manifestFile) {
-			std::cout << "Error creating file!" << std::endl;
-			return;
-		}
-
-		manifestFile << j.dump(1, '\t');
-		manifestFile.close();
+		writeFile(dir + constants::MANIFEST_PATH, j.dump(1, '\t'));
 	}
 };
 

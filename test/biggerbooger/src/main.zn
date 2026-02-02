@@ -1,0 +1,5 @@
+package a
+
+Void greet() {
+	puts("Hello a")
+}

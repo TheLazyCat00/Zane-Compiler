@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-#include "utils/print.hpp"
+#include "utils/utils.hpp"
 
 namespace repl {
 
