@@ -178,7 +178,7 @@ struct StringLiteral : public IRNode {
 	}
 
 	std::string getNodeName() const override {
-		return "StringLiteral(\"" + value + "\")";
+		return "StringLiteral(" + value + ")";
 	}
 };
 
