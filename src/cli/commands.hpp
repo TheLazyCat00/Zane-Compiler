@@ -14,6 +14,10 @@
 #include <map>
 #include <iostream>
 #include <fstream>
+#include <filesystem>
+#include <vector>
+#include <algorithm>
+#include <sstream>
 #include <antlr4-runtime.h>
 #include <parser/ZaneLexer.h>
 #include <parser/ZaneParser.h>
@@ -26,12 +30,36 @@ enum Mode {
 };
 
 inline int execute(const std::string& filename, Mode mode) {
-	std::ifstream stream(filename);
-	if (!stream) {
-		std::cerr << "Failed to open file: " << filename << "\n";
+	namespace fs = std::filesystem;
+	fs::path entryPath(filename);
+	fs::path dir = entryPath.parent_path();
+	if (dir.empty()) dir = ".";
+
+	if (!fs::exists(dir) || !fs::is_directory(dir)) {
+		std::cerr << "Directory not found: " << dir << "\n";
 		return 1;
 	}
-	antlr4::ANTLRInputStream input(stream);
+
+	std::vector<fs::path> sources;
+	for (const auto& entry : fs::directory_iterator(dir)) {
+		if (entry.path().extension() == ".zn") {
+			sources.push_back(entry.path());
+		}
+	}
+
+	std::sort(sources.begin(), sources.end());
+
+	std::stringstream ss;
+	for (const auto& path : sources) {
+		std::ifstream stream(path);
+		if (!stream) {
+			std::cerr << "Failed to open file: " << path << "\n";
+			return 1;
+		}
+		ss << stream.rdbuf() << "\n";
+	}
+
+	antlr4::ANTLRInputStream input(ss.str());
 	parser::ZaneLexer lexer(&input);
 	antlr4::CommonTokenStream tokens(&lexer);
 	parser::ZaneParser parser(&tokens);
@@ -57,11 +85,27 @@ inline int execute(const std::string& filename, Mode mode) {
 }
 
 inline void run(int argc, char* argv[]) {
-	execute(constants::ENTRY, JIT);
+	namespace fs = std::filesystem;
+	std::string entry = constants::executable::ENTRY;
+	if (fs::exists(constants::MANIFEST_PATH)) {
+		manifest::Manifest manifest(constants::MANIFEST_PATH);
+		if (manifest.type == manifest::Type::Library) {
+			entry = constants::library::ENTRY;
+		}
+	}
+	execute(entry, JIT);
 }
 
 inline void debug(int argc, char* argv[]) {
-	execute(constants::ENTRY, Debug);
+	namespace fs = std::filesystem;
+	std::string entry = constants::executable::ENTRY;
+	if (fs::exists(constants::MANIFEST_PATH)) {
+		manifest::Manifest manifest(constants::MANIFEST_PATH);
+		if (manifest.type == manifest::Type::Library) {
+			entry = constants::library::ENTRY;
+		}
+	}
+	execute(entry, Debug);
 }
 
 inline bool directoryIsEmpty(const std::filesystem::path& dir) {

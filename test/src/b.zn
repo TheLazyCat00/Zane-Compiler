@@ -1,0 +1,3 @@
+Void greet() {
+	puts("bye")
+}

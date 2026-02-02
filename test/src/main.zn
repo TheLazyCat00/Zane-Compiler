@@ -1,3 +1,3 @@
 Void main() {
-	puts("hi")
+	greet()
 }
