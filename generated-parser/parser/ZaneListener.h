@@ -22,6 +22,12 @@ public:
   virtual void enterDeclaration(ZaneParser::DeclarationContext *ctx) = 0;
   virtual void exitDeclaration(ZaneParser::DeclarationContext *ctx) = 0;
 
+  virtual void enterPkgDef(ZaneParser::PkgDefContext *ctx) = 0;
+  virtual void exitPkgDef(ZaneParser::PkgDefContext *ctx) = 0;
+
+  virtual void enterPkgImport(ZaneParser::PkgImportContext *ctx) = 0;
+  virtual void exitPkgImport(ZaneParser::PkgImportContext *ctx) = 0;
+
   virtual void enterType(ZaneParser::TypeContext *ctx) = 0;
   virtual void exitType(ZaneParser::TypeContext *ctx) = 0;
 

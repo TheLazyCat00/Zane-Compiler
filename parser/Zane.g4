@@ -14,12 +14,15 @@ NUMBER: SIMPLE_NUMBER | MANAGED_NUMBER;
 WS: [ \t\r\n]+ -> skip;
 
 // --- Parser Rules ---
-globalScope: declaration+ EOF;
+globalScope: pkgDef pkgImport* declaration* EOF;
 
 declaration
 	: funcDef
 	| varDef
 	;
+
+pkgDef: 'package' name=IDENTIFIER;
+pkgImport: 'import' name=IDENTIFIER;
 
 type: name=IDENTIFIER ('<' type (',' type)* '>')?;
 collection: (value (',' value)*)?;

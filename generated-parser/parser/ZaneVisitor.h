@@ -24,6 +24,10 @@ public:
 
     virtual std::any visitDeclaration(ZaneParser::DeclarationContext *context) = 0;
 
+    virtual std::any visitPkgDef(ZaneParser::PkgDefContext *context) = 0;
+
+    virtual std::any visitPkgImport(ZaneParser::PkgImportContext *context) = 0;
+
     virtual std::any visitType(ZaneParser::TypeContext *context) = 0;
 
     virtual std::any visitCollection(ZaneParser::CollectionContext *context) = 0;

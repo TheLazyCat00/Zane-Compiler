@@ -9,6 +9,10 @@ inline void print(const std::string& text) {
 	std::cout << text << std::endl;
 }
 
+inline void alert(const std::string& text) {
+	std::cerr << text << std::endl;
+}
+
 inline void writeFile(const std::string& path, const std::string& content) {
 	std::filesystem::path filePath(path);
 

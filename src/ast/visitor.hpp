@@ -47,6 +47,12 @@ public:
 
 	std::any visitGlobalScope(ZaneParser::GlobalScopeContext *ctx) override {
 		currentScope = globalScope;
+		globalScope->pkgName = ctx->pkgDef()->name->getText();
+		
+		for (auto pkgCtx : ctx->pkgImport()) {
+			globalScope->importedPackages.push_back(pkgCtx->name->getText());
+		}
+
 		visitChildren(ctx);
 		return std::static_pointer_cast<ir::IRNode>(globalScope);
 	}

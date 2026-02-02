@@ -6,6 +6,7 @@ constexpr char MANIFEST_PATH[] = "zane.json";
 
 namespace executable {
 	constexpr char ENTRY[] = "src/main.zn";
+	constexpr char ENTRY_DIR[] = "src";
 
 	inline std::string getEntryContent() {
 		return
@@ -16,6 +17,7 @@ namespace executable {
 }
 namespace library {
 	constexpr char ENTRY[] = "test/main.zn";
+	constexpr char ENTRY_DIR[] = "test";
 	constexpr char LIBRARY[] = "src/main.zn";
 
 	inline std::string getEntryContent(const std::string& libraryName) {

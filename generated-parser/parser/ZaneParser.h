@@ -14,16 +14,16 @@ class  ZaneParser : public antlr4::Parser {
 public:
   enum {
     T__0 = 1, T__1 = 2, T__2 = 3, T__3 = 4, T__4 = 5, T__5 = 6, T__6 = 7, 
-    T__7 = 8, T__8 = 9, T__9 = 10, T__10 = 11, T__11 = 12, OPERATOR = 13, 
-    IDENTIFIER = 14, STRING = 15, NUMBER = 16, WS = 17
+    T__7 = 8, T__8 = 9, T__9 = 10, T__10 = 11, T__11 = 12, T__12 = 13, T__13 = 14, 
+    OPERATOR = 15, IDENTIFIER = 16, STRING = 17, NUMBER = 18, WS = 19
   };
 
   enum {
-    RuleGlobalScope = 0, RuleDeclaration = 1, RuleType = 2, RuleCollection = 3, 
-    RuleValue = 4, RulePrimary = 5, RuleFuncDef = 6, RuleParam = 7, RuleParams = 8, 
-    RuleFuncMod = 9, RuleStrict = 10, RulePure = 11, RuleFuncBody = 12, 
-    RuleArrowFunction = 13, RuleScope = 14, RuleFuncCall = 15, RuleConstructorCall = 16, 
-    RuleCallSuffix = 17, RuleVarDef = 18, RuleStatement = 19
+    RuleGlobalScope = 0, RuleDeclaration = 1, RulePkgDef = 2, RulePkgImport = 3, 
+    RuleType = 4, RuleCollection = 5, RuleValue = 6, RulePrimary = 7, RuleFuncDef = 8, 
+    RuleParam = 9, RuleParams = 10, RuleFuncMod = 11, RuleStrict = 12, RulePure = 13, 
+    RuleFuncBody = 14, RuleArrowFunction = 15, RuleScope = 16, RuleFuncCall = 17, 
+    RuleConstructorCall = 18, RuleCallSuffix = 19, RuleVarDef = 20, RuleStatement = 21
   };
 
   explicit ZaneParser(antlr4::TokenStream *input);
@@ -45,6 +45,8 @@ public:
 
   class GlobalScopeContext;
   class DeclarationContext;
+  class PkgDefContext;
+  class PkgImportContext;
   class TypeContext;
   class CollectionContext;
   class ValueContext;
@@ -68,7 +70,10 @@ public:
   public:
     GlobalScopeContext(antlr4::ParserRuleContext *parent, size_t invokingState);
     virtual size_t getRuleIndex() const override;
+    PkgDefContext *pkgDef();
     antlr4::tree::TerminalNode *EOF();
+    std::vector<PkgImportContext *> pkgImport();
+    PkgImportContext* pkgImport(size_t i);
     std::vector<DeclarationContext *> declaration();
     DeclarationContext* declaration(size_t i);
 
@@ -96,6 +101,38 @@ public:
   };
 
   DeclarationContext* declaration();
+
+  class  PkgDefContext : public antlr4::ParserRuleContext {
+  public:
+    antlr4::Token *name = nullptr;
+    PkgDefContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    virtual size_t getRuleIndex() const override;
+    antlr4::tree::TerminalNode *IDENTIFIER();
+
+    virtual void enterRule(antlr4::tree::ParseTreeListener *listener) override;
+    virtual void exitRule(antlr4::tree::ParseTreeListener *listener) override;
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+   
+  };
+
+  PkgDefContext* pkgDef();
+
+  class  PkgImportContext : public antlr4::ParserRuleContext {
+  public:
+    antlr4::Token *name = nullptr;
+    PkgImportContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    virtual size_t getRuleIndex() const override;
+    antlr4::tree::TerminalNode *IDENTIFIER();
+
+    virtual void enterRule(antlr4::tree::ParseTreeListener *listener) override;
+    virtual void exitRule(antlr4::tree::ParseTreeListener *listener) override;
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+   
+  };
+
+  PkgImportContext* pkgImport();
 
   class  TypeContext : public antlr4::ParserRuleContext {
   public:

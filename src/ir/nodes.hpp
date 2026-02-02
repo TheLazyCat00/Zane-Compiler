@@ -37,6 +37,8 @@ struct Parameter : public IRNode {
 };
 
 struct GlobalScope : public IRNode {
+	std::string pkgName;
+	std::vector<std::string> importedPackages;
 	std::unordered_map<std::string, std::shared_ptr<FuncDef>> functionDefs;
 	std::vector<std::shared_ptr<IRNode>> body;
 
@@ -45,7 +47,7 @@ struct GlobalScope : public IRNode {
 	}
 
 	std::string getNodeName() const override {
-		return "FileScope";
+		return "GlobalScope";
 	}
 
 	std::string printChildren(const std::string& prefix) const override {
@@ -63,7 +65,7 @@ struct Scope : public IRNode {
 	}
 
 	std::string getNodeName() const override {
-		return "LocalScope";
+		return "Scope";
 	}
 
 	std::string printChildren(const std::string& prefix) const override {

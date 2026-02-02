@@ -24,6 +24,12 @@ public:
   virtual void enterDeclaration(ZaneParser::DeclarationContext * /*ctx*/) override { }
   virtual void exitDeclaration(ZaneParser::DeclarationContext * /*ctx*/) override { }
 
+  virtual void enterPkgDef(ZaneParser::PkgDefContext * /*ctx*/) override { }
+  virtual void exitPkgDef(ZaneParser::PkgDefContext * /*ctx*/) override { }
+
+  virtual void enterPkgImport(ZaneParser::PkgImportContext * /*ctx*/) override { }
+  virtual void exitPkgImport(ZaneParser::PkgImportContext * /*ctx*/) override { }
+
   virtual void enterType(ZaneParser::TypeContext * /*ctx*/) override { }
   virtual void exitType(ZaneParser::TypeContext * /*ctx*/) override { }
 

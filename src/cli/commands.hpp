@@ -1,11 +1,12 @@
 #pragma once
 
-#include "visitor/visitor.hpp"
+#include "ast/visitor.hpp"
 #include "codegen/llvm.hpp"
 #include "cli/manifest.hpp"
 #include "cli/repl.hpp"
 #include "cli/constants.hpp"
 #include "cli/template.hpp"
+#include "ir/nodes.hpp"
 #include "utils/utils.hpp"
 
 #include <cstdio>
@@ -29,15 +30,13 @@ enum Mode {
 	JIT,
 };
 
-inline int execute(const std::string& filename, Mode mode) {
+inline void execute(const std::string& dir, Mode mode, const std::string& projectName) {
 	namespace fs = std::filesystem;
-	fs::path entryPath(filename);
-	fs::path dir = entryPath.parent_path();
-	if (dir.empty()) dir = ".";
+	fs::path entry(dir);
 
-	if (!fs::exists(dir) || !fs::is_directory(dir)) {
+	if (!fs::exists(entry) || !fs::is_directory(entry)) {
 		std::cerr << "Directory not found: " << dir << "\n";
-		return 1;
+		return;
 	}
 
 	std::vector<fs::path> sources;
@@ -49,25 +48,38 @@ inline int execute(const std::string& filename, Mode mode) {
 
 	std::sort(sources.begin(), sources.end());
 
-	std::stringstream ss;
+	Visitor visitor;
+	std::shared_ptr<ir::GlobalScope> irProgram;
 	for (const auto& path : sources) {
 		std::ifstream stream(path);
 		if (!stream) {
 			std::cerr << "Failed to open file: " << path << "\n";
-			return 1;
+			return;
 		}
-		ss << stream.rdbuf() << "\n";
+
+		std::stringstream ss;
+		ss << stream.rdbuf();
+
+		antlr4::ANTLRInputStream input(ss.str());
+		parser::ZaneLexer lexer(&input);
+		antlr4::CommonTokenStream tokens(&lexer);
+		parser::ZaneParser parser(&tokens);
+
+		antlr4::tree::ParseTree *tree = parser.globalScope();
+		visitor.visit(tree);
+
+		irProgram = visitor.getGlobalScope();
+		const std::string& pkgName = irProgram->pkgName;
+
+		const std::string& expectedName =
+			(entry == fs::path("src")) ? projectName : dir;
+		
+		if (expectedName != pkgName) {
+			std::cerr << "Expected package name " << expectedName << " but got " << pkgName;
+			return;
+		}
 	}
 
-	antlr4::ANTLRInputStream input(ss.str());
-	parser::ZaneLexer lexer(&input);
-	antlr4::CommonTokenStream tokens(&lexer);
-	parser::ZaneParser parser(&tokens);
-
-	antlr4::tree::ParseTree *tree = parser.globalScope();
-	Visitor visitor;
-	visitor.visit(tree);
-	auto irProgram = visitor.getGlobalScope();
 
 	if (mode == Debug) {
 		std::cout << irProgram->toString();
@@ -80,32 +92,42 @@ inline int execute(const std::string& filename, Mode mode) {
 		std::cout << "--- JIT Execution ---\n";
 		codegen.executeJIT();
 	}
-
-	return 0;
 }
 
 inline void run(int argc, char* argv[]) {
 	namespace fs = std::filesystem;
-	std::string entry = constants::executable::ENTRY;
-	if (fs::exists(constants::MANIFEST_PATH)) {
-		manifest::Manifest manifest(constants::MANIFEST_PATH);
-		if (manifest.type == manifest::Type::Library) {
-			entry = constants::library::ENTRY;
-		}
+	std::string entry;
+	if (!fs::exists(constants::MANIFEST_PATH)) {
+		alert("Project not initialized.");
+		return;
 	}
-	execute(entry, JIT);
+
+	manifest::Manifest manifest(constants::MANIFEST_PATH);
+	if (manifest.type == manifest::Type::Executable) {
+		entry = constants::executable::ENTRY_DIR;
+	}
+	else {
+		entry = constants::library::ENTRY_DIR;
+	}
+	execute(entry, JIT, manifest.name);
 }
 
 inline void debug(int argc, char* argv[]) {
 	namespace fs = std::filesystem;
-	std::string entry = constants::executable::ENTRY;
-	if (fs::exists(constants::MANIFEST_PATH)) {
-		manifest::Manifest manifest(constants::MANIFEST_PATH);
-		if (manifest.type == manifest::Type::Library) {
-			entry = constants::library::ENTRY;
-		}
+	std::string entry;
+	if (!fs::exists(constants::MANIFEST_PATH)) {
+		alert("Project not initialized.");
+		return;
 	}
-	execute(entry, Debug);
+
+	manifest::Manifest manifest(constants::MANIFEST_PATH);
+	if (manifest.type == manifest::Type::Executable) {
+		entry = constants::executable::ENTRY_DIR;
+	}
+	else {
+		entry = constants::library::ENTRY_DIR;
+	}
+	execute(entry, Debug, manifest.name);
 }
 
 inline bool directoryIsEmpty(const std::filesystem::path& dir) {

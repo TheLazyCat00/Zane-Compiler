@@ -1,16 +1,12 @@
 #pragma once
 
+#include "cli/commands.hpp"
+
 #include <string>
 #include <iostream>
-
 #include <antlr4-runtime.h>
 #include <parser/ZaneLexer.h>
 #include <parser/ZaneParser.h>
-#include <visitor/visitor.hpp>
-#include <codegen/llvm.hpp>
-#include <cli/commands.hpp>
-#include <cli/constants.hpp>
-
 
 class CLI {
 public:

@@ -25,6 +25,14 @@ public:
     return visitChildren(ctx);
   }
 
+  virtual std::any visitPkgDef(ZaneParser::PkgDefContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitPkgImport(ZaneParser::PkgImportContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
   virtual std::any visitType(ZaneParser::TypeContext *ctx) override {
     return visitChildren(ctx);
   }
