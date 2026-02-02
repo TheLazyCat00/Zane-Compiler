@@ -62,9 +62,19 @@ inline void debug(int argc, char* argv[], manifest::Manifest manifest) {
 	execute(ENTRY, Debug);
 }
 
+inline void init(int argc, char* argv[], manifest::Manifest manifest) {
+	auto dir = std::string(argv[0]);
+	if (dir == "") {
+		dir = "";
+	}
+
+	std::cout << dir;
+}
+
 const std::map<std::string, void(*)(int, char*[], manifest::Manifest)> commands = {
 	{ "run", run},
 	{ "debug", debug},
+	{ "init", init},
 };
 
 inline void dispatch(std::string cmd, int argc, char* argv[], manifest::Manifest manifest){

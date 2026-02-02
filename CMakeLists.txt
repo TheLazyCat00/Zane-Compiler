@@ -61,15 +61,3 @@ target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE
 	zane_parser
 	${llvm_libs}
 )
-
-add_custom_target(run
-	COMMAND ${CMAKE_PROJECT_NAME} run
-	DEPENDS ${CMAKE_PROJECT_NAME}
-	WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/test
-)
-
-add_custom_target(debug
-	COMMAND ${CMAKE_PROJECT_NAME} debug
-	DEPENDS ${CMAKE_PROJECT_NAME}
-	WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/test
-)

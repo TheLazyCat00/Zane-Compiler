@@ -29,7 +29,7 @@
 				"CMAKE_CXX_COMPILER": "clang++",
 				"CMAKE_CXX_STANDARD": "23",
 				"LLVM_DIR": "/usr/lib/llvm-18/lib/cmake/llvm",
-				"VCPKG_MANIFEST_INSTALL": "ON"
+				"VCPKG_MANIFEST_INSTALL": "OFF"
 			}
 		}
 	]
