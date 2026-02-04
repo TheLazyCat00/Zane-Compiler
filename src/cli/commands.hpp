@@ -6,6 +6,7 @@
 #include "cli/repl.hpp"
 #include "cli/constants.hpp"
 #include "cli/template.hpp"
+#include "cli/help.hpp"
 #include "ir/nodes.hpp"
 #include "utils/utils.hpp"
 
@@ -78,8 +79,8 @@ inline void execute(Mode mode, const manifest::Manifest& manifest) {
 		irProgram = visitor.getGlobalScope();
 		const std::string& pkgName = irProgram->pkgName;
 
-		const std::string& expectedName =
-			(entry == fs::path("src")) ? projectName : dir;
+		const std::string expectedName =
+			(entry == fs::path("src")) ? manifest.name : entry.string();
 		
 		if (expectedName != pkgName) {
 			std::cerr << "Expected package name " << expectedName << " but got " << pkgName;
@@ -159,28 +160,61 @@ inline void init(int argc, char* argv[]) {
 	templ::create(manifest, dir);
 }
 
-const std::map<std::string, void(*)(int, char*[], const manifest::Manifest&)> commands = {
+inline void help(int argc, char* argv[]) {
+	if (argc > 0) {
+		std::string cmd = argv[0];
+		auto it = help::commandHelp.find(cmd);
+		if (it != help::commandHelp.end()) {
+			std::cout << cmd << ": " << it->second << "\n";
+		} else {
+			std::cout << "Unknown command: " << cmd << "\n\n";
+			std::cout << "Available commands:\n";
+			for (const auto& [name, desc] : help::commandHelp) {
+				std::cout << "  " << name << " - " << desc << "\n";
+			}
+		}
+	} else {
+		std::cout << "Available commands:\n";
+		for (const auto& [name, desc] : help::commandHelp) {
+			std::cout << "  " << name << " - " << desc << "\n";
+		}
+	}
+}
+
+// Commands that require an initialized project
+const std::map<std::string, void(*)(int, char*[], const manifest::Manifest&)> projectCommands = {
 	{ "run", run},
 	{ "debug", debug},
 	{ "ir", ir},
+};
+
+// Commands that don't require an initialized project
+const std::map<std::string, void(*)(int, char*[])> standaloneCommands = {
 	{ "init", init},
+	{ "help", help},
 };
 
 inline void dispatch(const std::string& cmd, int argc, char* argv[]){
-	auto it = commands.find(cmd);
-	if (it == commands.end()) {
+	auto standaloneIt = standaloneCommands.find(cmd);
+	if (standaloneIt != standaloneCommands.end()) {
+		standaloneIt->second(argc, argv);
+		return;
+	}
+
+	auto projectIt = projectCommands.find(cmd);
+	if (projectIt == projectCommands.end()) {
 		std::cout << "Unknown command: " << cmd << "\n";
+		return;
 	}
 
 	namespace fs = std::filesystem;
-	std::string entry;
 	if (!fs::exists(constants::MANIFEST_PATH)) {
 		alert("Project not initialized.");
 		return;
 	}
 
 	manifest::Manifest manifest(constants::MANIFEST_PATH);
-	it->second(argc, argv, manifest);
+	projectIt->second(argc, argv, manifest);
 }
 
 } // namespace commands
