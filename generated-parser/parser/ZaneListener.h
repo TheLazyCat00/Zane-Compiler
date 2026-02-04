@@ -22,6 +22,9 @@ public:
   virtual void enterDeclaration(ZaneParser::DeclarationContext *ctx) = 0;
   virtual void exitDeclaration(ZaneParser::DeclarationContext *ctx) = 0;
 
+  virtual void enterStatement(ZaneParser::StatementContext *ctx) = 0;
+  virtual void exitStatement(ZaneParser::StatementContext *ctx) = 0;
+
   virtual void enterPkgDef(ZaneParser::PkgDefContext *ctx) = 0;
   virtual void exitPkgDef(ZaneParser::PkgDefContext *ctx) = 0;
 
@@ -31,8 +34,11 @@ public:
   virtual void enterType(ZaneParser::TypeContext *ctx) = 0;
   virtual void exitType(ZaneParser::TypeContext *ctx) = 0;
 
-  virtual void enterCollection(ZaneParser::CollectionContext *ctx) = 0;
-  virtual void exitCollection(ZaneParser::CollectionContext *ctx) = 0;
+  virtual void enterMemberAccess(ZaneParser::MemberAccessContext *ctx) = 0;
+  virtual void exitMemberAccess(ZaneParser::MemberAccessContext *ctx) = 0;
+
+  virtual void enterBaseName(ZaneParser::BaseNameContext *ctx) = 0;
+  virtual void exitBaseName(ZaneParser::BaseNameContext *ctx) = 0;
 
   virtual void enterAtom(ZaneParser::AtomContext *ctx) = 0;
   virtual void exitAtom(ZaneParser::AtomContext *ctx) = 0;
@@ -46,17 +52,20 @@ public:
   virtual void enterCall(ZaneParser::CallContext *ctx) = 0;
   virtual void exitCall(ZaneParser::CallContext *ctx) = 0;
 
-  virtual void enterIdentifier(ZaneParser::IdentifierContext *ctx) = 0;
-  virtual void exitIdentifier(ZaneParser::IdentifierContext *ctx) = 0;
-
   virtual void enterNum(ZaneParser::NumContext *ctx) = 0;
   virtual void exitNum(ZaneParser::NumContext *ctx) = 0;
 
-  virtual void enterGrouping(ZaneParser::GroupingContext *ctx) = 0;
-  virtual void exitGrouping(ZaneParser::GroupingContext *ctx) = 0;
+  virtual void enterName(ZaneParser::NameContext *ctx) = 0;
+  virtual void exitName(ZaneParser::NameContext *ctx) = 0;
+
+  virtual void enterPropertyAccess(ZaneParser::PropertyAccessContext *ctx) = 0;
+  virtual void exitPropertyAccess(ZaneParser::PropertyAccessContext *ctx) = 0;
 
   virtual void enterCons(ZaneParser::ConsContext *ctx) = 0;
   virtual void exitCons(ZaneParser::ConsContext *ctx) = 0;
+
+  virtual void enterCollection(ZaneParser::CollectionContext *ctx) = 0;
+  virtual void exitCollection(ZaneParser::CollectionContext *ctx) = 0;
 
   virtual void enterFuncDef(ZaneParser::FuncDefContext *ctx) = 0;
   virtual void exitFuncDef(ZaneParser::FuncDefContext *ctx) = 0;
@@ -97,8 +106,8 @@ public:
   virtual void enterVarDef(ZaneParser::VarDefContext *ctx) = 0;
   virtual void exitVarDef(ZaneParser::VarDefContext *ctx) = 0;
 
-  virtual void enterStatement(ZaneParser::StatementContext *ctx) = 0;
-  virtual void exitStatement(ZaneParser::StatementContext *ctx) = 0;
+  virtual void enterRetStat(ZaneParser::RetStatContext *ctx) = 0;
+  virtual void exitRetStat(ZaneParser::RetStatContext *ctx) = 0;
 
 
 };

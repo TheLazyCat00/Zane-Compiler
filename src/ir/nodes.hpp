@@ -135,7 +135,7 @@ struct VarDef : public IRNode {
 	}
 };
 
-struct Identifier : public IRNode {
+struct NameRule : public IRNode {
 	std::string name;
 
 	std::any accept(IRVisitor* visitor) override {

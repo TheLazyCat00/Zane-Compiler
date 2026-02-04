@@ -131,8 +131,11 @@ public:
 		return std::static_pointer_cast<ir::IRNode>(stringLit);
 	}
 
+	std::any visitAttr(ZaneParser::AttrContext *ctx) override {
+
+	}
 	std::any visitIdentifier(ZaneParser::IdentifierContext *ctx) override {
-		auto identifier = std::make_shared<ir::Identifier>();
+		auto identifier = std::make_shared<ir::NameRule>();
 		identifier->name = ctx->getText();
 
 		return std::static_pointer_cast<ir::IRNode>(identifier);

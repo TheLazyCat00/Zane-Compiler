@@ -54,80 +54,87 @@ void zaneParserInitialize() {
 #endif
   auto staticData = std::make_unique<ZaneParserStaticData>(
     std::vector<std::string>{
-      "globalScope", "declaration", "pkgDef", "pkgImport", "type", "collection", 
-      "value", "primary", "funcDef", "param", "params", "funcMod", "strict", 
-      "pure", "funcBody", "arrowFunction", "scope", "funcCall", "constructorCall", 
-      "callSuffix", "varDef", "statement"
+      "globalScope", "declaration", "statement", "pkgDef", "pkgImport", 
+      "type", "nameRule", "value", "primary", "collection", "funcDef", "param", 
+      "params", "funcMod", "strict", "pure", "funcBody", "arrowFunction", 
+      "scope", "funcCall", "constructorCall", "callSuffix", "varDef", "retStat"
     },
     std::vector<std::string>{
-      "", "'package'", "'import'", "'<'", "','", "'>'", "'('", "')'", "'strict'", 
-      "'pure'", "'=>'", "'{'", "'}'", "':'", "'='"
+      "", "'package'", "'import'", "'<'", "','", "'>'", "'.'", "'('", "')'", 
+      "'strict'", "'pure'", "'=>'", "'{'", "'}'", "':'", "'='", "'returns'"
     },
     std::vector<std::string>{
-      "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "OPERATOR", 
-      "IDENTIFIER", "STRING", "NUMBER", "WS"
+      "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", 
+      "OPERATOR", "IDENTIFIER", "STRING", "NUMBER", "WS"
     }
   );
   static const int32_t serializedATNSegment[] = {
-  	4,1,19,195,2,0,7,0,2,1,7,1,2,2,7,2,2,3,7,3,2,4,7,4,2,5,7,5,2,6,7,6,2,
+  	4,1,21,213,2,0,7,0,2,1,7,1,2,2,7,2,2,3,7,3,2,4,7,4,2,5,7,5,2,6,7,6,2,
   	7,7,7,2,8,7,8,2,9,7,9,2,10,7,10,2,11,7,11,2,12,7,12,2,13,7,13,2,14,7,
   	14,2,15,7,15,2,16,7,16,2,17,7,17,2,18,7,18,2,19,7,19,2,20,7,20,2,21,7,
-  	21,1,0,1,0,5,0,47,8,0,10,0,12,0,50,9,0,1,0,5,0,53,8,0,10,0,12,0,56,9,
-  	0,1,0,1,0,1,1,1,1,3,1,62,8,1,1,2,1,2,1,2,1,3,1,3,1,3,1,4,1,4,1,4,1,4,
-  	1,4,5,4,75,8,4,10,4,12,4,78,9,4,1,4,1,4,3,4,82,8,4,1,5,1,5,1,5,5,5,87,
-  	8,5,10,5,12,5,90,9,5,3,5,92,8,5,1,6,1,6,1,6,1,6,1,6,1,6,5,6,100,8,6,10,
-  	6,12,6,103,9,6,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,3,7,114,8,7,1,7,1,
-  	7,5,7,118,8,7,10,7,12,7,121,9,7,1,8,1,8,1,8,1,8,3,8,127,8,8,1,8,1,8,3,
-  	8,131,8,8,1,8,1,8,1,9,1,9,1,9,1,10,1,10,1,10,5,10,141,8,10,10,10,12,10,
-  	144,9,10,1,11,1,11,3,11,148,8,11,1,12,1,12,1,13,1,13,1,14,1,14,3,14,156,
-  	8,14,1,15,1,15,1,15,1,16,1,16,5,16,163,8,16,10,16,12,16,166,9,16,1,16,
-  	1,16,1,17,1,17,1,17,1,18,1,18,1,18,1,18,1,19,1,19,1,19,1,19,1,19,1,19,
-  	3,19,183,8,19,1,20,1,20,1,20,1,20,1,20,1,21,1,21,1,21,3,21,193,8,21,1,
-  	21,0,2,12,14,22,0,2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36,38,
-  	40,42,0,0,194,0,44,1,0,0,0,2,61,1,0,0,0,4,63,1,0,0,0,6,66,1,0,0,0,8,69,
-  	1,0,0,0,10,91,1,0,0,0,12,93,1,0,0,0,14,113,1,0,0,0,16,122,1,0,0,0,18,
-  	134,1,0,0,0,20,137,1,0,0,0,22,147,1,0,0,0,24,149,1,0,0,0,26,151,1,0,0,
-  	0,28,155,1,0,0,0,30,157,1,0,0,0,32,160,1,0,0,0,34,169,1,0,0,0,36,172,
-  	1,0,0,0,38,182,1,0,0,0,40,184,1,0,0,0,42,192,1,0,0,0,44,48,3,4,2,0,45,
-  	47,3,6,3,0,46,45,1,0,0,0,47,50,1,0,0,0,48,46,1,0,0,0,48,49,1,0,0,0,49,
-  	54,1,0,0,0,50,48,1,0,0,0,51,53,3,2,1,0,52,51,1,0,0,0,53,56,1,0,0,0,54,
-  	52,1,0,0,0,54,55,1,0,0,0,55,57,1,0,0,0,56,54,1,0,0,0,57,58,5,0,0,1,58,
-  	1,1,0,0,0,59,62,3,16,8,0,60,62,3,40,20,0,61,59,1,0,0,0,61,60,1,0,0,0,
-  	62,3,1,0,0,0,63,64,5,1,0,0,64,65,5,16,0,0,65,5,1,0,0,0,66,67,5,2,0,0,
-  	67,68,5,16,0,0,68,7,1,0,0,0,69,81,5,16,0,0,70,71,5,3,0,0,71,76,3,8,4,
-  	0,72,73,5,4,0,0,73,75,3,8,4,0,74,72,1,0,0,0,75,78,1,0,0,0,76,74,1,0,0,
-  	0,76,77,1,0,0,0,77,79,1,0,0,0,78,76,1,0,0,0,79,80,5,5,0,0,80,82,1,0,0,
-  	0,81,70,1,0,0,0,81,82,1,0,0,0,82,9,1,0,0,0,83,88,3,12,6,0,84,85,5,4,0,
-  	0,85,87,3,12,6,0,86,84,1,0,0,0,87,90,1,0,0,0,88,86,1,0,0,0,88,89,1,0,
-  	0,0,89,92,1,0,0,0,90,88,1,0,0,0,91,83,1,0,0,0,91,92,1,0,0,0,92,11,1,0,
-  	0,0,93,94,6,6,-1,0,94,95,3,14,7,0,95,101,1,0,0,0,96,97,10,2,0,0,97,98,
-  	5,15,0,0,98,100,3,12,6,3,99,96,1,0,0,0,100,103,1,0,0,0,101,99,1,0,0,0,
-  	101,102,1,0,0,0,102,13,1,0,0,0,103,101,1,0,0,0,104,105,6,7,-1,0,105,114,
-  	5,17,0,0,106,114,5,18,0,0,107,114,5,16,0,0,108,114,3,36,18,0,109,110,
-  	5,6,0,0,110,111,3,12,6,0,111,112,5,7,0,0,112,114,1,0,0,0,113,104,1,0,
-  	0,0,113,106,1,0,0,0,113,107,1,0,0,0,113,108,1,0,0,0,113,109,1,0,0,0,114,
-  	119,1,0,0,0,115,116,10,1,0,0,116,118,3,38,19,0,117,115,1,0,0,0,118,121,
-  	1,0,0,0,119,117,1,0,0,0,119,120,1,0,0,0,120,15,1,0,0,0,121,119,1,0,0,
-  	0,122,123,3,8,4,0,123,124,5,16,0,0,124,126,5,6,0,0,125,127,3,20,10,0,
-  	126,125,1,0,0,0,126,127,1,0,0,0,127,128,1,0,0,0,128,130,5,7,0,0,129,131,
-  	3,22,11,0,130,129,1,0,0,0,130,131,1,0,0,0,131,132,1,0,0,0,132,133,3,28,
-  	14,0,133,17,1,0,0,0,134,135,3,8,4,0,135,136,5,16,0,0,136,19,1,0,0,0,137,
-  	142,3,18,9,0,138,139,5,4,0,0,139,141,3,18,9,0,140,138,1,0,0,0,141,144,
-  	1,0,0,0,142,140,1,0,0,0,142,143,1,0,0,0,143,21,1,0,0,0,144,142,1,0,0,
-  	0,145,148,3,24,12,0,146,148,3,26,13,0,147,145,1,0,0,0,147,146,1,0,0,0,
-  	148,23,1,0,0,0,149,150,5,8,0,0,150,25,1,0,0,0,151,152,5,9,0,0,152,27,
-  	1,0,0,0,153,156,3,30,15,0,154,156,3,32,16,0,155,153,1,0,0,0,155,154,1,
-  	0,0,0,156,29,1,0,0,0,157,158,5,10,0,0,158,159,3,12,6,0,159,31,1,0,0,0,
-  	160,164,5,11,0,0,161,163,3,42,21,0,162,161,1,0,0,0,163,166,1,0,0,0,164,
-  	162,1,0,0,0,164,165,1,0,0,0,165,167,1,0,0,0,166,164,1,0,0,0,167,168,5,
-  	12,0,0,168,33,1,0,0,0,169,170,3,14,7,0,170,171,3,38,19,0,171,35,1,0,0,
-  	0,172,173,5,6,0,0,173,174,3,10,5,0,174,175,5,7,0,0,175,37,1,0,0,0,176,
-  	177,5,6,0,0,177,178,3,10,5,0,178,179,5,7,0,0,179,183,1,0,0,0,180,181,
-  	5,13,0,0,181,183,3,12,6,0,182,176,1,0,0,0,182,180,1,0,0,0,183,39,1,0,
-  	0,0,184,185,3,8,4,0,185,186,5,16,0,0,186,187,5,14,0,0,187,188,3,12,6,
-  	0,188,41,1,0,0,0,189,193,3,34,17,0,190,193,3,36,18,0,191,193,3,40,20,
-  	0,192,189,1,0,0,0,192,190,1,0,0,0,192,191,1,0,0,0,193,43,1,0,0,0,18,48,
-  	54,61,76,81,88,91,101,113,119,126,130,142,147,155,164,182,192
+  	21,2,22,7,22,2,23,7,23,1,0,1,0,5,0,51,8,0,10,0,12,0,54,9,0,1,0,5,0,57,
+  	8,0,10,0,12,0,60,9,0,1,0,1,0,1,1,1,1,3,1,66,8,1,1,2,1,2,1,2,1,2,3,2,72,
+  	8,2,1,3,1,3,1,3,1,4,1,4,1,4,1,5,1,5,1,5,1,5,1,5,5,5,85,8,5,10,5,12,5,
+  	88,9,5,1,5,1,5,3,5,92,8,5,1,6,1,6,1,6,1,6,1,6,1,6,5,6,100,8,6,10,6,12,
+  	6,103,9,6,1,7,1,7,1,7,1,7,1,7,1,7,5,7,111,8,7,10,7,12,7,114,9,7,1,8,1,
+  	8,1,8,1,8,1,8,3,8,121,8,8,1,8,1,8,1,8,1,8,1,8,5,8,128,8,8,10,8,12,8,131,
+  	9,8,1,9,1,9,1,9,5,9,136,8,9,10,9,12,9,139,9,9,3,9,141,8,9,1,10,1,10,1,
+  	10,1,10,3,10,147,8,10,1,10,1,10,3,10,151,8,10,1,10,1,10,1,11,1,11,1,11,
+  	1,12,1,12,1,12,5,12,161,8,12,10,12,12,12,164,9,12,1,13,1,13,3,13,168,
+  	8,13,1,14,1,14,1,15,1,15,1,16,1,16,3,16,176,8,16,1,17,1,17,1,17,1,18,
+  	1,18,5,18,183,8,18,10,18,12,18,186,9,18,1,18,1,18,1,19,1,19,1,19,1,20,
+  	1,20,1,20,1,20,1,21,1,21,1,21,1,21,1,21,1,21,3,21,203,8,21,1,22,1,22,
+  	1,22,1,22,1,22,1,23,1,23,1,23,1,23,0,3,12,14,16,24,0,2,4,6,8,10,12,14,
+  	16,18,20,22,24,26,28,30,32,34,36,38,40,42,44,46,0,0,212,0,48,1,0,0,0,
+  	2,65,1,0,0,0,4,71,1,0,0,0,6,73,1,0,0,0,8,76,1,0,0,0,10,79,1,0,0,0,12,
+  	93,1,0,0,0,14,104,1,0,0,0,16,120,1,0,0,0,18,140,1,0,0,0,20,142,1,0,0,
+  	0,22,154,1,0,0,0,24,157,1,0,0,0,26,167,1,0,0,0,28,169,1,0,0,0,30,171,
+  	1,0,0,0,32,175,1,0,0,0,34,177,1,0,0,0,36,180,1,0,0,0,38,189,1,0,0,0,40,
+  	192,1,0,0,0,42,202,1,0,0,0,44,204,1,0,0,0,46,209,1,0,0,0,48,52,3,6,3,
+  	0,49,51,3,8,4,0,50,49,1,0,0,0,51,54,1,0,0,0,52,50,1,0,0,0,52,53,1,0,0,
+  	0,53,58,1,0,0,0,54,52,1,0,0,0,55,57,3,2,1,0,56,55,1,0,0,0,57,60,1,0,0,
+  	0,58,56,1,0,0,0,58,59,1,0,0,0,59,61,1,0,0,0,60,58,1,0,0,0,61,62,5,0,0,
+  	1,62,1,1,0,0,0,63,66,3,20,10,0,64,66,3,44,22,0,65,63,1,0,0,0,65,64,1,
+  	0,0,0,66,3,1,0,0,0,67,72,3,38,19,0,68,72,3,40,20,0,69,72,3,44,22,0,70,
+  	72,3,46,23,0,71,67,1,0,0,0,71,68,1,0,0,0,71,69,1,0,0,0,71,70,1,0,0,0,
+  	72,5,1,0,0,0,73,74,5,1,0,0,74,75,5,18,0,0,75,7,1,0,0,0,76,77,5,2,0,0,
+  	77,78,5,18,0,0,78,9,1,0,0,0,79,91,3,12,6,0,80,81,5,3,0,0,81,86,3,10,5,
+  	0,82,83,5,4,0,0,83,85,3,10,5,0,84,82,1,0,0,0,85,88,1,0,0,0,86,84,1,0,
+  	0,0,86,87,1,0,0,0,87,89,1,0,0,0,88,86,1,0,0,0,89,90,5,5,0,0,90,92,1,0,
+  	0,0,91,80,1,0,0,0,91,92,1,0,0,0,92,11,1,0,0,0,93,94,6,6,-1,0,94,95,5,
+  	18,0,0,95,101,1,0,0,0,96,97,10,1,0,0,97,98,5,6,0,0,98,100,5,18,0,0,99,
+  	96,1,0,0,0,100,103,1,0,0,0,101,99,1,0,0,0,101,102,1,0,0,0,102,13,1,0,
+  	0,0,103,101,1,0,0,0,104,105,6,7,-1,0,105,106,3,16,8,0,106,112,1,0,0,0,
+  	107,108,10,2,0,0,108,109,5,17,0,0,109,111,3,14,7,3,110,107,1,0,0,0,111,
+  	114,1,0,0,0,112,110,1,0,0,0,112,113,1,0,0,0,113,15,1,0,0,0,114,112,1,
+  	0,0,0,115,116,6,8,-1,0,116,121,5,19,0,0,117,121,5,20,0,0,118,121,3,12,
+  	6,0,119,121,3,40,20,0,120,115,1,0,0,0,120,117,1,0,0,0,120,118,1,0,0,0,
+  	120,119,1,0,0,0,121,129,1,0,0,0,122,123,10,2,0,0,123,128,3,42,21,0,124,
+  	125,10,1,0,0,125,126,5,6,0,0,126,128,5,18,0,0,127,122,1,0,0,0,127,124,
+  	1,0,0,0,128,131,1,0,0,0,129,127,1,0,0,0,129,130,1,0,0,0,130,17,1,0,0,
+  	0,131,129,1,0,0,0,132,137,3,14,7,0,133,134,5,4,0,0,134,136,3,14,7,0,135,
+  	133,1,0,0,0,136,139,1,0,0,0,137,135,1,0,0,0,137,138,1,0,0,0,138,141,1,
+  	0,0,0,139,137,1,0,0,0,140,132,1,0,0,0,140,141,1,0,0,0,141,19,1,0,0,0,
+  	142,143,3,10,5,0,143,144,5,18,0,0,144,146,5,7,0,0,145,147,3,24,12,0,146,
+  	145,1,0,0,0,146,147,1,0,0,0,147,148,1,0,0,0,148,150,5,8,0,0,149,151,3,
+  	26,13,0,150,149,1,0,0,0,150,151,1,0,0,0,151,152,1,0,0,0,152,153,3,32,
+  	16,0,153,21,1,0,0,0,154,155,3,10,5,0,155,156,5,18,0,0,156,23,1,0,0,0,
+  	157,162,3,22,11,0,158,159,5,4,0,0,159,161,3,22,11,0,160,158,1,0,0,0,161,
+  	164,1,0,0,0,162,160,1,0,0,0,162,163,1,0,0,0,163,25,1,0,0,0,164,162,1,
+  	0,0,0,165,168,3,28,14,0,166,168,3,30,15,0,167,165,1,0,0,0,167,166,1,0,
+  	0,0,168,27,1,0,0,0,169,170,5,9,0,0,170,29,1,0,0,0,171,172,5,10,0,0,172,
+  	31,1,0,0,0,173,176,3,34,17,0,174,176,3,36,18,0,175,173,1,0,0,0,175,174,
+  	1,0,0,0,176,33,1,0,0,0,177,178,5,11,0,0,178,179,3,14,7,0,179,35,1,0,0,
+  	0,180,184,5,12,0,0,181,183,3,4,2,0,182,181,1,0,0,0,183,186,1,0,0,0,184,
+  	182,1,0,0,0,184,185,1,0,0,0,185,187,1,0,0,0,186,184,1,0,0,0,187,188,5,
+  	13,0,0,188,37,1,0,0,0,189,190,3,16,8,0,190,191,3,42,21,0,191,39,1,0,0,
+  	0,192,193,5,7,0,0,193,194,3,18,9,0,194,195,5,8,0,0,195,41,1,0,0,0,196,
+  	197,5,7,0,0,197,198,3,18,9,0,198,199,5,8,0,0,199,203,1,0,0,0,200,201,
+  	5,14,0,0,201,203,3,14,7,0,202,196,1,0,0,0,202,200,1,0,0,0,203,43,1,0,
+  	0,0,204,205,3,10,5,0,205,206,5,18,0,0,206,207,5,15,0,0,207,208,3,14,7,
+  	0,208,45,1,0,0,0,209,210,5,16,0,0,210,211,3,14,7,0,211,47,1,0,0,0,20,
+  	52,58,65,71,86,91,101,112,120,127,129,137,140,146,150,162,167,175,184,
+  	202
   };
   staticData->serializedATN = antlr4::atn::SerializedATNView(serializedATNSegment, sizeof(serializedATNSegment) / sizeof(serializedATNSegment[0]));
 
@@ -245,29 +252,29 @@ ZaneParser::GlobalScopeContext* ZaneParser::globalScope() {
   });
   try {
     enterOuterAlt(_localctx, 1);
-    setState(44);
-    pkgDef();
     setState(48);
+    pkgDef();
+    setState(52);
     _errHandler->sync(this);
     _la = _input->LA(1);
     while (_la == ZaneParser::T__1) {
-      setState(45);
+      setState(49);
       pkgImport();
-      setState(50);
+      setState(54);
       _errHandler->sync(this);
       _la = _input->LA(1);
     }
-    setState(54);
+    setState(58);
     _errHandler->sync(this);
     _la = _input->LA(1);
     while (_la == ZaneParser::IDENTIFIER) {
-      setState(51);
+      setState(55);
       declaration();
-      setState(56);
+      setState(60);
       _errHandler->sync(this);
       _la = _input->LA(1);
     }
-    setState(57);
+    setState(61);
     match(ZaneParser::EOF);
    
   }
@@ -331,20 +338,124 @@ ZaneParser::DeclarationContext* ZaneParser::declaration() {
     exitRule();
   });
   try {
-    setState(61);
+    setState(65);
     _errHandler->sync(this);
     switch (getInterpreter<atn::ParserATNSimulator>()->adaptivePredict(_input, 2, _ctx)) {
     case 1: {
       enterOuterAlt(_localctx, 1);
-      setState(59);
+      setState(63);
       funcDef();
       break;
     }
 
     case 2: {
       enterOuterAlt(_localctx, 2);
-      setState(60);
+      setState(64);
       varDef();
+      break;
+    }
+
+    default:
+      break;
+    }
+   
+  }
+  catch (RecognitionException &e) {
+    _errHandler->reportError(this, e);
+    _localctx->exception = std::current_exception();
+    _errHandler->recover(this, _localctx->exception);
+  }
+
+  return _localctx;
+}
+
+//----------------- StatementContext ------------------------------------------------------------------
+
+ZaneParser::StatementContext::StatementContext(ParserRuleContext *parent, size_t invokingState)
+  : ParserRuleContext(parent, invokingState) {
+}
+
+ZaneParser::FuncCallContext* ZaneParser::StatementContext::funcCall() {
+  return getRuleContext<ZaneParser::FuncCallContext>(0);
+}
+
+ZaneParser::ConstructorCallContext* ZaneParser::StatementContext::constructorCall() {
+  return getRuleContext<ZaneParser::ConstructorCallContext>(0);
+}
+
+ZaneParser::VarDefContext* ZaneParser::StatementContext::varDef() {
+  return getRuleContext<ZaneParser::VarDefContext>(0);
+}
+
+ZaneParser::RetStatContext* ZaneParser::StatementContext::retStat() {
+  return getRuleContext<ZaneParser::RetStatContext>(0);
+}
+
+
+size_t ZaneParser::StatementContext::getRuleIndex() const {
+  return ZaneParser::RuleStatement;
+}
+
+void ZaneParser::StatementContext::enterRule(tree::ParseTreeListener *listener) {
+  auto parserListener = dynamic_cast<ZaneListener *>(listener);
+  if (parserListener != nullptr)
+    parserListener->enterStatement(this);
+}
+
+void ZaneParser::StatementContext::exitRule(tree::ParseTreeListener *listener) {
+  auto parserListener = dynamic_cast<ZaneListener *>(listener);
+  if (parserListener != nullptr)
+    parserListener->exitStatement(this);
+}
+
+
+std::any ZaneParser::StatementContext::accept(tree::ParseTreeVisitor *visitor) {
+  if (auto parserVisitor = dynamic_cast<ZaneVisitor*>(visitor))
+    return parserVisitor->visitStatement(this);
+  else
+    return visitor->visitChildren(this);
+}
+
+ZaneParser::StatementContext* ZaneParser::statement() {
+  StatementContext *_localctx = _tracker.createInstance<StatementContext>(_ctx, getState());
+  enterRule(_localctx, 4, ZaneParser::RuleStatement);
+
+#if __cplusplus > 201703L
+  auto onExit = finally([=, this] {
+#else
+  auto onExit = finally([=] {
+#endif
+    exitRule();
+  });
+  try {
+    setState(71);
+    _errHandler->sync(this);
+    switch (getInterpreter<atn::ParserATNSimulator>()->adaptivePredict(_input, 3, _ctx)) {
+    case 1: {
+      enterOuterAlt(_localctx, 1);
+      setState(67);
+      funcCall();
+      break;
+    }
+
+    case 2: {
+      enterOuterAlt(_localctx, 2);
+      setState(68);
+      constructorCall();
+      break;
+    }
+
+    case 3: {
+      enterOuterAlt(_localctx, 3);
+      setState(69);
+      varDef();
+      break;
+    }
+
+    case 4: {
+      enterOuterAlt(_localctx, 4);
+      setState(70);
+      retStat();
       break;
     }
 
@@ -399,7 +510,7 @@ std::any ZaneParser::PkgDefContext::accept(tree::ParseTreeVisitor *visitor) {
 
 ZaneParser::PkgDefContext* ZaneParser::pkgDef() {
   PkgDefContext *_localctx = _tracker.createInstance<PkgDefContext>(_ctx, getState());
-  enterRule(_localctx, 4, ZaneParser::RulePkgDef);
+  enterRule(_localctx, 6, ZaneParser::RulePkgDef);
 
 #if __cplusplus > 201703L
   auto onExit = finally([=, this] {
@@ -410,9 +521,9 @@ ZaneParser::PkgDefContext* ZaneParser::pkgDef() {
   });
   try {
     enterOuterAlt(_localctx, 1);
-    setState(63);
+    setState(73);
     match(ZaneParser::T__0);
-    setState(64);
+    setState(74);
     antlrcpp::downCast<PkgDefContext *>(_localctx)->name = match(ZaneParser::IDENTIFIER);
    
   }
@@ -462,7 +573,7 @@ std::any ZaneParser::PkgImportContext::accept(tree::ParseTreeVisitor *visitor) {
 
 ZaneParser::PkgImportContext* ZaneParser::pkgImport() {
   PkgImportContext *_localctx = _tracker.createInstance<PkgImportContext>(_ctx, getState());
-  enterRule(_localctx, 6, ZaneParser::RulePkgImport);
+  enterRule(_localctx, 8, ZaneParser::RulePkgImport);
 
 #if __cplusplus > 201703L
   auto onExit = finally([=, this] {
@@ -473,9 +584,9 @@ ZaneParser::PkgImportContext* ZaneParser::pkgImport() {
   });
   try {
     enterOuterAlt(_localctx, 1);
-    setState(66);
+    setState(76);
     match(ZaneParser::T__1);
-    setState(67);
+    setState(77);
     antlrcpp::downCast<PkgImportContext *>(_localctx)->name = match(ZaneParser::IDENTIFIER);
    
   }
@@ -494,8 +605,8 @@ ZaneParser::TypeContext::TypeContext(ParserRuleContext *parent, size_t invokingS
   : ParserRuleContext(parent, invokingState) {
 }
 
-tree::TerminalNode* ZaneParser::TypeContext::IDENTIFIER() {
-  return getToken(ZaneParser::IDENTIFIER, 0);
+ZaneParser::NameRuleContext* ZaneParser::TypeContext::nameRule() {
+  return getRuleContext<ZaneParser::NameRuleContext>(0);
 }
 
 std::vector<ZaneParser::TypeContext *> ZaneParser::TypeContext::type() {
@@ -533,7 +644,7 @@ std::any ZaneParser::TypeContext::accept(tree::ParseTreeVisitor *visitor) {
 
 ZaneParser::TypeContext* ZaneParser::type() {
   TypeContext *_localctx = _tracker.createInstance<TypeContext>(_ctx, getState());
-  enterRule(_localctx, 8, ZaneParser::RuleType);
+  enterRule(_localctx, 10, ZaneParser::RuleType);
   size_t _la = 0;
 
 #if __cplusplus > 201703L
@@ -545,30 +656,30 @@ ZaneParser::TypeContext* ZaneParser::type() {
   });
   try {
     enterOuterAlt(_localctx, 1);
-    setState(69);
-    antlrcpp::downCast<TypeContext *>(_localctx)->name = match(ZaneParser::IDENTIFIER);
-    setState(81);
+    setState(79);
+    nameRule(0);
+    setState(91);
     _errHandler->sync(this);
 
     _la = _input->LA(1);
     if (_la == ZaneParser::T__2) {
-      setState(70);
+      setState(80);
       match(ZaneParser::T__2);
-      setState(71);
+      setState(81);
       type();
-      setState(76);
+      setState(86);
       _errHandler->sync(this);
       _la = _input->LA(1);
       while (_la == ZaneParser::T__3) {
-        setState(72);
+        setState(82);
         match(ZaneParser::T__3);
-        setState(73);
+        setState(83);
         type();
-        setState(78);
+        setState(88);
         _errHandler->sync(this);
         _la = _input->LA(1);
       }
-      setState(79);
+      setState(89);
       match(ZaneParser::T__4);
     }
    
@@ -582,88 +693,138 @@ ZaneParser::TypeContext* ZaneParser::type() {
   return _localctx;
 }
 
-//----------------- CollectionContext ------------------------------------------------------------------
+//----------------- NameRuleContext ------------------------------------------------------------------
 
-ZaneParser::CollectionContext::CollectionContext(ParserRuleContext *parent, size_t invokingState)
+ZaneParser::NameRuleContext::NameRuleContext(ParserRuleContext *parent, size_t invokingState)
   : ParserRuleContext(parent, invokingState) {
 }
 
-std::vector<ZaneParser::ValueContext *> ZaneParser::CollectionContext::value() {
-  return getRuleContexts<ZaneParser::ValueContext>();
+
+size_t ZaneParser::NameRuleContext::getRuleIndex() const {
+  return ZaneParser::RuleNameRule;
 }
 
-ZaneParser::ValueContext* ZaneParser::CollectionContext::value(size_t i) {
-  return getRuleContext<ZaneParser::ValueContext>(i);
+void ZaneParser::NameRuleContext::copyFrom(NameRuleContext *ctx) {
+  ParserRuleContext::copyFrom(ctx);
 }
 
+//----------------- MemberAccessContext ------------------------------------------------------------------
 
-size_t ZaneParser::CollectionContext::getRuleIndex() const {
-  return ZaneParser::RuleCollection;
+ZaneParser::NameRuleContext* ZaneParser::MemberAccessContext::nameRule() {
+  return getRuleContext<ZaneParser::NameRuleContext>(0);
 }
 
-void ZaneParser::CollectionContext::enterRule(tree::ParseTreeListener *listener) {
+tree::TerminalNode* ZaneParser::MemberAccessContext::IDENTIFIER() {
+  return getToken(ZaneParser::IDENTIFIER, 0);
+}
+
+ZaneParser::MemberAccessContext::MemberAccessContext(NameRuleContext *ctx) { copyFrom(ctx); }
+
+void ZaneParser::MemberAccessContext::enterRule(tree::ParseTreeListener *listener) {
   auto parserListener = dynamic_cast<ZaneListener *>(listener);
   if (parserListener != nullptr)
-    parserListener->enterCollection(this);
+    parserListener->enterMemberAccess(this);
 }
-
-void ZaneParser::CollectionContext::exitRule(tree::ParseTreeListener *listener) {
+void ZaneParser::MemberAccessContext::exitRule(tree::ParseTreeListener *listener) {
   auto parserListener = dynamic_cast<ZaneListener *>(listener);
   if (parserListener != nullptr)
-    parserListener->exitCollection(this);
+    parserListener->exitMemberAccess(this);
 }
 
-
-std::any ZaneParser::CollectionContext::accept(tree::ParseTreeVisitor *visitor) {
+std::any ZaneParser::MemberAccessContext::accept(tree::ParseTreeVisitor *visitor) {
   if (auto parserVisitor = dynamic_cast<ZaneVisitor*>(visitor))
-    return parserVisitor->visitCollection(this);
+    return parserVisitor->visitMemberAccess(this);
+  else
+    return visitor->visitChildren(this);
+}
+//----------------- BaseNameContext ------------------------------------------------------------------
+
+tree::TerminalNode* ZaneParser::BaseNameContext::IDENTIFIER() {
+  return getToken(ZaneParser::IDENTIFIER, 0);
+}
+
+ZaneParser::BaseNameContext::BaseNameContext(NameRuleContext *ctx) { copyFrom(ctx); }
+
+void ZaneParser::BaseNameContext::enterRule(tree::ParseTreeListener *listener) {
+  auto parserListener = dynamic_cast<ZaneListener *>(listener);
+  if (parserListener != nullptr)
+    parserListener->enterBaseName(this);
+}
+void ZaneParser::BaseNameContext::exitRule(tree::ParseTreeListener *listener) {
+  auto parserListener = dynamic_cast<ZaneListener *>(listener);
+  if (parserListener != nullptr)
+    parserListener->exitBaseName(this);
+}
+
+std::any ZaneParser::BaseNameContext::accept(tree::ParseTreeVisitor *visitor) {
+  if (auto parserVisitor = dynamic_cast<ZaneVisitor*>(visitor))
+    return parserVisitor->visitBaseName(this);
   else
     return visitor->visitChildren(this);
 }
 
-ZaneParser::CollectionContext* ZaneParser::collection() {
-  CollectionContext *_localctx = _tracker.createInstance<CollectionContext>(_ctx, getState());
-  enterRule(_localctx, 10, ZaneParser::RuleCollection);
-  size_t _la = 0;
+ZaneParser::NameRuleContext* ZaneParser::nameRule() {
+   return nameRule(0);
+}
+
+ZaneParser::NameRuleContext* ZaneParser::nameRule(int precedence) {
+  ParserRuleContext *parentContext = _ctx;
+  size_t parentState = getState();
+  ZaneParser::NameRuleContext *_localctx = _tracker.createInstance<NameRuleContext>(_ctx, parentState);
+  ZaneParser::NameRuleContext *previousContext = _localctx;
+  (void)previousContext; // Silence compiler, in case the context is not used by generated code.
+  size_t startState = 12;
+  enterRecursionRule(_localctx, 12, ZaneParser::RuleNameRule, precedence);
+
+    
 
 #if __cplusplus > 201703L
   auto onExit = finally([=, this] {
 #else
   auto onExit = finally([=] {
 #endif
-    exitRule();
+    unrollRecursionContexts(parentContext);
   });
   try {
+    size_t alt;
     enterOuterAlt(_localctx, 1);
-    setState(91);
-    _errHandler->sync(this);
+    _localctx = _tracker.createInstance<BaseNameContext>(_localctx);
+    _ctx = _localctx;
+    previousContext = _localctx;
 
-    _la = _input->LA(1);
-    if ((((_la & ~ 0x3fULL) == 0) &&
-      ((1ULL << _la) & 458816) != 0)) {
-      setState(83);
-      value(0);
-      setState(88);
-      _errHandler->sync(this);
-      _la = _input->LA(1);
-      while (_la == ZaneParser::T__3) {
-        setState(84);
-        match(ZaneParser::T__3);
-        setState(85);
-        value(0);
-        setState(90);
-        _errHandler->sync(this);
-        _la = _input->LA(1);
+    setState(94);
+    antlrcpp::downCast<BaseNameContext *>(_localctx)->name = match(ZaneParser::IDENTIFIER);
+    _ctx->stop = _input->LT(-1);
+    setState(101);
+    _errHandler->sync(this);
+    alt = getInterpreter<atn::ParserATNSimulator>()->adaptivePredict(_input, 6, _ctx);
+    while (alt != 2 && alt != atn::ATN::INVALID_ALT_NUMBER) {
+      if (alt == 1) {
+        if (!_parseListeners.empty())
+          triggerExitRuleEvent();
+        previousContext = _localctx;
+        auto newContext = _tracker.createInstance<MemberAccessContext>(_tracker.createInstance<NameRuleContext>(parentContext, parentState));
+        _localctx = newContext;
+        newContext->parent = previousContext;
+        pushNewRecursionContext(newContext, startState, RuleNameRule);
+        setState(96);
+
+        if (!(precpred(_ctx, 1))) throw FailedPredicateException(this, "precpred(_ctx, 1)");
+        setState(97);
+        match(ZaneParser::T__5);
+        setState(98);
+        antlrcpp::downCast<MemberAccessContext *>(_localctx)->child = match(ZaneParser::IDENTIFIER); 
       }
+      setState(103);
+      _errHandler->sync(this);
+      alt = getInterpreter<atn::ParserATNSimulator>()->adaptivePredict(_input, 6, _ctx);
     }
-   
   }
   catch (RecognitionException &e) {
     _errHandler->reportError(this, e);
     _localctx->exception = std::current_exception();
     _errHandler->recover(this, _localctx->exception);
   }
-
   return _localctx;
 }
 
@@ -751,8 +912,8 @@ ZaneParser::ValueContext* ZaneParser::value(int precedence) {
   ZaneParser::ValueContext *_localctx = _tracker.createInstance<ValueContext>(_ctx, parentState);
   ZaneParser::ValueContext *previousContext = _localctx;
   (void)previousContext; // Silence compiler, in case the context is not used by generated code.
-  size_t startState = 12;
-  enterRecursionRule(_localctx, 12, ZaneParser::RuleValue, precedence);
+  size_t startState = 14;
+  enterRecursionRule(_localctx, 14, ZaneParser::RuleValue, precedence);
 
     
 
@@ -770,10 +931,10 @@ ZaneParser::ValueContext* ZaneParser::value(int precedence) {
     _ctx = _localctx;
     previousContext = _localctx;
 
-    setState(94);
+    setState(105);
     primary(0);
     _ctx->stop = _input->LT(-1);
-    setState(101);
+    setState(112);
     _errHandler->sync(this);
     alt = getInterpreter<atn::ParserATNSimulator>()->adaptivePredict(_input, 7, _ctx);
     while (alt != 2 && alt != atn::ATN::INVALID_ALT_NUMBER) {
@@ -783,16 +944,17 @@ ZaneParser::ValueContext* ZaneParser::value(int precedence) {
         previousContext = _localctx;
         auto newContext = _tracker.createInstance<OperationContext>(_tracker.createInstance<ValueContext>(parentContext, parentState));
         _localctx = newContext;
+        newContext->left = previousContext;
         pushNewRecursionContext(newContext, startState, RuleValue);
-        setState(96);
+        setState(107);
 
         if (!(precpred(_ctx, 2))) throw FailedPredicateException(this, "precpred(_ctx, 2)");
-        setState(97);
-        match(ZaneParser::OPERATOR);
-        setState(98);
-        value(3); 
+        setState(108);
+        antlrcpp::downCast<OperationContext *>(_localctx)->operator_ = match(ZaneParser::OPERATOR);
+        setState(109);
+        antlrcpp::downCast<OperationContext *>(_localctx)->right = value(3); 
       }
-      setState(103);
+      setState(114);
       _errHandler->sync(this);
       alt = getInterpreter<atn::ParserATNSimulator>()->adaptivePredict(_input, 7, _ctx);
     }
@@ -847,12 +1009,12 @@ std::any ZaneParser::StrContext::accept(tree::ParseTreeVisitor *visitor) {
 }
 //----------------- CallContext ------------------------------------------------------------------
 
-ZaneParser::PrimaryContext* ZaneParser::CallContext::primary() {
-  return getRuleContext<ZaneParser::PrimaryContext>(0);
-}
-
 ZaneParser::CallSuffixContext* ZaneParser::CallContext::callSuffix() {
   return getRuleContext<ZaneParser::CallSuffixContext>(0);
+}
+
+ZaneParser::PrimaryContext* ZaneParser::CallContext::primary() {
+  return getRuleContext<ZaneParser::PrimaryContext>(0);
 }
 
 ZaneParser::CallContext::CallContext(PrimaryContext *ctx) { copyFrom(ctx); }
@@ -871,31 +1033,6 @@ void ZaneParser::CallContext::exitRule(tree::ParseTreeListener *listener) {
 std::any ZaneParser::CallContext::accept(tree::ParseTreeVisitor *visitor) {
   if (auto parserVisitor = dynamic_cast<ZaneVisitor*>(visitor))
     return parserVisitor->visitCall(this);
-  else
-    return visitor->visitChildren(this);
-}
-//----------------- IdentifierContext ------------------------------------------------------------------
-
-tree::TerminalNode* ZaneParser::IdentifierContext::IDENTIFIER() {
-  return getToken(ZaneParser::IDENTIFIER, 0);
-}
-
-ZaneParser::IdentifierContext::IdentifierContext(PrimaryContext *ctx) { copyFrom(ctx); }
-
-void ZaneParser::IdentifierContext::enterRule(tree::ParseTreeListener *listener) {
-  auto parserListener = dynamic_cast<ZaneListener *>(listener);
-  if (parserListener != nullptr)
-    parserListener->enterIdentifier(this);
-}
-void ZaneParser::IdentifierContext::exitRule(tree::ParseTreeListener *listener) {
-  auto parserListener = dynamic_cast<ZaneListener *>(listener);
-  if (parserListener != nullptr)
-    parserListener->exitIdentifier(this);
-}
-
-std::any ZaneParser::IdentifierContext::accept(tree::ParseTreeVisitor *visitor) {
-  if (auto parserVisitor = dynamic_cast<ZaneVisitor*>(visitor))
-    return parserVisitor->visitIdentifier(this);
   else
     return visitor->visitChildren(this);
 }
@@ -924,28 +1061,57 @@ std::any ZaneParser::NumContext::accept(tree::ParseTreeVisitor *visitor) {
   else
     return visitor->visitChildren(this);
 }
-//----------------- GroupingContext ------------------------------------------------------------------
+//----------------- NameContext ------------------------------------------------------------------
 
-ZaneParser::ValueContext* ZaneParser::GroupingContext::value() {
-  return getRuleContext<ZaneParser::ValueContext>(0);
+ZaneParser::NameRuleContext* ZaneParser::NameContext::nameRule() {
+  return getRuleContext<ZaneParser::NameRuleContext>(0);
 }
 
-ZaneParser::GroupingContext::GroupingContext(PrimaryContext *ctx) { copyFrom(ctx); }
+ZaneParser::NameContext::NameContext(PrimaryContext *ctx) { copyFrom(ctx); }
 
-void ZaneParser::GroupingContext::enterRule(tree::ParseTreeListener *listener) {
+void ZaneParser::NameContext::enterRule(tree::ParseTreeListener *listener) {
   auto parserListener = dynamic_cast<ZaneListener *>(listener);
   if (parserListener != nullptr)
-    parserListener->enterGrouping(this);
+    parserListener->enterName(this);
 }
-void ZaneParser::GroupingContext::exitRule(tree::ParseTreeListener *listener) {
+void ZaneParser::NameContext::exitRule(tree::ParseTreeListener *listener) {
   auto parserListener = dynamic_cast<ZaneListener *>(listener);
   if (parserListener != nullptr)
-    parserListener->exitGrouping(this);
+    parserListener->exitName(this);
 }
 
-std::any ZaneParser::GroupingContext::accept(tree::ParseTreeVisitor *visitor) {
+std::any ZaneParser::NameContext::accept(tree::ParseTreeVisitor *visitor) {
   if (auto parserVisitor = dynamic_cast<ZaneVisitor*>(visitor))
-    return parserVisitor->visitGrouping(this);
+    return parserVisitor->visitName(this);
+  else
+    return visitor->visitChildren(this);
+}
+//----------------- PropertyAccessContext ------------------------------------------------------------------
+
+ZaneParser::PrimaryContext* ZaneParser::PropertyAccessContext::primary() {
+  return getRuleContext<ZaneParser::PrimaryContext>(0);
+}
+
+tree::TerminalNode* ZaneParser::PropertyAccessContext::IDENTIFIER() {
+  return getToken(ZaneParser::IDENTIFIER, 0);
+}
+
+ZaneParser::PropertyAccessContext::PropertyAccessContext(PrimaryContext *ctx) { copyFrom(ctx); }
+
+void ZaneParser::PropertyAccessContext::enterRule(tree::ParseTreeListener *listener) {
+  auto parserListener = dynamic_cast<ZaneListener *>(listener);
+  if (parserListener != nullptr)
+    parserListener->enterPropertyAccess(this);
+}
+void ZaneParser::PropertyAccessContext::exitRule(tree::ParseTreeListener *listener) {
+  auto parserListener = dynamic_cast<ZaneListener *>(listener);
+  if (parserListener != nullptr)
+    parserListener->exitPropertyAccess(this);
+}
+
+std::any ZaneParser::PropertyAccessContext::accept(tree::ParseTreeVisitor *visitor) {
+  if (auto parserVisitor = dynamic_cast<ZaneVisitor*>(visitor))
+    return parserVisitor->visitPropertyAccess(this);
   else
     return visitor->visitChildren(this);
 }
@@ -985,8 +1151,8 @@ ZaneParser::PrimaryContext* ZaneParser::primary(int precedence) {
   ZaneParser::PrimaryContext *_localctx = _tracker.createInstance<PrimaryContext>(_ctx, parentState);
   ZaneParser::PrimaryContext *previousContext = _localctx;
   (void)previousContext; // Silence compiler, in case the context is not used by generated code.
-  size_t startState = 14;
-  enterRecursionRule(_localctx, 14, ZaneParser::RulePrimary, precedence);
+  size_t startState = 16;
+  enterRecursionRule(_localctx, 16, ZaneParser::RulePrimary, precedence);
 
     
 
@@ -1000,83 +1166,96 @@ ZaneParser::PrimaryContext* ZaneParser::primary(int precedence) {
   try {
     size_t alt;
     enterOuterAlt(_localctx, 1);
-    setState(113);
+    setState(120);
     _errHandler->sync(this);
-    switch (getInterpreter<atn::ParserATNSimulator>()->adaptivePredict(_input, 8, _ctx)) {
-    case 1: {
-      _localctx = _tracker.createInstance<StrContext>(_localctx);
-      _ctx = _localctx;
-      previousContext = _localctx;
+    switch (_input->LA(1)) {
+      case ZaneParser::STRING: {
+        _localctx = _tracker.createInstance<StrContext>(_localctx);
+        _ctx = _localctx;
+        previousContext = _localctx;
 
-      setState(105);
-      match(ZaneParser::STRING);
-      break;
-    }
+        setState(116);
+        match(ZaneParser::STRING);
+        break;
+      }
 
-    case 2: {
-      _localctx = _tracker.createInstance<NumContext>(_localctx);
-      _ctx = _localctx;
-      previousContext = _localctx;
-      setState(106);
-      match(ZaneParser::NUMBER);
-      break;
-    }
+      case ZaneParser::NUMBER: {
+        _localctx = _tracker.createInstance<NumContext>(_localctx);
+        _ctx = _localctx;
+        previousContext = _localctx;
+        setState(117);
+        match(ZaneParser::NUMBER);
+        break;
+      }
 
-    case 3: {
-      _localctx = _tracker.createInstance<IdentifierContext>(_localctx);
-      _ctx = _localctx;
-      previousContext = _localctx;
-      setState(107);
-      match(ZaneParser::IDENTIFIER);
-      break;
-    }
+      case ZaneParser::IDENTIFIER: {
+        _localctx = _tracker.createInstance<NameContext>(_localctx);
+        _ctx = _localctx;
+        previousContext = _localctx;
+        setState(118);
+        nameRule(0);
+        break;
+      }
 
-    case 4: {
-      _localctx = _tracker.createInstance<ConsContext>(_localctx);
-      _ctx = _localctx;
-      previousContext = _localctx;
-      setState(108);
-      constructorCall();
-      break;
-    }
-
-    case 5: {
-      _localctx = _tracker.createInstance<GroupingContext>(_localctx);
-      _ctx = _localctx;
-      previousContext = _localctx;
-      setState(109);
-      match(ZaneParser::T__5);
-      setState(110);
-      value(0);
-      setState(111);
-      match(ZaneParser::T__6);
-      break;
-    }
+      case ZaneParser::T__6: {
+        _localctx = _tracker.createInstance<ConsContext>(_localctx);
+        _ctx = _localctx;
+        previousContext = _localctx;
+        setState(119);
+        constructorCall();
+        break;
+      }
 
     default:
-      break;
+      throw NoViableAltException(this);
     }
     _ctx->stop = _input->LT(-1);
-    setState(119);
+    setState(129);
     _errHandler->sync(this);
-    alt = getInterpreter<atn::ParserATNSimulator>()->adaptivePredict(_input, 9, _ctx);
+    alt = getInterpreter<atn::ParserATNSimulator>()->adaptivePredict(_input, 10, _ctx);
     while (alt != 2 && alt != atn::ATN::INVALID_ALT_NUMBER) {
       if (alt == 1) {
         if (!_parseListeners.empty())
           triggerExitRuleEvent();
         previousContext = _localctx;
-        auto newContext = _tracker.createInstance<CallContext>(_tracker.createInstance<PrimaryContext>(parentContext, parentState));
-        _localctx = newContext;
-        pushNewRecursionContext(newContext, startState, RulePrimary);
-        setState(115);
+        setState(127);
+        _errHandler->sync(this);
+        switch (getInterpreter<atn::ParserATNSimulator>()->adaptivePredict(_input, 9, _ctx)) {
+        case 1: {
+          auto newContext = _tracker.createInstance<CallContext>(_tracker.createInstance<PrimaryContext>(parentContext, parentState));
+          _localctx = newContext;
+          newContext->obj = previousContext;
+          pushNewRecursionContext(newContext, startState, RulePrimary);
+          setState(122);
 
-        if (!(precpred(_ctx, 1))) throw FailedPredicateException(this, "precpred(_ctx, 1)");
-        setState(116);
-        callSuffix(); 
+          if (!(precpred(_ctx, 2))) throw FailedPredicateException(this, "precpred(_ctx, 2)");
+          setState(123);
+          callSuffix();
+          break;
+        }
+
+        case 2: {
+          auto newContext = _tracker.createInstance<PropertyAccessContext>(_tracker.createInstance<PrimaryContext>(parentContext, parentState));
+          _localctx = newContext;
+          newContext->obj = previousContext;
+          pushNewRecursionContext(newContext, startState, RulePrimary);
+          setState(124);
+
+          if (!(precpred(_ctx, 1))) throw FailedPredicateException(this, "precpred(_ctx, 1)");
+          setState(125);
+          match(ZaneParser::T__5);
+          setState(126);
+          antlrcpp::downCast<PropertyAccessContext *>(_localctx)->member = match(ZaneParser::IDENTIFIER);
+          break;
+        }
+
+        default:
+          break;
+        } 
       }
-      setState(121);
+      setState(131);
       _errHandler->sync(this);
-      alt = getInterpreter<atn::ParserATNSimulator>()->adaptivePredict(_input, 9, _ctx);
+      alt = getInterpreter<atn::ParserATNSimulator>()->adaptivePredict(_input, 10, _ctx);
     }
   }
   catch (RecognitionException &e) {
@@ -1087,18 +1266,103 @@ ZaneParser::PrimaryContext* ZaneParser::primary(int precedence) {
   return _localctx;
 }
 
+//----------------- CollectionContext ------------------------------------------------------------------
+
+ZaneParser::CollectionContext::CollectionContext(ParserRuleContext *parent, size_t invokingState)
+  : ParserRuleContext(parent, invokingState) {
+}
+
+std::vector<ZaneParser::ValueContext *> ZaneParser::CollectionContext::value() {
+  return getRuleContexts<ZaneParser::ValueContext>();
+}
+
+ZaneParser::ValueContext* ZaneParser::CollectionContext::value(size_t i) {
+  return getRuleContext<ZaneParser::ValueContext>(i);
+}
+
+
+size_t ZaneParser::CollectionContext::getRuleIndex() const {
+  return ZaneParser::RuleCollection;
+}
+
+void ZaneParser::CollectionContext::enterRule(tree::ParseTreeListener *listener) {
+  auto parserListener = dynamic_cast<ZaneListener *>(listener);
+  if (parserListener != nullptr)
+    parserListener->enterCollection(this);
+}
+
+void ZaneParser::CollectionContext::exitRule(tree::ParseTreeListener *listener) {
+  auto parserListener = dynamic_cast<ZaneListener *>(listener);
+  if (parserListener != nullptr)
+    parserListener->exitCollection(this);
+}
+
+
+std::any ZaneParser::CollectionContext::accept(tree::ParseTreeVisitor *visitor) {
+  if (auto parserVisitor = dynamic_cast<ZaneVisitor*>(visitor))
+    return parserVisitor->visitCollection(this);
+  else
+    return visitor->visitChildren(this);
+}
+
+ZaneParser::CollectionContext* ZaneParser::collection() {
+  CollectionContext *_localctx = _tracker.createInstance<CollectionContext>(_ctx, getState());
+  enterRule(_localctx, 18, ZaneParser::RuleCollection);
+  size_t _la = 0;
+
+#if __cplusplus > 201703L
+  auto onExit = finally([=, this] {
+#else
+  auto onExit = finally([=] {
+#endif
+    exitRule();
+  });
+  try {
+    enterOuterAlt(_localctx, 1);
+    setState(140);
+    _errHandler->sync(this);
+
+    _la = _input->LA(1);
+    if ((((_la & ~ 0x3fULL) == 0) &&
+      ((1ULL << _la) & 1835136) != 0)) {
+      setState(132);
+      value(0);
+      setState(137);
+      _errHandler->sync(this);
+      _la = _input->LA(1);
+      while (_la == ZaneParser::T__3) {
+        setState(133);
+        match(ZaneParser::T__3);
+        setState(134);
+        value(0);
+        setState(139);
+        _errHandler->sync(this);
+        _la = _input->LA(1);
+      }
+    }
+   
+  }
+  catch (RecognitionException &e) {
+    _errHandler->reportError(this, e);
+    _localctx->exception = std::current_exception();
+    _errHandler->recover(this, _localctx->exception);
+  }
+
+  return _localctx;
+}
+
 //----------------- FuncDefContext ------------------------------------------------------------------
 
 ZaneParser::FuncDefContext::FuncDefContext(ParserRuleContext *parent, size_t invokingState)
   : ParserRuleContext(parent, invokingState) {
 }
 
-ZaneParser::TypeContext* ZaneParser::FuncDefContext::type() {
-  return getRuleContext<ZaneParser::TypeContext>(0);
-}
-
 ZaneParser::FuncBodyContext* ZaneParser::FuncDefContext::funcBody() {
   return getRuleContext<ZaneParser::FuncBodyContext>(0);
+}
+
+ZaneParser::TypeContext* ZaneParser::FuncDefContext::type() {
+  return getRuleContext<ZaneParser::TypeContext>(0);
 }
 
 tree::TerminalNode* ZaneParser::FuncDefContext::IDENTIFIER() {
@@ -1140,7 +1404,7 @@ std::any ZaneParser::FuncDefContext::accept(tree::ParseTreeVisitor *visitor) {
 
 ZaneParser::FuncDefContext* ZaneParser::funcDef() {
   FuncDefContext *_localctx = _tracker.createInstance<FuncDefContext>(_ctx, getState());
-  enterRule(_localctx, 16, ZaneParser::RuleFuncDef);
+  enterRule(_localctx, 20, ZaneParser::RuleFuncDef);
   size_t _la = 0;
 
 #if __cplusplus > 201703L
@@ -1152,33 +1416,33 @@ ZaneParser::FuncDefContext* ZaneParser::funcDef() {
   });
   try {
     enterOuterAlt(_localctx, 1);
-    setState(122);
-    type();
-    setState(123);
+    setState(142);
+    antlrcpp::downCast<FuncDefContext *>(_localctx)->returnType = type();
+    setState(143);
     antlrcpp::downCast<FuncDefContext *>(_localctx)->name = match(ZaneParser::IDENTIFIER);
-    setState(124);
-    match(ZaneParser::T__5);
-    setState(126);
+    setState(144);
+    match(ZaneParser::T__6);
+    setState(146);
     _errHandler->sync(this);
 
     _la = _input->LA(1);
     if (_la == ZaneParser::IDENTIFIER) {
-      setState(125);
+      setState(145);
       params();
     }
-    setState(128);
-    match(ZaneParser::T__6);
-    setState(130);
+    setState(148);
+    match(ZaneParser::T__7);
+    setState(150);
     _errHandler->sync(this);
 
     _la = _input->LA(1);
-    if (_la == ZaneParser::T__7
+    if (_la == ZaneParser::T__8
 
-    || _la == ZaneParser::T__8) {
-      setState(129);
+    || _la == ZaneParser::T__9) {
+      setState(149);
       funcMod();
     }
-    setState(132);
+    setState(152);
     funcBody();
    
   }
@@ -1232,7 +1496,7 @@ std::any ZaneParser::ParamContext::accept(tree::ParseTreeVisitor *visitor) {
 
 ZaneParser::ParamContext* ZaneParser::param() {
   ParamContext *_localctx = _tracker.createInstance<ParamContext>(_ctx, getState());
-  enterRule(_localctx, 18, ZaneParser::RuleParam);
+  enterRule(_localctx, 22, ZaneParser::RuleParam);
 
 #if __cplusplus > 201703L
   auto onExit = finally([=, this] {
@@ -1243,9 +1507,9 @@ ZaneParser::ParamContext* ZaneParser::param() {
   });
   try {
     enterOuterAlt(_localctx, 1);
-    setState(134);
+    setState(154);
     type();
-    setState(135);
+    setState(155);
     antlrcpp::downCast<ParamContext *>(_localctx)->name = match(ZaneParser::IDENTIFIER);
    
   }
@@ -1299,7 +1563,7 @@ std::any ZaneParser::ParamsContext::accept(tree::ParseTreeVisitor *visitor) {
 
 ZaneParser::ParamsContext* ZaneParser::params() {
   ParamsContext *_localctx = _tracker.createInstance<ParamsContext>(_ctx, getState());
-  enterRule(_localctx, 20, ZaneParser::RuleParams);
+  enterRule(_localctx, 24, ZaneParser::RuleParams);
   size_t _la = 0;
 
 #if __cplusplus > 201703L
@@ -1311,17 +1575,17 @@ ZaneParser::ParamsContext* ZaneParser::params() {
   });
   try {
     enterOuterAlt(_localctx, 1);
-    setState(137);
+    setState(157);
     param();
-    setState(142);
+    setState(162);
     _errHandler->sync(this);
     _la = _input->LA(1);
     while (_la == ZaneParser::T__3) {
-      setState(138);
+      setState(158);
       match(ZaneParser::T__3);
-      setState(139);
+      setState(159);
       param();
-      setState(144);
+      setState(164);
       _errHandler->sync(this);
       _la = _input->LA(1);
     }
@@ -1377,7 +1641,7 @@ std::any ZaneParser::FuncModContext::accept(tree::ParseTreeVisitor *visitor) {
 
 ZaneParser::FuncModContext* ZaneParser::funcMod() {
   FuncModContext *_localctx = _tracker.createInstance<FuncModContext>(_ctx, getState());
-  enterRule(_localctx, 22, ZaneParser::RuleFuncMod);
+  enterRule(_localctx, 26, ZaneParser::RuleFuncMod);
 
 #if __cplusplus > 201703L
   auto onExit = finally([=, this] {
@@ -1387,19 +1651,19 @@ ZaneParser::FuncModContext* ZaneParser::funcMod() {
     exitRule();
   });
   try {
-    setState(147);
+    setState(167);
     _errHandler->sync(this);
     switch (_input->LA(1)) {
-      case ZaneParser::T__7: {
+      case ZaneParser::T__8: {
         enterOuterAlt(_localctx, 1);
-        setState(145);
+        setState(165);
         strict();
         break;
       }
 
-      case ZaneParser::T__8: {
+      case ZaneParser::T__9: {
         enterOuterAlt(_localctx, 2);
-        setState(146);
+        setState(166);
         pure();
         break;
       }
@@ -1451,7 +1715,7 @@ std::any ZaneParser::StrictContext::accept(tree::ParseTreeVisitor *visitor) {
 
 ZaneParser::StrictContext* ZaneParser::strict() {
   StrictContext *_localctx = _tracker.createInstance<StrictContext>(_ctx, getState());
-  enterRule(_localctx, 24, ZaneParser::RuleStrict);
+  enterRule(_localctx, 28, ZaneParser::RuleStrict);
 
 #if __cplusplus > 201703L
   auto onExit = finally([=, this] {
@@ -1462,8 +1726,8 @@ ZaneParser::StrictContext* ZaneParser::strict() {
   });
   try {
     enterOuterAlt(_localctx, 1);
-    setState(149);
-    match(ZaneParser::T__7);
+    setState(169);
+    match(ZaneParser::T__8);
    
   }
   catch (RecognitionException &e) {
@@ -1508,7 +1772,7 @@ std::any ZaneParser::PureContext::accept(tree::ParseTreeVisitor *visitor) {
 
 ZaneParser::PureContext* ZaneParser::pure() {
   PureContext *_localctx = _tracker.createInstance<PureContext>(_ctx, getState());
-  enterRule(_localctx, 26, ZaneParser::RulePure);
+  enterRule(_localctx, 30, ZaneParser::RulePure);
 
 #if __cplusplus > 201703L
   auto onExit = finally([=, this] {
@@ -1519,8 +1783,8 @@ ZaneParser::PureContext* ZaneParser::pure() {
   });
   try {
     enterOuterAlt(_localctx, 1);
-    setState(151);
-    match(ZaneParser::T__8);
+    setState(171);
+    match(ZaneParser::T__9);
    
   }
   catch (RecognitionException &e) {
@@ -1573,7 +1837,7 @@ std::any ZaneParser::FuncBodyContext::accept(tree::ParseTreeVisitor *visitor) {
 
 ZaneParser::FuncBodyContext* ZaneParser::funcBody() {
   FuncBodyContext *_localctx = _tracker.createInstance<FuncBodyContext>(_ctx, getState());
-  enterRule(_localctx, 28, ZaneParser::RuleFuncBody);
+  enterRule(_localctx, 32, ZaneParser::RuleFuncBody);
 
 #if __cplusplus > 201703L
   auto onExit = finally([=, this] {
@@ -1583,19 +1847,19 @@ ZaneParser::FuncBodyContext* ZaneParser::funcBody() {
     exitRule();
   });
   try {
-    setState(155);
+    setState(175);
     _errHandler->sync(this);
     switch (_input->LA(1)) {
-      case ZaneParser::T__9: {
+      case ZaneParser::T__10: {
         enterOuterAlt(_localctx, 1);
-        setState(153);
+        setState(173);
         arrowFunction();
         break;
       }
 
-      case ZaneParser::T__10: {
+      case ZaneParser::T__11: {
         enterOuterAlt(_localctx, 2);
-        setState(154);
+        setState(174);
         scope();
         break;
       }
@@ -1651,7 +1915,7 @@ std::any ZaneParser::ArrowFunctionContext::accept(tree::ParseTreeVisitor *visito
 
 ZaneParser::ArrowFunctionContext* ZaneParser::arrowFunction() {
   ArrowFunctionContext *_localctx = _tracker.createInstance<ArrowFunctionContext>(_ctx, getState());
-  enterRule(_localctx, 30, ZaneParser::RuleArrowFunction);
+  enterRule(_localctx, 34, ZaneParser::RuleArrowFunction);
 
 #if __cplusplus > 201703L
   auto onExit = finally([=, this] {
@@ -1662,9 +1926,9 @@ ZaneParser::ArrowFunctionContext* ZaneParser::arrowFunction() {
   });
   try {
     enterOuterAlt(_localctx, 1);
-    setState(157);
-    match(ZaneParser::T__9);
-    setState(158);
+    setState(177);
+    match(ZaneParser::T__10);
+    setState(178);
     value(0);
    
   }
@@ -1718,7 +1982,7 @@ std::any ZaneParser::ScopeContext::accept(tree::ParseTreeVisitor *visitor) {
 
 ZaneParser::ScopeContext* ZaneParser::scope() {
   ScopeContext *_localctx = _tracker.createInstance<ScopeContext>(_ctx, getState());
-  enterRule(_localctx, 32, ZaneParser::RuleScope);
+  enterRule(_localctx, 36, ZaneParser::RuleScope);
   size_t _la = 0;
 
 #if __cplusplus > 201703L
@@ -1730,21 +1994,21 @@ ZaneParser::ScopeContext* ZaneParser::scope() {
   });
   try {
     enterOuterAlt(_localctx, 1);
-    setState(160);
-    match(ZaneParser::T__10);
-    setState(164);
+    setState(180);
+    match(ZaneParser::T__11);
+    setState(184);
     _errHandler->sync(this);
     _la = _input->LA(1);
     while ((((_la & ~ 0x3fULL) == 0) &&
-      ((1ULL << _la) & 458816) != 0)) {
-      setState(161);
+      ((1ULL << _la) & 1900672) != 0)) {
+      setState(181);
       statement();
-      setState(166);
+      setState(186);
       _errHandler->sync(this);
       _la = _input->LA(1);
     }
-    setState(167);
-    match(ZaneParser::T__11);
+    setState(187);
+    match(ZaneParser::T__12);
    
   }
   catch (RecognitionException &e) {
@@ -1797,7 +2061,7 @@ std::any ZaneParser::FuncCallContext::accept(tree::ParseTreeVisitor *visitor) {
 
 ZaneParser::FuncCallContext* ZaneParser::funcCall() {
   FuncCallContext *_localctx = _tracker.createInstance<FuncCallContext>(_ctx, getState());
-  enterRule(_localctx, 34, ZaneParser::RuleFuncCall);
+  enterRule(_localctx, 38, ZaneParser::RuleFuncCall);
 
 #if __cplusplus > 201703L
   auto onExit = finally([=, this] {
@@ -1808,9 +2072,9 @@ ZaneParser::FuncCallContext* ZaneParser::funcCall() {
   });
   try {
     enterOuterAlt(_localctx, 1);
-    setState(169);
+    setState(189);
     primary(0);
-    setState(170);
+    setState(190);
     callSuffix();
    
   }
@@ -1860,7 +2124,7 @@ std::any ZaneParser::ConstructorCallContext::accept(tree::ParseTreeVisitor *visi
 
 ZaneParser::ConstructorCallContext* ZaneParser::constructorCall() {
   ConstructorCallContext *_localctx = _tracker.createInstance<ConstructorCallContext>(_ctx, getState());
-  enterRule(_localctx, 36, ZaneParser::RuleConstructorCall);
+  enterRule(_localctx, 40, ZaneParser::RuleConstructorCall);
 
 #if __cplusplus > 201703L
   auto onExit = finally([=, this] {
@@ -1871,12 +2135,12 @@ ZaneParser::ConstructorCallContext* ZaneParser::constructorCall() {
   });
   try {
     enterOuterAlt(_localctx, 1);
-    setState(172);
-    match(ZaneParser::T__5);
-    setState(173);
-    collection();
-    setState(174);
+    setState(192);
     match(ZaneParser::T__6);
+    setState(193);
+    collection();
+    setState(194);
+    match(ZaneParser::T__7);
    
   }
   catch (RecognitionException &e) {
@@ -1929,7 +2193,7 @@ std::any ZaneParser::CallSuffixContext::accept(tree::ParseTreeVisitor *visitor) 
 
 ZaneParser::CallSuffixContext* ZaneParser::callSuffix() {
   CallSuffixContext *_localctx = _tracker.createInstance<CallSuffixContext>(_ctx, getState());
-  enterRule(_localctx, 38, ZaneParser::RuleCallSuffix);
+  enterRule(_localctx, 42, ZaneParser::RuleCallSuffix);
 
 #if __cplusplus > 201703L
   auto onExit = finally([=, this] {
@@ -1939,25 +2203,25 @@ ZaneParser::CallSuffixContext* ZaneParser::callSuffix() {
     exitRule();
   });
   try {
-    setState(182);
+    setState(202);
     _errHandler->sync(this);
     switch (_input->LA(1)) {
-      case ZaneParser::T__5: {
+      case ZaneParser::T__6: {
         enterOuterAlt(_localctx, 1);
-        setState(176);
-        match(ZaneParser::T__5);
-        setState(177);
-        collection();
-        setState(178);
+        setState(196);
         match(ZaneParser::T__6);
+        setState(197);
+        collection();
+        setState(198);
+        match(ZaneParser::T__7);
         break;
       }
 
-      case ZaneParser::T__12: {
+      case ZaneParser::T__13: {
         enterOuterAlt(_localctx, 2);
-        setState(180);
-        match(ZaneParser::T__12);
-        setState(181);
+        setState(200);
+        match(ZaneParser::T__13);
+        setState(201);
         value(0);
         break;
       }
@@ -2021,7 +2285,7 @@ std::any ZaneParser::VarDefContext::accept(tree::ParseTreeVisitor *visitor) {
 
 ZaneParser::VarDefContext* ZaneParser::varDef() {
   VarDefContext *_localctx = _tracker.createInstance<VarDefContext>(_ctx, getState());
-  enterRule(_localctx, 40, ZaneParser::RuleVarDef);
+  enterRule(_localctx, 44, ZaneParser::RuleVarDef);
 
 #if __cplusplus > 201703L
   auto onExit = finally([=, this] {
@@ -2032,13 +2296,13 @@ ZaneParser::VarDefContext* ZaneParser::varDef() {
   });
   try {
     enterOuterAlt(_localctx, 1);
-    setState(184);
+    setState(204);
     type();
-    setState(185);
+    setState(205);
     antlrcpp::downCast<VarDefContext *>(_localctx)->name = match(ZaneParser::IDENTIFIER);
-    setState(186);
-    match(ZaneParser::T__13);
-    setState(187);
+    setState(206);
+    match(ZaneParser::T__14);
+    setState(207);
     value(0);
    
   }
@@ -2051,52 +2315,44 @@ ZaneParser::VarDefContext* ZaneParser::varDef() {
   return _localctx;
 }
 
-//----------------- StatementContext ------------------------------------------------------------------
+//----------------- RetStatContext ------------------------------------------------------------------
 
-ZaneParser::StatementContext::StatementContext(ParserRuleContext *parent, size_t invokingState)
+ZaneParser::RetStatContext::RetStatContext(ParserRuleContext *parent, size_t invokingState)
   : ParserRuleContext(parent, invokingState) {
 }
 
-ZaneParser::FuncCallContext* ZaneParser::StatementContext::funcCall() {
-  return getRuleContext<ZaneParser::FuncCallContext>(0);
-}
-
-ZaneParser::ConstructorCallContext* ZaneParser::StatementContext::constructorCall() {
-  return getRuleContext<ZaneParser::ConstructorCallContext>(0);
-}
-
-ZaneParser::VarDefContext* ZaneParser::StatementContext::varDef() {
-  return getRuleContext<ZaneParser::VarDefContext>(0);
+ZaneParser::ValueContext* ZaneParser::RetStatContext::value() {
+  return getRuleContext<ZaneParser::ValueContext>(0);
 }
 
 
-size_t ZaneParser::StatementContext::getRuleIndex() const {
-  return ZaneParser::RuleStatement;
+size_t ZaneParser::RetStatContext::getRuleIndex() const {
+  return ZaneParser::RuleRetStat;
 }
 
-void ZaneParser::StatementContext::enterRule(tree::ParseTreeListener *listener) {
+void ZaneParser::RetStatContext::enterRule(tree::ParseTreeListener *listener) {
   auto parserListener = dynamic_cast<ZaneListener *>(listener);
   if (parserListener != nullptr)
-    parserListener->enterStatement(this);
+    parserListener->enterRetStat(this);
 }
 
-void ZaneParser::StatementContext::exitRule(tree::ParseTreeListener *listener) {
+void ZaneParser::RetStatContext::exitRule(tree::ParseTreeListener *listener) {
   auto parserListener = dynamic_cast<ZaneListener *>(listener);
   if (parserListener != nullptr)
-    parserListener->exitStatement(this);
+    parserListener->exitRetStat(this);
 }
 
 
-std::any ZaneParser::StatementContext::accept(tree::ParseTreeVisitor *visitor) {
+std::any ZaneParser::RetStatContext::accept(tree::ParseTreeVisitor *visitor) {
   if (auto parserVisitor = dynamic_cast<ZaneVisitor*>(visitor))
-    return parserVisitor->visitStatement(this);
+    return parserVisitor->visitRetStat(this);
   else
     return visitor->visitChildren(this);
 }
 
-ZaneParser::StatementContext* ZaneParser::statement() {
-  StatementContext *_localctx = _tracker.createInstance<StatementContext>(_ctx, getState());
-  enterRule(_localctx, 42, ZaneParser::RuleStatement);
+ZaneParser::RetStatContext* ZaneParser::retStat() {
+  RetStatContext *_localctx = _tracker.createInstance<RetStatContext>(_ctx, getState());
+  enterRule(_localctx, 46, ZaneParser::RuleRetStat);
 
 #if __cplusplus > 201703L
   auto onExit = finally([=, this] {
@@ -2106,33 +2362,11 @@ ZaneParser::StatementContext* ZaneParser::statement() {
     exitRule();
   });
   try {
-    setState(192);
-    _errHandler->sync(this);
-    switch (getInterpreter<atn::ParserATNSimulator>()->adaptivePredict(_input, 17, _ctx)) {
-    case 1: {
-      enterOuterAlt(_localctx, 1);
-      setState(189);
-      funcCall();
-      break;
-    }
-
-    case 2: {
-      enterOuterAlt(_localctx, 2);
-      setState(190);
-      constructorCall();
-      break;
-    }
-
-    case 3: {
-      enterOuterAlt(_localctx, 3);
-      setState(191);
-      varDef();
-      break;
-    }
-
-    default:
-      break;
-    }
+    enterOuterAlt(_localctx, 1);
+    setState(209);
+    match(ZaneParser::T__15);
+    setState(210);
+    value(0);
    
   }
   catch (RecognitionException &e) {
@@ -2146,8 +2380,19 @@ ZaneParser::StatementContext* ZaneParser::statement() {
 
 bool ZaneParser::sempred(RuleContext *context, size_t ruleIndex, size_t predicateIndex) {
   switch (ruleIndex) {
-    case 6: return valueSempred(antlrcpp::downCast<ValueContext *>(context), predicateIndex);
-    case 7: return primarySempred(antlrcpp::downCast<PrimaryContext *>(context), predicateIndex);
+    case 6: return nameRuleSempred(antlrcpp::downCast<NameRuleContext *>(context), predicateIndex);
+    case 7: return valueSempred(antlrcpp::downCast<ValueContext *>(context), predicateIndex);
+    case 8: return primarySempred(antlrcpp::downCast<PrimaryContext *>(context), predicateIndex);
+
+  default:
+    break;
+  }
+  return true;
+}
+
+bool ZaneParser::nameRuleSempred(NameRuleContext *_localctx, size_t predicateIndex) {
+  switch (predicateIndex) {
+    case 0: return precpred(_ctx, 1);
 
   default:
     break;
@@ -2157,7 +2402,7 @@ bool ZaneParser::sempred(RuleContext *context, size_t ruleIndex, size_t predicat
 
 bool ZaneParser::valueSempred(ValueContext *_localctx, size_t predicateIndex) {
   switch (predicateIndex) {
-    case 0: return precpred(_ctx, 2);
+    case 1: return precpred(_ctx, 2);
 
   default:
     break;
@@ -2167,7 +2412,8 @@ bool ZaneParser::valueSempred(ValueContext *_localctx, size_t predicateIndex) {
 
 bool ZaneParser::primarySempred(PrimaryContext *_localctx, size_t predicateIndex) {
   switch (predicateIndex) {
-    case 1: return precpred(_ctx, 1);
+    case 2: return precpred(_ctx, 2);
+    case 3: return precpred(_ctx, 1);
 
   default:
     break;

@@ -24,6 +24,9 @@ public:
   virtual void enterDeclaration(ZaneParser::DeclarationContext * /*ctx*/) override { }
   virtual void exitDeclaration(ZaneParser::DeclarationContext * /*ctx*/) override { }
 
+  virtual void enterStatement(ZaneParser::StatementContext * /*ctx*/) override { }
+  virtual void exitStatement(ZaneParser::StatementContext * /*ctx*/) override { }
+
   virtual void enterPkgDef(ZaneParser::PkgDefContext * /*ctx*/) override { }
   virtual void exitPkgDef(ZaneParser::PkgDefContext * /*ctx*/) override { }
 
@@ -33,8 +36,11 @@ public:
   virtual void enterType(ZaneParser::TypeContext * /*ctx*/) override { }
   virtual void exitType(ZaneParser::TypeContext * /*ctx*/) override { }
 
-  virtual void enterCollection(ZaneParser::CollectionContext * /*ctx*/) override { }
-  virtual void exitCollection(ZaneParser::CollectionContext * /*ctx*/) override { }
+  virtual void enterMemberAccess(ZaneParser::MemberAccessContext * /*ctx*/) override { }
+  virtual void exitMemberAccess(ZaneParser::MemberAccessContext * /*ctx*/) override { }
+
+  virtual void enterBaseName(ZaneParser::BaseNameContext * /*ctx*/) override { }
+  virtual void exitBaseName(ZaneParser::BaseNameContext * /*ctx*/) override { }
 
   virtual void enterAtom(ZaneParser::AtomContext * /*ctx*/) override { }
   virtual void exitAtom(ZaneParser::AtomContext * /*ctx*/) override { }
@@ -48,17 +54,20 @@ public:
   virtual void enterCall(ZaneParser::CallContext * /*ctx*/) override { }
   virtual void exitCall(ZaneParser::CallContext * /*ctx*/) override { }
 
-  virtual void enterIdentifier(ZaneParser::IdentifierContext * /*ctx*/) override { }
-  virtual void exitIdentifier(ZaneParser::IdentifierContext * /*ctx*/) override { }
-
   virtual void enterNum(ZaneParser::NumContext * /*ctx*/) override { }
   virtual void exitNum(ZaneParser::NumContext * /*ctx*/) override { }
 
-  virtual void enterGrouping(ZaneParser::GroupingContext * /*ctx*/) override { }
-  virtual void exitGrouping(ZaneParser::GroupingContext * /*ctx*/) override { }
+  virtual void enterName(ZaneParser::NameContext * /*ctx*/) override { }
+  virtual void exitName(ZaneParser::NameContext * /*ctx*/) override { }
+
+  virtual void enterPropertyAccess(ZaneParser::PropertyAccessContext * /*ctx*/) override { }
+  virtual void exitPropertyAccess(ZaneParser::PropertyAccessContext * /*ctx*/) override { }
 
   virtual void enterCons(ZaneParser::ConsContext * /*ctx*/) override { }
   virtual void exitCons(ZaneParser::ConsContext * /*ctx*/) override { }
+
+  virtual void enterCollection(ZaneParser::CollectionContext * /*ctx*/) override { }
+  virtual void exitCollection(ZaneParser::CollectionContext * /*ctx*/) override { }
 
   virtual void enterFuncDef(ZaneParser::FuncDefContext * /*ctx*/) override { }
   virtual void exitFuncDef(ZaneParser::FuncDefContext * /*ctx*/) override { }
@@ -99,8 +108,8 @@ public:
   virtual void enterVarDef(ZaneParser::VarDefContext * /*ctx*/) override { }
   virtual void exitVarDef(ZaneParser::VarDefContext * /*ctx*/) override { }
 
-  virtual void enterStatement(ZaneParser::StatementContext * /*ctx*/) override { }
-  virtual void exitStatement(ZaneParser::StatementContext * /*ctx*/) override { }
+  virtual void enterRetStat(ZaneParser::RetStatContext * /*ctx*/) override { }
+  virtual void exitRetStat(ZaneParser::RetStatContext * /*ctx*/) override { }
 
 
   virtual void enterEveryRule(antlr4::ParserRuleContext * /*ctx*/) override { }

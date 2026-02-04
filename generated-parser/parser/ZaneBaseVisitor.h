@@ -25,6 +25,10 @@ public:
     return visitChildren(ctx);
   }
 
+  virtual std::any visitStatement(ZaneParser::StatementContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
   virtual std::any visitPkgDef(ZaneParser::PkgDefContext *ctx) override {
     return visitChildren(ctx);
   }
@@ -37,7 +41,11 @@ public:
     return visitChildren(ctx);
   }
 
-  virtual std::any visitCollection(ZaneParser::CollectionContext *ctx) override {
+  virtual std::any visitMemberAccess(ZaneParser::MemberAccessContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitBaseName(ZaneParser::BaseNameContext *ctx) override {
     return visitChildren(ctx);
   }
 
@@ -57,19 +65,23 @@ public:
     return visitChildren(ctx);
   }
 
-  virtual std::any visitIdentifier(ZaneParser::IdentifierContext *ctx) override {
-    return visitChildren(ctx);
-  }
-
   virtual std::any visitNum(ZaneParser::NumContext *ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual std::any visitGrouping(ZaneParser::GroupingContext *ctx) override {
+  virtual std::any visitName(ZaneParser::NameContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitPropertyAccess(ZaneParser::PropertyAccessContext *ctx) override {
     return visitChildren(ctx);
   }
 
   virtual std::any visitCons(ZaneParser::ConsContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitCollection(ZaneParser::CollectionContext *ctx) override {
     return visitChildren(ctx);
   }
 
@@ -125,7 +137,7 @@ public:
     return visitChildren(ctx);
   }
 
-  virtual std::any visitStatement(ZaneParser::StatementContext *ctx) override {
+  virtual std::any visitRetStat(ZaneParser::RetStatContext *ctx) override {
     return visitChildren(ctx);
   }
 

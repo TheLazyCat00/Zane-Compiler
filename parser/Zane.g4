@@ -21,31 +21,46 @@ declaration
 	| varDef
 	;
 
+// Statements
+statement
+	: funcCall
+	| constructorCall
+	| varDef
+	| retStat
+	;
+
 pkgDef: 'package' name=IDENTIFIER;
 pkgImport: 'import' name=IDENTIFIER;
 
-attribute: name=IDENTIFIER | attribute '.' name=IDENTIFIER;
-type: attribute ('<' type (',' type)* '>')?;
-collection: (value (',' value)*)?;
+// --- Types ---
+// Allows 'List<Int>' or 'sys.collections.Map<String, Int>'
+type: nameRule ('<' type (',' type)* '>')?;
 
-// Expressions & Values
-// ANTLR 4 handles the left-recursion here to allow infinite chaining of operations
+// Recursive rule for static name access (e.g., namespace or class paths)
+nameRule
+	: name=IDENTIFIER                         # baseName
+	| parent=nameRule '.' child=IDENTIFIER    # memberAccess
+	;
+
+// --- Values ---
 value
-	: value OPERATOR value    # operation
-	| primary                 # atom
+	: left=value operator=OPERATOR right=value # operation
+	| primary                                 # atom
 	;
 
 primary
-	: STRING                  # str
-	| NUMBER                  # num
-	| attribute               # attr
-	| constructorCall         # cons
-	| '(' value ')'           # tuple
-	| primary callSuffix      # call
+	: STRING                                  # str
+	| NUMBER                                  # num
+	| nameRule                                # name
+	| constructorCall                         # cons
+	| obj=primary callSuffix                  # call
+	| obj=primary '.' member=IDENTIFIER       # propertyAccess
 	;
 
-// Functions
-funcDef: type name=IDENTIFIER '(' params? ')' funcMod? funcBody;
+collection: (value (',' value)*)?;
+
+// --- Functions ---
+funcDef: returnType=type name=IDENTIFIER '(' params? ')' funcMod? funcBody;
 param: type name=IDENTIFIER;
 params: param (',' param)*;
 
@@ -64,12 +79,8 @@ callSuffix
 	: '(' collection ')'
 	| ':' value;
 
-// Variables
+// --- Variables ---
 varDef: type name=IDENTIFIER '=' value;
 
-// Statements
-statement
-	: funcCall
-	| constructorCall
-	| varDef
-	;
+// --- Blocks ---
+retStat: 'returns' value;

@@ -14,7 +14,7 @@ class GlobalScope;
 class Scope;
 class FuncCall;
 class StringLiteral;
-class Identifier;
+class NameRule;
 class Type;
 class Parameter;
 
@@ -28,7 +28,7 @@ public:
 	virtual std::any visitScope(Scope* node) = 0;
 	virtual std::any visitFuncCall(FuncCall* node) = 0;
 	virtual std::any visitStringLiteral(StringLiteral* node) = 0;
-	virtual std::any visitIdentifier(Identifier* node) = 0;
+	virtual std::any visitIdentifier(NameRule* node) = 0;
 	virtual std::any visitType(Type* node) = 0;
 	virtual std::any visitParameter(Parameter* node) = 0;
 	virtual std::any visitVarDef(VarDef* node) = 0;

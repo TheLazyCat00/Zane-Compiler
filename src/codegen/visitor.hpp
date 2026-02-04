@@ -97,7 +97,7 @@ public:
 		return (llvm::Value*)builder.CreateGlobalStringPtr(node->value);
 	}
 
-	std::any visitIdentifier(ir::Identifier* node) override {
+	std::any visitIdentifier(ir::NameRule* node) override {
 		if (namedValues.count(node->name)) {
 			llvm::AllocaInst* alloca = namedValues[node->name];
 			return (llvm::Value*)builder.CreateLoad(alloca->getAllocatedType(), alloca, node->name);
