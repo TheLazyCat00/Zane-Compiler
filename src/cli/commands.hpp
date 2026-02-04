@@ -28,19 +28,26 @@ namespace commands {
 enum Mode {
 	Debug,
 	JIT,
+	IR,
 };
 
-inline void execute(const std::string& dir, Mode mode, const std::string& projectName) {
+inline void execute(Mode mode, const manifest::Manifest& manifest) {
 	namespace fs = std::filesystem;
-	fs::path entry(dir);
+	fs::path entry;
+	if (manifest.type == manifest::Type::Executable) {
+		entry = constants::executable::ENTRY_DIR;
+	}
+	else {
+		entry = constants::library::ENTRY_DIR;
+	}
 
 	if (!fs::exists(entry) || !fs::is_directory(entry)) {
-		std::cerr << "Directory not found: " << dir << "\n";
+		std::cerr << "Directory not found: " << entry << "\n";
 		return;
 	}
 
 	std::vector<fs::path> sources;
-	for (const auto& entry : fs::directory_iterator(dir)) {
+	for (const auto& entry : fs::directory_iterator(entry)) {
 		if (entry.path().extension() == ".zn") {
 			sources.push_back(entry.path());
 		}
@@ -84,6 +91,12 @@ inline void execute(const std::string& dir, Mode mode, const std::string& projec
 	if (mode == Debug) {
 		std::cout << irProgram->toString();
 	}
+	else if (mode == IR) {
+		llvm::LLVMContext context;
+		LLVMCodeGen codegen(context);
+		codegen.generate(irProgram);
+		codegen.writeLLVMIR("/dev/stdout");
+	}
 	else {
 		llvm::LLVMContext context;
 		LLVMCodeGen codegen(context);
@@ -94,40 +107,16 @@ inline void execute(const std::string& dir, Mode mode, const std::string& projec
 	}
 }
 
-inline void run(int argc, char* argv[]) {
-	namespace fs = std::filesystem;
-	std::string entry;
-	if (!fs::exists(constants::MANIFEST_PATH)) {
-		alert("Project not initialized.");
-		return;
-	}
-
-	manifest::Manifest manifest(constants::MANIFEST_PATH);
-	if (manifest.type == manifest::Type::Executable) {
-		entry = constants::executable::ENTRY_DIR;
-	}
-	else {
-		entry = constants::library::ENTRY_DIR;
-	}
-	execute(entry, JIT, manifest.name);
+inline void run(int argc, char* argv[], const manifest::Manifest& manifest) {
+	execute(JIT, manifest);
 }
 
-inline void debug(int argc, char* argv[]) {
-	namespace fs = std::filesystem;
-	std::string entry;
-	if (!fs::exists(constants::MANIFEST_PATH)) {
-		alert("Project not initialized.");
-		return;
-	}
+inline void debug(int argc, char* argv[], const manifest::Manifest& manifest) {
+	execute(Debug, manifest);
+}
 
-	manifest::Manifest manifest(constants::MANIFEST_PATH);
-	if (manifest.type == manifest::Type::Executable) {
-		entry = constants::executable::ENTRY_DIR;
-	}
-	else {
-		entry = constants::library::ENTRY_DIR;
-	}
-	execute(entry, Debug, manifest.name);
+inline void ir(int argc, char* argv[], const manifest::Manifest& manifest) {
+	execute(IR, manifest);
 }
 
 inline bool directoryIsEmpty(const std::filesystem::path& dir) {
@@ -170,20 +159,28 @@ inline void init(int argc, char* argv[]) {
 	templ::create(manifest, dir);
 }
 
-const std::map<std::string, void(*)(int, char*[])> commands = {
+const std::map<std::string, void(*)(int, char*[], const manifest::Manifest&)> commands = {
 	{ "run", run},
 	{ "debug", debug},
+	{ "ir", ir},
 	{ "init", init},
 };
 
 inline void dispatch(const std::string& cmd, int argc, char* argv[]){
 	auto it = commands.find(cmd);
-	if (it != commands.end()) {
-		it->second(argc, argv);
-	}
-	else {
+	if (it == commands.end()) {
 		std::cout << "Unknown command: " << cmd << "\n";
 	}
+
+	namespace fs = std::filesystem;
+	std::string entry;
+	if (!fs::exists(constants::MANIFEST_PATH)) {
+		alert("Project not initialized.");
+		return;
+	}
+
+	manifest::Manifest manifest(constants::MANIFEST_PATH);
+	it->second(argc, argv, manifest);
 }
 
 } // namespace commands

@@ -126,7 +126,13 @@ public:
 
 	std::any visitStr(ZaneParser::StrContext *ctx) override {
 		auto stringLit = std::make_shared<ir::StringLiteral>();
-		stringLit->value = ctx->getText();
+		std::string text = ctx->getText();
+		// Strip surrounding quotes
+		if (text.length() >= 2 && text.front() == '"' && text.back() == '"') {
+			stringLit->value = text.substr(1, text.length() - 2);
+		} else {
+			stringLit->value = text;
+		}
 
 		return std::static_pointer_cast<ir::IRNode>(stringLit);
 	}

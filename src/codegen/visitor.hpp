@@ -106,6 +106,12 @@ public:
 		return (llvm::Value*)module.getFunction(node->name);
 	}
 
+	std::any visitNameRule(ir::NameRule* node) override {
+		// For now, just visit the child BaseName
+		// In the future, this might handle qualified names
+		return visit(node->child.get());
+	}
+
 	// Nodes that don't produce values in the code-gen pass
 	std::any visitType(ir::Type* node) override { return {}; }
 	std::any visitParameter(ir::Parameter* node) override { return {}; }
