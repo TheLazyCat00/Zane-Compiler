@@ -97,7 +97,7 @@ public:
 		return (llvm::Value*)builder.CreateGlobalStringPtr(node->value);
 	}
 
-	std::any visitIdentifier(ir::NameRule* node) override {
+	std::any visitBaseName(ir::BaseName* node) override {
 		if (namedValues.count(node->name)) {
 			llvm::AllocaInst* alloca = namedValues[node->name];
 			return (llvm::Value*)builder.CreateLoad(alloca->getAllocatedType(), alloca, node->name);
@@ -110,7 +110,7 @@ public:
 	std::any visitType(ir::Type* node) override { return {}; }
 	std::any visitParameter(ir::Parameter* node) override { return {}; }
 	std::any visitVarDef(ir::VarDef* node) override {
-		llvm::Type* type = typeMapper.toLLVMType(node->type->name);
+		llvm::Type* type = typeMapper.toLLVMType(node->type->getMangledName());
 		if (!type) return {};
 
 		llvm::AllocaInst* alloca = builder.CreateAlloca(type, nullptr, node->name);
@@ -127,10 +127,10 @@ public:
 
 private:
 	void declareSignature(ir::FuncDef* node) {
-		llvm::Type* retType = typeMapper.toLLVMType(node->returnType->name);
+		llvm::Type* retType = typeMapper.toLLVMType(node->returnType->getMangledName());
 		std::vector<llvm::Type*> params;
 		for (auto& p : node->parameters) {
-			params.push_back(typeMapper.toLLVMType(p.type->name));
+			params.push_back(typeMapper.toLLVMType(p.type->getMangledName()));
 		}
 		llvm::FunctionType* ft = llvm::FunctionType::get(retType, params, false);
 		llvm::Function::Create(ft, llvm::Function::ExternalLinkage, node->name, module);

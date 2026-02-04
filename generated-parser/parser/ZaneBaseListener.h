@@ -36,11 +36,14 @@ public:
   virtual void enterType(ZaneParser::TypeContext * /*ctx*/) override { }
   virtual void exitType(ZaneParser::TypeContext * /*ctx*/) override { }
 
-  virtual void enterMemberAccess(ZaneParser::MemberAccessContext * /*ctx*/) override { }
-  virtual void exitMemberAccess(ZaneParser::MemberAccessContext * /*ctx*/) override { }
-
   virtual void enterBaseName(ZaneParser::BaseNameContext * /*ctx*/) override { }
   virtual void exitBaseName(ZaneParser::BaseNameContext * /*ctx*/) override { }
+
+  virtual void enterNameRuleLeaf(ZaneParser::NameRuleLeafContext * /*ctx*/) override { }
+  virtual void exitNameRuleLeaf(ZaneParser::NameRuleLeafContext * /*ctx*/) override { }
+
+  virtual void enterNameRuleBranch(ZaneParser::NameRuleBranchContext * /*ctx*/) override { }
+  virtual void exitNameRuleBranch(ZaneParser::NameRuleBranchContext * /*ctx*/) override { }
 
   virtual void enterAtom(ZaneParser::AtomContext * /*ctx*/) override { }
   virtual void exitAtom(ZaneParser::AtomContext * /*ctx*/) override { }

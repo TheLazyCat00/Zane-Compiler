@@ -59,7 +59,7 @@ public:
 
 	std::any visitType(ZaneParser::TypeContext *ctx) override {
 		auto type = std::make_shared<ir::Type>();
-		type->name = ctx->name->getText();
+		type->nameRule = get<ir::NameRule>(ctx->nameRule());
 		for (auto generic : ctx->type()) {
 			type->generics.push_back(get<ir::Type>(generic));
 		}
@@ -131,14 +131,30 @@ public:
 		return std::static_pointer_cast<ir::IRNode>(stringLit);
 	}
 
-	std::any visitAttr(ZaneParser::AttrContext *ctx) override {
-
+	std::any visitBaseName(ZaneParser::BaseNameContext *ctx) override {
+		auto baseName = std::make_shared<ir::BaseName>();
+		baseName->name = ctx->name->getText();
+		
+		// Return as IRNode so the helper can cast it back
+		return std::static_pointer_cast<ir::IRNode>(baseName);
 	}
-	std::any visitIdentifier(ZaneParser::IdentifierContext *ctx) override {
-		auto identifier = std::make_shared<ir::NameRule>();
-		identifier->name = ctx->getText();
 
-		return std::static_pointer_cast<ir::IRNode>(identifier);
+	std::any visitNameRuleLeaf(ZaneParser::NameRuleLeafContext *ctx) override {
+		auto nameRule = std::make_shared<ir::NameRule>();
+		
+		nameRule->child = get<ir::BaseName>(ctx->name); 
+		nameRule->parent = nullptr;
+		
+		return std::static_pointer_cast<ir::IRNode>(nameRule);
+	}
+
+	std::any visitNameRuleBranch(ZaneParser::NameRuleBranchContext *ctx) override {
+		auto nameRule = std::make_shared<ir::NameRule>();
+		
+		nameRule->parent = get<ir::NameRule>(ctx->parent);
+		nameRule->child = get<ir::BaseName>(ctx->child);
+		
+		return std::static_pointer_cast<ir::IRNode>(nameRule);
 	}
 
 	void processStatement(ZaneParser::StatementContext *statement, std::shared_ptr<ir::Scope> scope) {

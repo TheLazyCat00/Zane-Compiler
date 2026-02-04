@@ -21,11 +21,12 @@ public:
 
   enum {
     RuleGlobalScope = 0, RuleDeclaration = 1, RuleStatement = 2, RulePkgDef = 3, 
-    RulePkgImport = 4, RuleType = 5, RuleNameRule = 6, RuleValue = 7, RulePrimary = 8, 
-    RuleCollection = 9, RuleFuncDef = 10, RuleParam = 11, RuleParams = 12, 
-    RuleFuncMod = 13, RuleStrict = 14, RulePure = 15, RuleFuncBody = 16, 
-    RuleArrowFunction = 17, RuleScope = 18, RuleFuncCall = 19, RuleConstructorCall = 20, 
-    RuleCallSuffix = 21, RuleVarDef = 22, RuleRetStat = 23
+    RulePkgImport = 4, RuleType = 5, RuleBaseName = 6, RuleNameRule = 7, 
+    RuleValue = 8, RulePrimary = 9, RuleCollection = 10, RuleFuncDef = 11, 
+    RuleParam = 12, RuleParams = 13, RuleFuncMod = 14, RuleStrict = 15, 
+    RulePure = 16, RuleFuncBody = 17, RuleArrowFunction = 18, RuleScope = 19, 
+    RuleFuncCall = 20, RuleConstructorCall = 21, RuleCallSuffix = 22, RuleVarDef = 23, 
+    RuleRetStat = 24
   };
 
   explicit ZaneParser(antlr4::TokenStream *input);
@@ -51,6 +52,7 @@ public:
   class PkgDefContext;
   class PkgImportContext;
   class TypeContext;
+  class BaseNameContext;
   class NameRuleContext;
   class ValueContext;
   class PrimaryContext;
@@ -173,6 +175,22 @@ public:
 
   TypeContext* type();
 
+  class  BaseNameContext : public antlr4::ParserRuleContext {
+  public:
+    antlr4::Token *name = nullptr;
+    BaseNameContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    virtual size_t getRuleIndex() const override;
+    antlr4::tree::TerminalNode *IDENTIFIER();
+
+    virtual void enterRule(antlr4::tree::ParseTreeListener *listener) override;
+    virtual void exitRule(antlr4::tree::ParseTreeListener *listener) override;
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+   
+  };
+
+  BaseNameContext* baseName();
+
   class  NameRuleContext : public antlr4::ParserRuleContext {
   public:
     NameRuleContext(antlr4::ParserRuleContext *parent, size_t invokingState);
@@ -186,26 +204,26 @@ public:
    
   };
 
-  class  MemberAccessContext : public NameRuleContext {
+  class  NameRuleLeafContext : public NameRuleContext {
   public:
-    MemberAccessContext(NameRuleContext *ctx);
+    NameRuleLeafContext(NameRuleContext *ctx);
 
-    ZaneParser::NameRuleContext *parent = nullptr;
-    antlr4::Token *child = nullptr;
-    NameRuleContext *nameRule();
-    antlr4::tree::TerminalNode *IDENTIFIER();
+    ZaneParser::BaseNameContext *name = nullptr;
+    BaseNameContext *baseName();
     virtual void enterRule(antlr4::tree::ParseTreeListener *listener) override;
     virtual void exitRule(antlr4::tree::ParseTreeListener *listener) override;
 
     virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
   };
 
-  class  BaseNameContext : public NameRuleContext {
+  class  NameRuleBranchContext : public NameRuleContext {
   public:
-    BaseNameContext(NameRuleContext *ctx);
+    NameRuleBranchContext(NameRuleContext *ctx);
 
-    antlr4::Token *name = nullptr;
-    antlr4::tree::TerminalNode *IDENTIFIER();
+    ZaneParser::NameRuleContext *parent = nullptr;
+    ZaneParser::BaseNameContext *child = nullptr;
+    NameRuleContext *nameRule();
+    BaseNameContext *baseName();
     virtual void enterRule(antlr4::tree::ParseTreeListener *listener) override;
     virtual void exitRule(antlr4::tree::ParseTreeListener *listener) override;
 

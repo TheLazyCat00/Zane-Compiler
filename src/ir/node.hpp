@@ -14,6 +14,7 @@ class GlobalScope;
 class Scope;
 class FuncCall;
 class StringLiteral;
+class BaseName;
 class NameRule;
 class Type;
 class Parameter;
@@ -23,15 +24,16 @@ public:
 	virtual ~IRVisitor() = default;
 	virtual std::any visit(IRNode* node);
 
-	virtual std::any visitFuncDef(FuncDef* node) = 0;
-	virtual std::any visitGlobalScope(GlobalScope* node) = 0;
-	virtual std::any visitScope(Scope* node) = 0;
-	virtual std::any visitFuncCall(FuncCall* node) = 0;
-	virtual std::any visitStringLiteral(StringLiteral* node) = 0;
-	virtual std::any visitIdentifier(NameRule* node) = 0;
-	virtual std::any visitType(Type* node) = 0;
-	virtual std::any visitParameter(Parameter* node) = 0;
-	virtual std::any visitVarDef(VarDef* node) = 0;
+	virtual std::any visitFuncDef(FuncDef* node) { return {}; }
+	virtual std::any visitGlobalScope(GlobalScope* node) { return {}; }
+	virtual std::any visitScope(Scope* node) { return {}; }
+	virtual std::any visitFuncCall(FuncCall* node) { return {}; }
+	virtual std::any visitStringLiteral(StringLiteral* node) { return {}; }
+	virtual std::any visitBaseName(BaseName* node) { return {}; }
+	virtual std::any visitNameRule(NameRule* node) { return {}; }
+	virtual std::any visitType(Type* node) { return {}; }
+	virtual std::any visitParameter(Parameter* node) { return {}; }
+	virtual std::any visitVarDef(VarDef* node) { return {}; }
 };
 
 struct IRNode {

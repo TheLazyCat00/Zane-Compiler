@@ -10,16 +10,66 @@
 
 namespace ir {
 
-struct Type : public IRNode {
+struct BaseName : public IRNode {
 	std::string name;
+
+	std::any accept(IRVisitor* visitor) override {
+		return visitor->visitBaseName(this);
+	}
+
+	std::string getMangledName() const {
+		return name;
+	}
+
+	std::string getNodeName() const override {
+		return "BaseName(" + name + ")";
+	}
+};
+
+struct NameRule : public IRNode {
+	std::shared_ptr<BaseName> child;
+	std::shared_ptr<NameRule> parent = nullptr;
+
+	std::any accept(IRVisitor* visitor) override {
+		return visitor->visitNameRule(this);
+	}
+
+	std::string getMangledName() const {
+		std::string name;
+		if (parent != nullptr) {
+			name += parent->getMangledName();
+		}
+		name += child->getMangledName();
+
+		return name;
+	}
+
+	std::string getNodeName() const override {
+		return "NameRule(" + child->getNodeName() + ")";
+	}
+};
+
+struct Type : public IRNode {
+	std::shared_ptr<NameRule> nameRule;
 	std::vector<std::shared_ptr<Type>> generics;
 
 	std::any accept(IRVisitor* visitor) override {
 		return visitor->visitType(this);
 	}
 
+	std::string getMangledName() const {
+		std::string name = nameRule->getMangledName();
+		name += "<";
+		for (auto type : generics) {
+			name += type->getMangledName();
+		}
+		name += ">";
+
+		return name;
+	}
+
 	std::string getNodeName() const override {
-		return "Type(" + name + ")";
+		return "Type(" + nameRule->getNodeName() + ")";
 	}
 };
 
@@ -132,18 +182,6 @@ struct VarDef : public IRNode {
 
 	std::string getNodeName() const override {
 		return "VarDef(" + name + ")";
-	}
-};
-
-struct NameRule : public IRNode {
-	std::string name;
-
-	std::any accept(IRVisitor* visitor) override {
-		return visitor->visitIdentifier(this);
-	}
-
-	std::string getNodeName() const override {
-		return "Identifier(" + name + ")";
 	}
 };
 

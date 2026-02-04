@@ -37,9 +37,10 @@ pkgImport: 'import' name=IDENTIFIER;
 type: nameRule ('<' type (',' type)* '>')?;
 
 // Recursive rule for static name access (e.g., namespace or class paths)
+baseName: name=IDENTIFIER;
 nameRule
-	: name=IDENTIFIER                         # baseName
-	| parent=nameRule '.' child=IDENTIFIER    # memberAccess
+	: name=baseName                 # nameRuleLeaf
+	| parent=nameRule '.' child=baseName    # nameRuleBranch
 	;
 
 // --- Values ---
