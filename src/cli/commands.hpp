@@ -7,6 +7,7 @@
 #include "cli/constants.hpp"
 #include "cli/template.hpp"
 #include "cli/help.hpp"
+#include "compiler/compiler.hpp"
 #include "ir/nodes.hpp"
 #include "utils/utils.hpp"
 
@@ -33,61 +34,7 @@ enum Mode {
 };
 
 inline void execute(Mode mode, const manifest::Manifest& manifest) {
-	namespace fs = std::filesystem;
-	fs::path entry;
-	if (manifest.type == manifest::Type::Executable) {
-		entry = constants::executable::ENTRY_DIR;
-	}
-	else {
-		entry = constants::library::ENTRY_DIR;
-	}
-
-	if (!fs::exists(entry) || !fs::is_directory(entry)) {
-		std::cerr << "Directory not found: " << entry << "\n";
-		return;
-	}
-
-	std::vector<fs::path> sources;
-	for (const auto& entry : fs::directory_iterator(entry)) {
-		if (entry.path().extension() == ".zn") {
-			sources.push_back(entry.path());
-		}
-	}
-
-	std::sort(sources.begin(), sources.end());
-
-	Visitor visitor;
-	std::shared_ptr<ir::GlobalScope> irProgram;
-	for (const auto& path : sources) {
-		std::ifstream stream(path);
-		if (!stream) {
-			std::cerr << "Failed to open file: " << path << "\n";
-			return;
-		}
-
-		std::stringstream ss;
-		ss << stream.rdbuf();
-
-		antlr4::ANTLRInputStream input(ss.str());
-		parser::ZaneLexer lexer(&input);
-		antlr4::CommonTokenStream tokens(&lexer);
-		parser::ZaneParser parser(&tokens);
-
-		antlr4::tree::ParseTree *tree = parser.globalScope();
-		visitor.visit(tree);
-
-		irProgram = visitor.getGlobalScope();
-		const std::string& pkgName = irProgram->pkgName;
-
-		const std::string expectedName =
-			(entry == fs::path("src")) ? manifest.name : entry.string();
-		
-		if (expectedName != pkgName) {
-			std::cerr << "Expected package name " << expectedName << " but got " << pkgName;
-			return;
-		}
-	}
-
+	Compiler compiler(manifest);
 
 	if (mode == Debug) {
 		std::cout << irProgram->toString();
