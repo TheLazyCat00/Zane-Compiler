@@ -35,19 +35,19 @@ enum Mode {
 
 inline void execute(Mode mode, const manifest::Manifest& manifest) {
 	Compiler compiler(manifest);
-	std::cerr << "DEBUG: Starting compile\n";
 	compiler.compile();
-	std::cerr << "DEBUG: Starting generateCode\n";
-	compiler.generateCode();
-	std::cerr << "DEBUG: Finished generateCode\n";
 
 	if (mode == Debug) {
 		auto packages = compiler.getPackages();
 		for (const auto& [name, globalScope] : packages) {
 			std::cout << globalScope->toString();
 		}
+		return;
 	}
-	else if (mode == IR) {
+
+	compiler.generateCode();
+
+	if (mode == IR) {
 		auto linkedModule = compiler.link();
 		if (!linkedModule) {
 			std::cerr << "Failed to link modules\n";
@@ -56,13 +56,11 @@ inline void execute(Mode mode, const manifest::Manifest& manifest) {
 		compiler.writeLLVMIR(*linkedModule, "/dev/stdout");
 	}
 	else {
-		std::cerr << "DEBUG: Starting link\n";
 		auto linkedModule = compiler.link();
 		if (!linkedModule) {
 			std::cerr << "Failed to link modules\n";
 			return;
 		}
-		std::cerr << "DEBUG: Starting execute\n";
 		std::cout << "--- JIT Execution ---\n";
 		compiler.execute(*linkedModule);
 	}

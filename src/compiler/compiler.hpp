@@ -92,18 +92,9 @@ public:
 
 	void generateCode() {
 		for (auto& [pkgName, globalScope] : packages) {
-			std::cerr << "DEBUG: Generating code for package: " << pkgName << "\n";
-			if (!globalScope) {
-				std::cerr << "ERROR: null globalScope for " << pkgName << "\n";
-				continue;
-			}
-			std::cerr << "DEBUG: GlobalScope is valid\n";
 			LLVMCodeGen codegen(context);
-			std::cerr << "DEBUG: Created codegen\n";
 			codegen.generate(globalScope);
-			std::cerr << "DEBUG: Generated IR\n";
 			modules[pkgName] = codegen.extractModule();
-			std::cerr << "DEBUG: Extracted module\n";
 		}
 	}
 
@@ -142,8 +133,8 @@ public:
 
 		ExitOnErr(JIT->addIRModule(std::move(TSM)));
 
-		// Lookup projectname.main
-		std::string mainFn = manifest.name + ".main";
+		// Lookup main function with format: Void|packageName|main
+		std::string mainFn = "Void|" + manifest.name + "|main";
 		auto MainAddr = ExitOnErr(JIT->lookup(mainFn));
 		auto MainPtr = MainAddr.toPtr<void (*)()>();
 		MainPtr();

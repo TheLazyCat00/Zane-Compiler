@@ -1,10 +1,9 @@
 #include <unordered_map>
 #include <string>
-#include <sstream>
 #include <llvm/IR/Type.h>
 #include <llvm/IR/DerivedTypes.h>
 #include <llvm/IR/LLVMContext.h>
-#include <embedded_types.hpp>
+#include <utils/embedded_types.hpp>
 
 class TypeMapper {
 private:
@@ -13,7 +12,7 @@ private:
 
 public:
 	TypeMapper(llvm::LLVMContext& ctx) : context(ctx) {
-		loadTypes(embedded::TYPES_CSV);
+		loadTypes();
 	}
 
 	llvm::Type* toLLVMType(const std::string& irTypeName) {
@@ -35,27 +34,9 @@ private:
 		return nullptr;
 	}
 
-	void loadTypes(const std::string& csvContent) {
-		std::istringstream stream(csvContent);
-		std::string line;
-		bool firstLine = true;
-
-		while (std::getline(stream, line)) {
-			if (firstLine) { firstLine = false; continue; }
-
-			std::istringstream iss(line);
-			std::string name, llvmTypeName;
-			if (std::getline(iss, name, ',') && std::getline(iss, llvmTypeName)) {
-				trim(name);
-				trim(llvmTypeName);
-
-				typeCache[name] = resolveString(llvmTypeName);
-			}
+	void loadTypes() {
+		for (const auto& typeInfo : utils::parseEmbeddedTypes()) {
+			typeCache[typeInfo.name] = resolveString(typeInfo.llvmType);
 		}
-	}
-
-	void trim(std::string& s) {
-		s.erase(0, s.find_first_not_of(" \t\r"));
-		s.erase(s.find_last_not_of(" \t\r") + 1);
 	}
 };

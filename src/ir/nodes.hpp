@@ -1,5 +1,6 @@
 #pragma once
 
+#include <iostream>
 #include <map>
 #include <memory>
 #include <unordered_map>
@@ -19,13 +20,10 @@ struct NameRule : public IRNode {
 	}
 
 	std::string getMangledName() const {
-		std::string name;
-		if (package != "") {
-			name += package;
+		if (package.empty()) {
+			return name;
 		}
-		name += this->name;
-
-		return name;
+		return package + "." + name;
 	}
 
 	std::string getNodeName() const override {
@@ -42,6 +40,9 @@ struct Type : public IRNode {
 	}
 
 	std::string getMangledName() const {
+		if (!nameRule) {
+			return "?";
+		}
 		std::string name = nameRule->getMangledName();
 
 		if (generics.size() > 0) {
@@ -148,7 +149,7 @@ struct FuncDef : public IRNode {
 	}
 
 	std::string getMangledName() const {
-		return pkgName + "$" + returnType->getMangledName() + "$" + name;
+		return returnType->getMangledName() + "|" +  pkgName  + "|" + name;
 	}
 
 	std::string getNodeName() const override {
@@ -180,6 +181,7 @@ struct VarDef : public IRNode {
 struct FuncCall : public IRNode {
 	std::shared_ptr<IRNode> valueBeingCalledOn;
 	std::vector<std::shared_ptr<IRNode>> arguments;
+	std::shared_ptr<Type> returnType;
 
 	std::any accept(IRVisitor* visitor) override {
 		return visitor->visitFuncCall(this);

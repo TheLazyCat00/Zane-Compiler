@@ -41,8 +41,11 @@ public:
 	}
 
 	std::any visitFuncDef(ir::FuncDef* node) override {
-		llvm::Function* func = module.getFunction(node->getMangledName());
-		if (!func) return {};
+		std::string mangledName = node->getMangledName();
+		llvm::Function* func = module.getFunction(mangledName);
+		if (!func) {
+			return {};
+		}
 
 		llvm::BasicBlock* entry = llvm::BasicBlock::Create(context, "entry", func);
 		builder.SetInsertPoint(entry);

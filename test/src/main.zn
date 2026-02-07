@@ -1,5 +1,5 @@
 package test
 
 Void main() {
-	tester$greet()
+	puts("hello")
 }

@@ -6,6 +6,8 @@
 #include <ir/nodes.hpp>
 #include <stdexcept>
 #include <tree/ParseTree.h>
+#include <utils/embedded_types.hpp>
+#include <unordered_set>
 
 using namespace parser;
 
@@ -13,6 +15,7 @@ class Visitor : public ZaneBaseVisitor {
 private:
 	std::shared_ptr<ir::GlobalScope> globalScope;
 	std::shared_ptr<ir::IRNode> currentScope;
+	std::unordered_set<std::string> builtinTypes;
 
 	template<typename T>
 	std::shared_ptr<T> toIRNode(const std::any& result) {
@@ -43,7 +46,9 @@ private:
 	}
 
 public:
-	Visitor() : globalScope(std::make_shared<ir::GlobalScope>()) {}
+	Visitor() : globalScope(std::make_shared<ir::GlobalScope>()) {
+		builtinTypes = utils::getBuiltinTypeNames();
+	}
 
 	std::any visitGlobalScope(ZaneParser::GlobalScopeContext *ctx) override {
 		currentScope = globalScope;
@@ -151,7 +156,13 @@ public:
 			nameRule->package = ctx->package->getText();
 		}
 		else {
-			nameRule->package = globalScope->pkgName;
+			// Don't add package prefix for built-in types
+			std::string name = ctx->name->getText();
+			if (builtinTypes.find(name) == builtinTypes.end()) {
+				// Not a built-in type, use current package
+				nameRule->package = globalScope->pkgName;
+			}
+			// else: leave package empty for built-in types
 		}
 
 		nameRule->name = ctx->name->getText();
