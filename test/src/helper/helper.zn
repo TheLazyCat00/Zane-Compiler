@@ -1,0 +1,5 @@
+package tester
+
+Void greet() {
+	puts("Hi")
+}

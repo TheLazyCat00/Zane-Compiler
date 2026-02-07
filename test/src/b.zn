@@ -1,5 +1,0 @@
-package test
-
-Void greet() {
-	puts("bye")
-}

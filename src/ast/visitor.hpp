@@ -72,7 +72,13 @@ public:
 		funcDef->name = ctx->name->getText();
 		funcDef->scope = get<ir::Scope>(ctx->funcBody()->scope());
 		funcDef->returnType = get<ir::Type>(ctx->type());
-		
+
+		std::string funcMod = "open";
+		if (ctx->funcMod()){
+			funcMod = ctx->funcMod()->getText();
+		}
+
+		funcDef->mod = ir::FuncMod(funcMod);
 		if (ctx->funcMod()) {
 			funcDef->mod = ir::FuncMod(ctx->funcMod()->getText());
 		}
@@ -86,6 +92,7 @@ public:
 			}
 		}
 
+		funcDef->pkgName = globalScope->pkgName;
 		if (auto global = std::dynamic_pointer_cast<ir::GlobalScope>(currentScope)) {
 			global->functionDefs[funcDef->name] = funcDef;
 			global->body.push_back(funcDef);
@@ -137,29 +144,17 @@ public:
 		return std::static_pointer_cast<ir::IRNode>(stringLit);
 	}
 
-	std::any visitBaseName(ZaneParser::BaseNameContext *ctx) override {
-		auto baseName = std::make_shared<ir::BaseName>();
-		baseName->name = ctx->name->getText();
-		
-		// Return as IRNode so the helper can cast it back
-		return std::static_pointer_cast<ir::IRNode>(baseName);
-	}
-
-	std::any visitNameRuleLeaf(ZaneParser::NameRuleLeafContext *ctx) override {
+	std::any visitNameRule(ZaneParser::NameRuleContext *ctx) override {
 		auto nameRule = std::make_shared<ir::NameRule>();
-		
-		nameRule->child = get<ir::BaseName>(ctx->name); 
-		nameRule->parent = nullptr;
-		
-		return std::static_pointer_cast<ir::IRNode>(nameRule);
-	}
 
-	std::any visitNameRuleBranch(ZaneParser::NameRuleBranchContext *ctx) override {
-		auto nameRule = std::make_shared<ir::NameRule>();
-		
-		nameRule->parent = get<ir::NameRule>(ctx->parent);
-		nameRule->child = get<ir::BaseName>(ctx->child);
-		
+		if (ctx->package) {
+			nameRule->package = ctx->package->getText();
+		}
+		else {
+			nameRule->package = globalScope->pkgName;
+		}
+
+		nameRule->name = ctx->name->getText();
 		return std::static_pointer_cast<ir::IRNode>(nameRule);
 	}
 

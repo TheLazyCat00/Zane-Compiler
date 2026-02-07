@@ -32,11 +32,7 @@ public:
 
     virtual std::any visitType(ZaneParser::TypeContext *context) = 0;
 
-    virtual std::any visitBaseName(ZaneParser::BaseNameContext *context) = 0;
-
-    virtual std::any visitNameRuleLeaf(ZaneParser::NameRuleLeafContext *context) = 0;
-
-    virtual std::any visitNameRuleBranch(ZaneParser::NameRuleBranchContext *context) = 0;
+    virtual std::any visitNameRule(ZaneParser::NameRuleContext *context) = 0;
 
     virtual std::any visitAtom(ZaneParser::AtomContext *context) = 0;
 

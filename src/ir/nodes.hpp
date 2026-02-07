@@ -10,25 +10,9 @@
 
 namespace ir {
 
-struct BaseName : public IRNode {
-	std::string name;
-
-	std::any accept(IRVisitor* visitor) override {
-		return visitor->visitBaseName(this);
-	}
-
-	std::string getMangledName() const {
-		return name;
-	}
-
-	std::string getNodeName() const override {
-		return "BaseName(" + name + ")";
-	}
-};
-
 struct NameRule : public IRNode {
-	std::shared_ptr<BaseName> child;
-	std::shared_ptr<NameRule> parent = nullptr;
+	std::string name;
+	std::string package;
 
 	std::any accept(IRVisitor* visitor) override {
 		return visitor->visitNameRule(this);
@@ -36,16 +20,16 @@ struct NameRule : public IRNode {
 
 	std::string getMangledName() const {
 		std::string name;
-		if (parent != nullptr) {
-			name += parent->getMangledName();
+		if (package != "") {
+			name += package;
 		}
-		name += child->getMangledName();
+		name += this->name;
 
 		return name;
 	}
 
 	std::string getNodeName() const override {
-		return "NameRule(" + child->getNodeName() + ")";
+		return "NameRule(" + name + ")";
 	}
 };
 
@@ -59,11 +43,14 @@ struct Type : public IRNode {
 
 	std::string getMangledName() const {
 		std::string name = nameRule->getMangledName();
-		name += "<";
-		for (auto type : generics) {
-			name += type->getMangledName();
+
+		if (generics.size() > 0) {
+			name += "<";
+			for (auto type : generics) {
+				name += type->getMangledName();
+			}
+			name += ">";
 		}
-		name += ">";
 
 		return name;
 	}
@@ -153,10 +140,15 @@ struct FuncDef : public IRNode {
 	std::shared_ptr<Type> returnType;
 	std::vector<Parameter> parameters;
 	std::shared_ptr<Scope> scope;
+	std::string pkgName;
 	FuncMod mod;
 
 	std::any accept(IRVisitor* visitor) override {
 		return visitor->visitFuncDef(this);
+	}
+
+	std::string getMangledName() const {
+		return pkgName + "$" + returnType->getMangledName() + "$" + name;
 	}
 
 	std::string getNodeName() const override {

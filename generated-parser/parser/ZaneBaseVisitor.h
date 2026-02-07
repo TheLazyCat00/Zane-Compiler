@@ -41,15 +41,7 @@ public:
     return visitChildren(ctx);
   }
 
-  virtual std::any visitBaseName(ZaneParser::BaseNameContext *ctx) override {
-    return visitChildren(ctx);
-  }
-
-  virtual std::any visitNameRuleLeaf(ZaneParser::NameRuleLeafContext *ctx) override {
-    return visitChildren(ctx);
-  }
-
-  virtual std::any visitNameRuleBranch(ZaneParser::NameRuleBranchContext *ctx) override {
+  virtual std::any visitNameRule(ZaneParser::NameRuleContext *ctx) override {
     return visitChildren(ctx);
   }
 

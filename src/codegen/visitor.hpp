@@ -41,7 +41,7 @@ public:
 	}
 
 	std::any visitFuncDef(ir::FuncDef* node) override {
-		llvm::Function* func = module.getFunction(node->name);
+		llvm::Function* func = module.getFunction(node->getMangledName());
 		if (!func) return {};
 
 		llvm::BasicBlock* entry = llvm::BasicBlock::Create(context, "entry", func);
@@ -97,21 +97,6 @@ public:
 		return (llvm::Value*)builder.CreateGlobalStringPtr(node->value);
 	}
 
-	std::any visitBaseName(ir::BaseName* node) override {
-		if (namedValues.count(node->name)) {
-			llvm::AllocaInst* alloca = namedValues[node->name];
-			return (llvm::Value*)builder.CreateLoad(alloca->getAllocatedType(), alloca, node->name);
-		}
-		// Look up the function in the module
-		return (llvm::Value*)module.getFunction(node->name);
-	}
-
-	std::any visitNameRule(ir::NameRule* node) override {
-		// For now, just visit the child BaseName
-		// In the future, this might handle qualified names
-		return visit(node->child.get());
-	}
-
 	// Nodes that don't produce values in the code-gen pass
 	std::any visitType(ir::Type* node) override { return {}; }
 	std::any visitParameter(ir::Parameter* node) override { return {}; }
@@ -139,6 +124,6 @@ private:
 			params.push_back(typeMapper.toLLVMType(p.type->getMangledName()));
 		}
 		llvm::FunctionType* ft = llvm::FunctionType::get(retType, params, false);
-		llvm::Function::Create(ft, llvm::Function::ExternalLinkage, node->name, module);
+		llvm::Function::Create(ft, llvm::Function::ExternalLinkage, node->getMangledName(), module);
 	}
 };

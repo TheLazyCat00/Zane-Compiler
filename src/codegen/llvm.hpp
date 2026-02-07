@@ -15,17 +15,17 @@
 class LLVMCodeGen {
 private:
 	llvm::LLVMContext& context;
-	llvm::Module module;
+	std::unique_ptr<llvm::Module> module;
 	llvm::IRBuilder<> builder;
 
 public:
 	LLVMCodeGen(llvm::LLVMContext& ctx)
-	: context(ctx), module("zane", ctx), builder(ctx)  {}
+		: context(ctx), module(std::make_unique<llvm::Module>("zane", ctx)), builder(ctx)  {}
 
 	void generate(std::shared_ptr<ir::GlobalScope> globalScope) {
 		setupBuiltins();
 
-		LLVMVisitor visitor(context, builder, module);
+		LLVMVisitor visitor(context, builder, *module);
 		visitor.visit(globalScope.get());
 	}
 
@@ -33,7 +33,11 @@ public:
 		llvm::Type* i8Ptr = llvm::PointerType::get(context, 0);
 		llvm::FunctionType* putsType = llvm::FunctionType::get(
 			builder.getInt32Ty(), {i8Ptr}, false);
-		module.getOrInsertFunction("puts", putsType);
+		module->getOrInsertFunction("puts", putsType);
+	}
+
+	std::unique_ptr<llvm::Module> extractModule() {
+		return std::move(module);
 	}
 
 
@@ -45,7 +49,7 @@ public:
 		auto JIT = ExitOnErr(llvm::orc::LLJITBuilder().create());
 
 		auto TSM = llvm::orc::ThreadSafeModule(
-			llvm::CloneModule(module),
+			llvm::CloneModule(*module),
 			std::make_unique<llvm::LLVMContext>()
 		);
 
@@ -69,7 +73,7 @@ public:
 			return;
 		}
 
-		module.print(file, nullptr);
+		module->print(file, nullptr);
 	}
 
 	void writeBinary(const std::string& filename) {
@@ -77,7 +81,7 @@ public:
 		llvm::InitializeNativeTargetAsmPrinter();
 
 		auto targetTriple = llvm::sys::getDefaultTargetTriple();
-		module.setTargetTriple(targetTriple);
+		module->setTargetTriple(targetTriple);
 
 		std::string error;
 		auto target = llvm::TargetRegistry::lookupTarget(targetTriple, error);
@@ -92,7 +96,7 @@ public:
 		auto targetMachine = target->createTargetMachine(
 			targetTriple, CPU, features, opt, llvm::Reloc::PIC_);
 
-		module.setDataLayout(targetMachine->createDataLayout());
+		module->setDataLayout(targetMachine->createDataLayout());
 
 		std::error_code EC;
 		llvm::raw_fd_ostream dest(filename, EC, llvm::sys::fs::OF_None);
@@ -108,7 +112,7 @@ public:
 			return;
 		}
 
-		pass.run(module);
+		pass.run(*module);
 		dest.flush();
 	}
 };

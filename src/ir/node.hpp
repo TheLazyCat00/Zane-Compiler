@@ -14,7 +14,6 @@ class GlobalScope;
 class Scope;
 class FuncCall;
 class StringLiteral;
-class BaseName;
 class NameRule;
 class Type;
 class Parameter;
@@ -29,7 +28,6 @@ public:
 	virtual std::any visitScope(Scope* node) { return {}; }
 	virtual std::any visitFuncCall(FuncCall* node) { return {}; }
 	virtual std::any visitStringLiteral(StringLiteral* node) { return {}; }
-	virtual std::any visitBaseName(BaseName* node) { return {}; }
 	virtual std::any visitNameRule(NameRule* node) { return {}; }
 	virtual std::any visitType(Type* node) { return {}; }
 	virtual std::any visitParameter(Parameter* node) { return {}; }

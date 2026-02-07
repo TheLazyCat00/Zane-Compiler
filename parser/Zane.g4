@@ -36,12 +36,7 @@ pkgImport: 'import' name=IDENTIFIER;
 // Allows 'List<Int>' or 'sys.collections.Map<String, Int>'
 type: nameRule ('<' type (',' type)* '>')?;
 
-// Recursive rule for static name access (e.g., namespace or class paths)
-baseName: name=IDENTIFIER;
-nameRule
-	: name=baseName                 # nameRuleLeaf
-	| parent=nameRule '.' child=baseName    # nameRuleBranch
-	;
+nameRule: (package=IDENTIFIER '$')? name=IDENTIFIER;
 
 // --- Values ---
 value

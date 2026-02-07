@@ -34,14 +34,8 @@ public:
   virtual void enterType(ZaneParser::TypeContext *ctx) = 0;
   virtual void exitType(ZaneParser::TypeContext *ctx) = 0;
 
-  virtual void enterBaseName(ZaneParser::BaseNameContext *ctx) = 0;
-  virtual void exitBaseName(ZaneParser::BaseNameContext *ctx) = 0;
-
-  virtual void enterNameRuleLeaf(ZaneParser::NameRuleLeafContext *ctx) = 0;
-  virtual void exitNameRuleLeaf(ZaneParser::NameRuleLeafContext *ctx) = 0;
-
-  virtual void enterNameRuleBranch(ZaneParser::NameRuleBranchContext *ctx) = 0;
-  virtual void exitNameRuleBranch(ZaneParser::NameRuleBranchContext *ctx) = 0;
+  virtual void enterNameRule(ZaneParser::NameRuleContext *ctx) = 0;
+  virtual void exitNameRule(ZaneParser::NameRuleContext *ctx) = 0;
 
   virtual void enterAtom(ZaneParser::AtomContext *ctx) = 0;
   virtual void exitAtom(ZaneParser::AtomContext *ctx) = 0;
