@@ -56,13 +56,18 @@ inline void execute(Mode mode, const manifest::Manifest& manifest) {
 		compiler.writeLLVMIR(*linkedModule, "/dev/stdout");
 	}
 	else {
-		auto linkedModule = compiler.link();
-		if (!linkedModule) {
-			std::cerr << "Failed to link modules\n";
+		// Compile each package to object file in .cache for host target
+		auto hostTarget = constants::targets::getHostTarget();
+		compiler.compileToObjectFiles(hostTarget, true); // Clear modules after
+		
+		// Link object files to create executable
+		std::string executable = "a.out";
+		if (!compiler.linkObjectFiles(hostTarget, executable)) {
 			return;
 		}
-		std::cout << "--- JIT Execution ---\n";
-		compiler.execute(*linkedModule);
+		
+		// Execute the binary
+		compiler.executeNative(executable);
 	}
 }
 
@@ -76,6 +81,13 @@ inline void debug(int argc, char* argv[], const manifest::Manifest& manifest) {
 
 inline void ir(int argc, char* argv[], const manifest::Manifest& manifest) {
 	execute(IR, manifest);
+}
+
+inline void build(int argc, char* argv[], const manifest::Manifest& manifest) {
+	Compiler compiler(manifest);
+	compiler.compile();
+	compiler.generateCode();
+	compiler.buildForAllTargets();
 }
 
 inline bool directoryIsEmpty(const std::filesystem::path& dir) {
@@ -142,6 +154,7 @@ inline void help(int argc, char* argv[]) {
 // Commands that require an initialized project
 const std::map<std::string, void(*)(int, char*[], const manifest::Manifest&)> projectCommands = {
 	{ "run", run},
+	{ "build", build},
 	{ "debug", debug},
 	{ "ir", ir},
 };
