@@ -16,6 +16,30 @@ private:
 	std::shared_ptr<ir::GlobalScope> globalScope;
 	std::shared_ptr<ir::IRNode> currentScope;
 	std::unordered_set<std::string> builtinTypes;
+	std::vector<std::shared_ptr<ir::Type>> expectedTypeStack;  // Stack for type propagation
+
+	void pushExpectedType(std::shared_ptr<ir::Type> type) {
+		expectedTypeStack.push_back(type);
+	}
+
+	std::shared_ptr<ir::Type> popExpectedType() {
+		if (expectedTypeStack.empty()) return nullptr;
+		auto type = expectedTypeStack.back();
+		expectedTypeStack.pop_back();
+		return type;
+	}
+
+	std::shared_ptr<ir::Type> currentExpectedType() const {
+		return expectedTypeStack.empty() ? nullptr : expectedTypeStack.back();
+	}
+
+	std::shared_ptr<ir::Type> makeVoidType() {
+		auto voidType = std::make_shared<ir::Type>();
+		voidType->nameRule = std::make_shared<ir::NameRule>();
+		voidType->nameRule->name = "Void";
+		voidType->nameRule->package = "";
+		return voidType;
+	}
 
 	template<typename T>
 	std::shared_ptr<T> toIRNode(const std::any& result) {
@@ -47,7 +71,7 @@ private:
 
 public:
 	Visitor() : globalScope(std::make_shared<ir::GlobalScope>()) {
-		builtinTypes = utils::getBuiltinTypeNames();
+		builtinTypes = utils::getBuiltinNames();
 	}
 
 	std::any visitGlobalScope(ZaneParser::GlobalScopeContext *ctx) override {
@@ -113,23 +137,34 @@ public:
 
 	std::any visitVarDef(ZaneParser::VarDefContext *ctx) override {
 		auto varDef = std::make_shared<ir::VarDef>();
-		varDef->value = get<ir::IRNode>(ctx->value());
 		varDef->type = get<ir::Type>(ctx->type());
 		varDef->name = ctx->name->getText();
+		
+		pushExpectedType(varDef->type);
+		varDef->value = get<ir::IRNode>(ctx->value());
+		popExpectedType();
 
 		return std::static_pointer_cast<ir::IRNode>(varDef);
 	}
 
 	std::any visitFuncCall(ZaneParser::FuncCallContext *ctx) override {
 		auto funcCall = std::make_shared<ir::FuncCall>();
+		
 		funcCall->valueBeingCalledOn = get<ir::IRNode>(ctx->primary());
+		
+		funcCall->returnType = currentExpectedType();
+		if (!funcCall->returnType) {
+			funcCall->returnType = makeVoidType();
+		}
 
 		auto callSuffixCtx = ctx->callSuffix();
 		auto collectionCtx = callSuffixCtx->collection();
 		if (collectionCtx) {
 			for (auto valueCtx : collectionCtx->value()) {
-				// This will now work because visitStr/etc return IRNode
+				// TODO: Look up function signature to get parameter types
+				// pushExpectedType(parameterType);
 				funcCall->arguments.push_back(get<ir::IRNode>(valueCtx));
+				// popExpectedType();
 			}
 		}
 		
@@ -156,13 +191,10 @@ public:
 			nameRule->package = ctx->package->getText();
 		}
 		else {
-			// Don't add package prefix for built-in types
 			std::string name = ctx->name->getText();
 			if (builtinTypes.find(name) == builtinTypes.end()) {
-				// Not a built-in type, use current package
 				nameRule->package = globalScope->pkgName;
 			}
-			// else: leave package empty for built-in types
 		}
 
 		nameRule->name = ctx->name->getText();
@@ -171,7 +203,9 @@ public:
 
 	void processStatement(ZaneParser::StatementContext *statement, std::shared_ptr<ir::Scope> scope) {
 		if (auto funcCall = statement->funcCall()) {
+			pushExpectedType(makeVoidType());
 			auto irNode = get<ir::FuncCall>(funcCall);
+			popExpectedType();
 			scope->statements.push_back(irNode);
 
 			return;

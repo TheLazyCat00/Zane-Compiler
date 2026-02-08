@@ -41,11 +41,27 @@ inline std::vector<TypeInfo> parseEmbeddedTypes() {
 	return types;
 }
 
-inline std::unordered_set<std::string> getBuiltinTypeNames() {
+inline std::unordered_set<std::string> getBuiltinNames() {
 	std::unordered_set<std::string> names;
-	for (const auto& type : parseEmbeddedTypes()) {
-		names.insert(type.name);
+	std::istringstream stream(embedded::BUILTINS_CSV);
+	std::string line;
+	bool firstLine = true;
+
+	while (std::getline(stream, line)) {
+		if (firstLine) { 
+			firstLine = false; 
+			continue; 
+		}
+
+		// Trim whitespace
+		line.erase(0, line.find_first_not_of(" \t\r"));
+		line.erase(line.find_last_not_of(" \t\r") + 1);
+		
+		if (!line.empty()) {
+			names.insert(line);
+		}
 	}
+
 	return names;
 }
 

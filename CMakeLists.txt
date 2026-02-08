@@ -35,11 +35,12 @@ target_link_libraries(zane_parser PUBLIC antlr4_static)
 add_custom_command(
 	OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/embedded_types.hpp
 	COMMAND ${CMAKE_COMMAND}
-		-DINPUT_FILE=${CMAKE_CURRENT_SOURCE_DIR}/data/types.csv
+		-DTYPES_FILE=${CMAKE_CURRENT_SOURCE_DIR}/data/types.csv
+		-DBUILTINS_FILE=${CMAKE_CURRENT_SOURCE_DIR}/data/builtins.csv
 		-DOUTPUT_FILE=${CMAKE_CURRENT_BINARY_DIR}/embedded_types.hpp
-		-P ${CMAKE_CURRENT_SOURCE_DIR}/embed_types.cmake
-	DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/data/types.csv
-	COMMENT "Embedding types.csv into header"
+		-P ${CMAKE_CURRENT_SOURCE_DIR}/embed_data.cmake
+	DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/data/types.csv ${CMAKE_CURRENT_SOURCE_DIR}/data/builtins.csv
+	COMMENT "Embedding types.csv and builtins.csv into header"
 )
 
 add_custom_target(generate_embedded_types DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/embedded_types.hpp)

@@ -49,6 +49,7 @@ struct Type : public IRNode {
 			name += "<";
 			for (auto type : generics) {
 				name += type->getMangledName();
+				name += ",";
 			}
 			name += ">";
 		}
@@ -149,7 +150,7 @@ struct FuncDef : public IRNode {
 	}
 
 	std::string getMangledName() const {
-		return returnType->getMangledName() + "|" +  pkgName  + "|" + name;
+		return returnType->getMangledName() + "|" +  pkgName  + "$" + name;
 	}
 
 	std::string getNodeName() const override {
@@ -189,6 +190,22 @@ struct FuncCall : public IRNode {
 
 	std::string getNodeName() const override {
 		return "FunctionCall";
+	}
+
+	std::string getMangledName() const {
+		// Get the function name from valueBeingCalledOn (should be a NameRule)
+		auto nameRule = std::dynamic_pointer_cast<NameRule>(valueBeingCalledOn);
+		
+		// Builtins have no package - use simple name
+		if (nameRule->package.empty()) {
+			return nameRule->name;
+		}
+		
+		std::string retTypeName = returnType->getMangledName();
+		std::string pkgName = nameRule->package;
+		std::string funcName = nameRule->name;
+		
+		return retTypeName + "|" + pkgName + "$" + funcName;
 	}
 
 	std::string printChildren(const std::string& prefix) const override {

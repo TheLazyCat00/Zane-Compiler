@@ -1,5 +1,5 @@
 package tester
 
 Void greet() {
-	puts("Hi")
+	puts("Hello from tester!")
 }

@@ -40,6 +40,18 @@ public:
 		return {};
 	}
 
+	void declareSignatures(ir::GlobalScope* node) {
+		for (auto& [name, funcDef] : node->functionDefs) {
+			declareSignature(funcDef.get());
+		}
+	}
+
+	void generateBodies(ir::GlobalScope* node) {
+		for (auto& [name, funcDef] : node->functionDefs) {
+			visit(funcDef.get());
+		}
+	}
+
 	std::any visitFuncDef(ir::FuncDef* node) override {
 		std::string mangledName = node->getMangledName();
 		llvm::Function* func = module.getFunction(mangledName);
@@ -81,12 +93,11 @@ public:
 	}
 
 	std::any visitFuncCall(ir::FuncCall* node) override {
-		// Resolve the callee using the identifier's visit result
-		auto calleeVal = get<llvm::Value*>(node->valueBeingCalledOn.get());
-		if (!calleeVal) return {};
-
-		llvm::Function* callee = llvm::dyn_cast<llvm::Function>(calleeVal);
-		if (!callee) return {};
+		std::string mangledName = node->getMangledName();
+		llvm::Function* callee = module.getFunction(mangledName);
+		if (!callee) {
+			return {};
+		}
 
 		std::vector<llvm::Value*> args;
 		for (const auto& arg : node->arguments) {
@@ -100,7 +111,6 @@ public:
 		return (llvm::Value*)builder.CreateGlobalStringPtr(node->value);
 	}
 
-	// Nodes that don't produce values in the code-gen pass
 	std::any visitType(ir::Type* node) override { return {}; }
 	std::any visitParameter(ir::Parameter* node) override { return {}; }
 	std::any visitVarDef(ir::VarDef* node) override {

@@ -22,11 +22,19 @@ public:
 	LLVMCodeGen(llvm::LLVMContext& ctx)
 		: context(ctx), module(std::make_unique<llvm::Module>("zane", ctx)), builder(ctx)  {}
 
-	void generate(std::shared_ptr<ir::GlobalScope> globalScope) {
-		setupBuiltins();
-
+	void generate(
+			std::shared_ptr<ir::GlobalScope> globalScope,
+			const std::map<std::string, std::shared_ptr<ir::GlobalScope>>& allPackages) {
 		LLVMVisitor visitor(context, builder, *module);
-		visitor.visit(globalScope.get());
+		visitor.declareSignatures(globalScope.get());
+		
+		for (const auto& [pkgName, pkg] : allPackages) {
+			if (pkgName != globalScope->pkgName) {
+				visitor.declareSignatures(pkg.get());
+			}
+		}
+		
+		visitor.generateBodies(globalScope.get());
 	}
 
 	void setupBuiltins() {
