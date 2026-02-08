@@ -60,14 +60,23 @@ inline void execute(Mode mode, const manifest::Manifest& manifest) {
 		auto hostTarget = constants::targets::getHostTarget();
 		compiler.compileToObjectFiles(hostTarget, true); // Clear modules after
 		
+		// Create build directory
+		namespace fs = std::filesystem;
+		fs::path buildDir = fs::path(constants::BUILD_DIR) / hostTarget.name;
+		if (!fs::exists(buildDir)) {
+			fs::create_directories(buildDir);
+		}
+		
 		// Link object files to create executable
-		std::string executable = "a.out";
-		if (!compiler.linkObjectFiles(hostTarget, executable)) {
+		std::string executableName = manifest.name + std::string(hostTarget.extension);
+		fs::path outputPath = buildDir / executableName;
+		
+		if (!compiler.linkObjectFiles(hostTarget, outputPath.string())) {
 			return;
 		}
 		
 		// Execute the binary
-		compiler.executeNative(executable);
+		compiler.executeNative(outputPath.string());
 	}
 }
 
