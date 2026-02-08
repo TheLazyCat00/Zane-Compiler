@@ -4,6 +4,8 @@
 #include <filesystem>
 #include <llvm-18/llvm/TargetParser/Host.h>
 
+namespace fs = std::filesystem;
+
 namespace constants {
 constexpr char MANIFEST_PATH[] = "zane.json";
 
@@ -44,7 +46,15 @@ namespace library {
 
 
 constexpr char CACHE_DIR[] = ".cache";
+constexpr char SYMBOLS_DIR[] = ".cache/symbols";
+constexpr char SYMBOLS_NAME[] = "symbols.json";
 constexpr char BUILD_DIR[] = "build";
+
+inline fs::path getSymbolsPath(const fs::path& packageDir) {
+	const fs::path symbolsDir(constants::SYMBOLS_DIR);
+	const fs::path symbolsName(constants::SYMBOLS_NAME);
+	symbolsDir / packageDir / symbolsName;
+};
 
 namespace targets {
 	struct Target {

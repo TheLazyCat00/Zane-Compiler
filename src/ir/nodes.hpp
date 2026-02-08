@@ -3,6 +3,7 @@
 #include <iostream>
 #include <map>
 #include <memory>
+#include <nlohmann/json.hpp>
 #include <unordered_map>
 #include <vector>
 #include <string>
