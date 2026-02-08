@@ -223,7 +223,7 @@ public:
 		generateMainWrapper();
 	}
 
-	std::unique_ptr<llvm::Module> link() {
+	std::unique_ptr<llvm::Module> linkLlvmModules() {
 		if (modules.empty()) return nullptr;
 
 		auto linkedModule = std::move(modules.begin()->second);
@@ -339,13 +339,22 @@ public:
 	}
 
 	void buildForAllTargets() {
+		auto hostTarget = constants::targets::getHostTarget();
+		
 		for (const auto& target : constants::targets::ALL_TARGETS) {
+			// For now, only build for host platform
+			// TODO: Add bundled cross-compilation toolchains
+			if (std::string(target.triple) != std::string(hostTarget.triple)) {
+				std::cout << "Skipping " << target.name << " (cross-compilation toolchain not available)\n";
+				continue;
+			}
+			
 			std::cout << "\n=== Building for " << target.name << " ===\n";
 
 			modules.clear();
 			generateCode();
 
-			compileToObjectFiles(target);
+			compileToObjectFiles(target, true); // Clear modules after compilation
 
 			fs::path buildDir = fs::path(constants::BUILD_DIR) / target.name;
 			if (!fs::exists(buildDir)) {

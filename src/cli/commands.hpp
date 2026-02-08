@@ -48,7 +48,7 @@ inline void execute(Mode mode, const manifest::Manifest& manifest) {
 	compiler.generateCode();
 
 	if (mode == IR) {
-		auto linkedModule = compiler.link();
+		auto linkedModule = compiler.linkLlvmModules();
 		if (!linkedModule) {
 			std::cerr << "Failed to link modules\n";
 			return;
