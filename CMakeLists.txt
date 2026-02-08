@@ -6,6 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(antlr4-runtime CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
+find_package(cereal CONFIG REQUIRED)
 find_package(LLVM REQUIRED CONFIG)
 
 message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
@@ -59,6 +60,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
 
 target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE
 	nlohmann_json::nlohmann_json
+	cereal::cereal
 	zane_parser
 	${llvm_libs}
 )

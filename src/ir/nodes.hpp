@@ -30,6 +30,11 @@ struct NameRule : public IRNode {
 	std::string getNodeName() const override {
 		return "NameRule(" + name + ")";
 	}
+
+	template<class Archive>
+	void serialize(Archive& ar) {
+		ar(name, package);
+	}
 };
 
 struct Type : public IRNode {
@@ -61,6 +66,11 @@ struct Type : public IRNode {
 	std::string getNodeName() const override {
 		return "Type(" + nameRule->getNodeName() + ")";
 	}
+
+	template<class Archive>
+	void serialize(Archive& ar) {
+		ar(nameRule, generics);
+	}
 };
 
 struct Parameter : public IRNode {
@@ -73,6 +83,11 @@ struct Parameter : public IRNode {
 
 	std::string getNodeName() const override {
 		return "Parameter(" + name + ")";
+	}
+
+	template<class Archive>
+	void serialize(Archive& ar) {
+		ar(name, type);
 	}
 };
 
@@ -128,6 +143,11 @@ struct FuncMod {
 		return stringToEnum.at(mod);
 	}
 
+	template<class Archive>
+	void serialize(Archive& ar) {
+		ar(value);
+	}
+
 private:
 	static inline const std::map<std::string, Value> stringToEnum = {
 		{ "open", Open },
@@ -166,6 +186,11 @@ struct FuncDef : public IRNode {
 			return scope->printTree(prefix, true);
 		}
 		return "";
+	}
+
+	template<class Archive>
+	void serialize(Archive& ar) {
+		ar(name, pkgName, returnType, parameters, mod);
 	}
 };
 

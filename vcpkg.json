@@ -1,6 +1,7 @@
 {
   "dependencies": [
     "antlr4",
-    "nlohmann-json"
+    "nlohmann-json",
+    "cereal"
   ]
 }

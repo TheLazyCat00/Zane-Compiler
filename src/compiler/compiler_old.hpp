@@ -25,23 +25,65 @@ namespace fs = std::filesystem;
 
 class Compiler {
 private:
-	// Member variables
 	Packages packages;
 	Modules modules;
+
 	manifest::Manifest manifest;
 	llvm::LLVMContext context;
 
-	// Helper methods
-	fs::path getEntryDirectory() {
-		if (manifest.type == manifest::Type::Executable) {
-			return constants::executable::ENTRY_DIR;
+public:
+	Compiler(manifest::Manifest manifest) : manifest(manifest) {}
+
+	void compile() {
+		fs::path srcDir = getEntryDirectory();
+
+		if (!fs::exists(srcDir) || !fs::is_directory(srcDir)) {
+			std::cerr << "Directory not found: " << srcDir << "\n";
+			return;
 		}
-		return constants::library::ENTRY_DIR;
+
+		std::vector<fs::path> sources;
+		for (const auto& entry : fs::recursive_directory_iterator(srcDir)) {
+			if (entry.path().extension() == ".zn") {
+				sources.push_back(entry.path());
+			}
+		}
+
+		std::map<std::string, std::vector<fs::path>> packageFiles;
+		std::map<std::string, std::string> packageDirs;  // Track directory for each package
+		
+		for (const auto& source : sources) {
+			auto relativePath = fs::relative(source.parent_path(), srcDir);
+			std::string pkgName;
+			std::string dir;
+			
+			if (relativePath == ".") {
+				pkgName = manifest.name;  // Root src/ files
+				dir = "";  // Empty for root
+			} else {
+				pkgName = relativePath.string();  // Subdirectory name
+				dir = relativePath.string();  // Same as package name for subdirs
+			}
+			
+			packageFiles[pkgName].push_back(source);
+			packageDirs[pkgName] = dir;
+		}
+
+		for (const auto& [pkgName, files] : packageFiles) {
+			const auto& packageDir = packageDirs[pkgName];
+
+			if (isCacheValid(packageDir)) {
+				std::cout << "Using cached symbols for " << pkgName << "\n";
+			}
+			else {
+				compilePackage(pkgName, files, packageDir);
+			}
+		}
 	}
 
 	fs::file_time_type getLastModified(const fs::path& path) {
 		if (!fs::exists(path)) {
-			return fs::file_time_type::min();
+			return fs::file_time_type::min(); // Return minimum time if doesn't exist
 		}
 		return fs::last_write_time(path);
 	}
@@ -74,13 +116,21 @@ private:
 		fs::path sourcePath = srcDir / packageDir;
 
 		if (!fs::exists(symbolsPath)) {
-			return false;
+			return false; // Cache doesn't exist
 		}
 
 		auto cacheTime = getLastModified(symbolsPath);
 		auto sourceTime = getPackageLastModified(sourcePath);
 
 		return cacheTime > sourceTime;
+	}
+
+private:
+	fs::path getEntryDirectory() {
+		if (manifest.type == manifest::Type::Executable) {
+			return constants::executable::ENTRY_DIR;
+		}
+		return constants::library::ENTRY_DIR;
 	}
 
 	void compilePackage(const std::string& pkgName, const std::vector<fs::path>& files, const std::string& packageDir) {
@@ -128,6 +178,32 @@ private:
 		);
 	}
 
+public:
+
+	Packages getPackages() {
+		return packages;
+	}
+
+	void writeModules() {
+		for (const auto& [name, mod] : modules) {
+			std::cout << "=== Module: " << name << " ===\n";
+			writeLLVMIR(*mod, "/dev/stdout");
+			std::cout << "\n";
+		}
+	}
+
+	void generateCode() {
+		for (auto& [pkgName, globalScope] : packages) {
+			LLVMCodeGen codegen(context);
+			codegen.setupBuiltins();
+			codegen.generate(globalScope, packages);
+
+			modules[pkgName] = codegen.extractModule();
+		}
+
+		generateMainWrapper();
+	}
+
 	void generateMainWrapper() {
 		auto wrapperModule = std::make_unique<llvm::Module>("__main_wrapper", context);
 		llvm::IRBuilder<> builder(context);
@@ -155,74 +231,6 @@ private:
 		modules["__main_wrapper"] = std::move(wrapperModule);
 	}
 
-public:
-	// Constructor
-	Compiler(manifest::Manifest manifest) : manifest(manifest) {}
-
-	// Compilation pipeline
-	void compile() {
-		fs::path srcDir = getEntryDirectory();
-
-		if (!fs::exists(srcDir) || !fs::is_directory(srcDir)) {
-			std::cerr << "Directory not found: " << srcDir << "\n";
-			return;
-		}
-
-		std::vector<fs::path> sources;
-		for (const auto& entry : fs::recursive_directory_iterator(srcDir)) {
-			if (entry.path().extension() == ".zn") {
-				sources.push_back(entry.path());
-			}
-		}
-
-		std::map<std::string, std::vector<fs::path>> packageFiles;
-		std::map<std::string, std::string> packageDirs;
-		
-		for (const auto& source : sources) {
-			auto relativePath = fs::relative(source.parent_path(), srcDir);
-			std::string pkgName;
-			std::string dir;
-			
-			if (relativePath == ".") {
-				pkgName = manifest.name;
-				dir = "";
-			} else {
-				pkgName = relativePath.string();
-				dir = relativePath.string();
-			}
-			
-			packageFiles[pkgName].push_back(source);
-			packageDirs[pkgName] = dir;
-		}
-
-		for (const auto& [pkgName, files] : packageFiles) {
-			const auto& packageDir = packageDirs[pkgName];
-
-			if (isCacheValid(packageDir)) {
-				std::cout << "Using cached symbols for " << pkgName << "\n";
-			}
-			else {
-				compilePackage(pkgName, files, packageDir);
-			}
-		}
-	}
-
-	Packages getPackages() {
-		return packages;
-	}
-
-	void generateCode() {
-		for (auto& [pkgName, globalScope] : packages) {
-			LLVMCodeGen codegen(context);
-			codegen.setupBuiltins();
-			codegen.generate(globalScope, packages);
-
-			modules[pkgName] = codegen.extractModule();
-		}
-
-		generateMainWrapper();
-	}
-
 	std::unique_ptr<llvm::Module> link() {
 		if (modules.empty()) return nullptr;
 
@@ -244,10 +252,12 @@ public:
 		fs::path cacheDir = constants::CACHE_DIR;
 		cacheDir = cacheDir / target.name;
 
+		// Create .cache/<target> directory if it doesn't exist
 		if (!fs::exists(cacheDir)) {
 			fs::create_directories(cacheDir);
 		}
 
+		// Initialize native target and common targets (best effort)
 		llvm::InitializeNativeTarget();
 		llvm::InitializeNativeTargetAsmPrinter();
 		llvm::InitializeNativeTargetAsmParser();
@@ -267,12 +277,14 @@ public:
 			target.triple, CPU, features, opt, llvm::Reloc::PIC_);
 
 		for (auto& [pkgName, module] : modules) {
+			// Create package subdirectory structure in .cache/<target>
 			fs::path packagePath = cacheDir;
 			if (pkgName != manifest.name && pkgName != "__main_wrapper") {
 				packagePath = cacheDir / pkgName;
 				fs::create_directories(packagePath);
 			}
 
+			// Generate object file path
 			fs::path objectFile = packagePath / (pkgName + ".o");
 
 			module->setTargetTriple(target.triple);
@@ -307,6 +319,7 @@ public:
 	bool linkObjectFiles(const constants::targets::Target& target, const std::string& outputExecutable) {
 		fs::path cacheDir = fs::path(constants::CACHE_DIR) / target.name;
 
+		// Collect all object files for this target
 		std::vector<std::string> objectFiles;
 		for (const auto& entry : fs::recursive_directory_iterator(cacheDir)) {
 			if (entry.path().extension() == ".o") {
@@ -319,6 +332,7 @@ public:
 			return false;
 		}
 
+		// Build linker command
 		std::stringstream linkCmd;
 		linkCmd << "clang";
 		for (const auto& objFile : objectFiles) {
@@ -339,19 +353,24 @@ public:
 	}
 
 	void buildForAllTargets() {
+
 		for (const auto& target : constants::targets::ALL_TARGETS) {
 			std::cout << "\n=== Building for " << target.name << " ===\n";
 
+			// Regenerate code for this target (modules get modified with target-specific data)
 			modules.clear();
 			generateCode();
 
+			// Compile to object files
 			compileToObjectFiles(target);
 
+			// Create build directory
 			fs::path buildDir = fs::path(constants::BUILD_DIR) / target.name;
 			if (!fs::exists(buildDir)) {
 				fs::create_directories(buildDir);
 			}
 
+			// Link to executable
 			std::string executableName = manifest.name + std::string(target.extension);
 			fs::path outputPath = buildDir / executableName;
 
@@ -369,15 +388,6 @@ public:
 
 		std::cout << "--- Execution ---\n";
 		std::system(("./" + executable).c_str());
-	}
-
-	// Debug/output methods
-	void writeModules() {
-		for (const auto& [name, mod] : modules) {
-			std::cout << "=== Module: " << name << " ===\n";
-			writeLLVMIR(*mod, "/dev/stdout");
-			std::cout << "\n";
-		}
 	}
 
 	void writeLLVMIR(llvm::Module& linkedModule, const std::string& filename) {

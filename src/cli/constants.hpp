@@ -46,14 +46,14 @@ namespace library {
 
 
 constexpr char CACHE_DIR[] = ".cache";
-constexpr char SYMBOLS_DIR[] = ".cache/symbols";
-constexpr char SYMBOLS_NAME[] = "symbols.json";
 constexpr char BUILD_DIR[] = "build";
+constexpr char SYMBOLS_DIR[] = ".cache/symbols";
+constexpr char SYMBOLS_NAME[] = "symbols.bin";
 
 inline fs::path getSymbolsPath(const fs::path& packageDir) {
 	const fs::path symbolsDir(constants::SYMBOLS_DIR);
 	const fs::path symbolsName(constants::SYMBOLS_NAME);
-	symbolsDir / packageDir / symbolsName;
+	return symbolsDir / packageDir / symbolsName;
 };
 
 namespace targets {
