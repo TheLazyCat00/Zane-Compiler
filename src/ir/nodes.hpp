@@ -140,7 +140,7 @@ private:
 struct FuncDef : public IRNode {
 	std::string name;
 	std::shared_ptr<Type> returnType;
-	std::vector<Parameter> parameters;
+	std::vector<std::shared_ptr<Parameter>> parameters;
 	std::shared_ptr<Scope> scope;
 	std::string pkgName;
 	FuncMod mod;
@@ -150,7 +150,10 @@ struct FuncDef : public IRNode {
 	}
 
 	std::string getMangledName() const {
-		return returnType->getMangledName() + "|" +  pkgName  + "$" + name;
+		std::string retTypeName = returnType->getMangledName();
+		std::string argCount = std::to_string(parameters.size());
+
+		return retTypeName + "|" +  pkgName  + "$" + name + "|" + argCount;
 	}
 
 	std::string getNodeName() const override {
@@ -204,8 +207,9 @@ struct FuncCall : public IRNode {
 		std::string retTypeName = returnType->getMangledName();
 		std::string pkgName = nameRule->package;
 		std::string funcName = nameRule->name;
+		std::string argCount = std::to_string(arguments.size());
 		
-		return retTypeName + "|" + pkgName + "$" + funcName;
+		return retTypeName + "|" + pkgName + "$" + funcName + "|" + argCount;
 	}
 
 	std::string printChildren(const std::string& prefix) const override {

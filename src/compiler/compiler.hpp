@@ -123,7 +123,7 @@ public:
 		auto wrapperModule = std::make_unique<llvm::Module>("__main_wrapper", context);
 		llvm::IRBuilder<> builder(context);
 
-		std::string mangledMain = "Void|" + manifest.name + "$main";
+		std::string mangledMain = "Void|" + manifest.name + "$main|0";
 		llvm::FunctionType* mangledMainType = llvm::FunctionType::get(
 			builder.getVoidTy(), {}, false);
 		wrapperModule->getOrInsertFunction(mangledMain, mangledMainType);
@@ -161,30 +161,6 @@ public:
 
 		modules.clear();
 		return std::move(linkedModule);
-	}
-
-	void execute(llvm::Module& linkedModule) {
-		llvm::InitializeNativeTarget();
-		llvm::InitializeNativeTargetAsmPrinter();
-
-		llvm::ExitOnError ExitOnErr;
-		auto JIT = ExitOnErr(llvm::orc::LLJITBuilder().create());
-
-		auto TSM = llvm::orc::ThreadSafeModule(
-			llvm::CloneModule(linkedModule),
-			std::make_unique<llvm::LLVMContext>()
-		);
-
-		TSM.withModuleDo([&](llvm::Module& M) {
-			M.setDataLayout(JIT->getDataLayout());
-		});
-
-		ExitOnErr(JIT->addIRModule(std::move(TSM)));
-
-		std::string mainFn = "Void|" + manifest.name + "$main";
-		auto MainAddr = ExitOnErr(JIT->lookup(mainFn));
-		auto MainPtr = MainAddr.toPtr<void (*)()>();
-		MainPtr();
 	}
 
 	void compileToObjectFiles(const constants::targets::Target& target, bool clearModules = false) {

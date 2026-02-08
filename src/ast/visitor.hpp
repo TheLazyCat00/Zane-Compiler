@@ -114,9 +114,9 @@ public:
 
 		if (ctx->params()) {
 			for (auto paramCtx : ctx->params()->param()) {
-				ir::Parameter p;
-				p.name = paramCtx->name->getText();
-				p.type = get<ir::Type>(paramCtx->type());
+				auto p = std::make_shared<ir::Parameter>();
+				p->name = paramCtx->name->getText();
+				p->type = get<ir::Type>(paramCtx->type());
 				funcDef->parameters.push_back(p);
 			}
 		}
@@ -130,7 +130,7 @@ public:
 			scope->statements.push_back(funcDef);
 		}
 
-		visitChildren(ctx); 
+		visitChildren(ctx);
 		
 		return std::static_pointer_cast<ir::IRNode>(funcDef);
 	}

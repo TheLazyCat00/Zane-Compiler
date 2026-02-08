@@ -65,7 +65,7 @@ public:
 		namedValues.clear();
 		unsigned idx = 0;
 		for (auto& arg : func->args()) {
-			std::string argName = node->parameters[idx].name;
+			std::string argName = node->parameters[idx]->name;
 			arg.setName(argName);
 
 			llvm::AllocaInst* alloca = builder.CreateAlloca(arg.getType(), nullptr, argName);
@@ -134,7 +134,7 @@ private:
 		llvm::Type* retType = typeMapper.toLLVMType(node->returnType->getMangledName());
 		std::vector<llvm::Type*> params;
 		for (auto& p : node->parameters) {
-			params.push_back(typeMapper.toLLVMType(p.type->getMangledName()));
+			params.push_back(typeMapper.toLLVMType(p->type->getMangledName()));
 		}
 		llvm::FunctionType* ft = llvm::FunctionType::get(retType, params, false);
 		llvm::Function::Create(ft, llvm::Function::ExternalLinkage, node->getMangledName(), module);
