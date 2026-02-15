@@ -17,6 +17,7 @@ class StringLiteral;
 class NameRule;
 class Type;
 class Parameter;
+class ReturnStatement;
 
 class IRVisitor {
 public:
@@ -32,6 +33,7 @@ public:
 	virtual std::any visitType(Type* node) { return {}; }
 	virtual std::any visitParameter(Parameter* node) { return {}; }
 	virtual std::any visitVarDef(VarDef* node) { return {}; }
+	virtual std::any visitReturnStatement(ReturnStatement* node) { return {}; }
 };
 
 struct IRNode {

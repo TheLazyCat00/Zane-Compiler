@@ -1,8 +1,10 @@
 #pragma once
 
-#include <codegen/llvm.hpp>
-#include <codegen/type_mapper.hpp>
-#include <ir/node.hpp>
+#include "codegen/type_mapper.hpp"
+#include "ir/node.hpp"
+#include "ir/nodes.hpp"
+
+#include <iostream>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/IRBuilder.h>
 #include <any>
@@ -91,6 +93,44 @@ public:
 		}
 		return {};
 	}
+	
+
+	template <typename K, typename V>
+	std::string unordered_map_to_string(const std::unordered_map<K, V>& map) {
+		std::ostringstream oss;
+		oss << "{";
+		bool first = true;
+		for (const auto& [key, value] : map) {
+			if (!first) {
+				oss << ", ";
+			}
+			first = false;
+			oss << key << ": " << value;
+		}
+		oss << "}";
+		return oss.str();
+	}
+
+	std::any visitNameRule(ir::NameRule *node) override {
+		auto it = namedValues.find(node->getMangledName());
+
+		if (it == namedValues.end()) {
+			// Handle error: Variable not defined
+			// You might want to throw an exception or return nullptr
+			std::cerr << unordered_map_to_string(namedValues);
+			return (llvm::Value*)nullptr;
+		}
+
+		llvm::AllocaInst* alloca = it->second;
+
+		// 2. Generate a Load instruction to get the current value
+		// Note: In modern LLVM, you must provide the type being loaded
+		return (llvm::Value*)builder.CreateLoad(
+			alloca->getAllocatedType(), 
+			alloca,
+			node->getMangledName() + ".load"
+		);
+	}
 
 	std::any visitFuncCall(ir::FuncCall* node) override {
 		std::string mangledName = node->getMangledName();
@@ -111,14 +151,28 @@ public:
 		return (llvm::Value*)builder.CreateGlobalStringPtr(node->value);
 	}
 
+	std::any visitReturnStatement(ir::ReturnStatement *node) override {
+		if (node->value) {
+			// Evaluate the expression to get the LLVM Value*
+			llvm::Value* retVal = get<llvm::Value*>(node->value.get());
+			
+			if (retVal) {
+				return (llvm::Value*)builder.CreateRet(retVal);
+			}
+		}
+		
+		// Fallback for void returns or if the expression evaluation failed
+		return (llvm::Value*)builder.CreateRetVoid();
+	}
+
 	std::any visitType(ir::Type* node) override { return {}; }
 	std::any visitParameter(ir::Parameter* node) override { return {}; }
 	std::any visitVarDef(ir::VarDef* node) override {
 		llvm::Type* type = typeMapper.toLLVMType(node->type->getMangledName());
 		if (!type) return {};
 
-		llvm::AllocaInst* alloca = builder.CreateAlloca(type, nullptr, node->name);
-		namedValues[node->name] = alloca;
+		llvm::AllocaInst* alloca = builder.CreateAlloca(type, nullptr, node->nameRule->getMangledName());
+		namedValues[node->nameRule->getMangledName()] = alloca;
 
 		if (node->value) {
 			auto val = get<llvm::Value*>(node->value.get());

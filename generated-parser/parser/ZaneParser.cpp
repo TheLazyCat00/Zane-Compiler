@@ -61,7 +61,7 @@ void zaneParserInitialize() {
     },
     std::vector<std::string>{
       "", "'package'", "'import'", "'<'", "','", "'>'", "'$'", "'.'", "'('", 
-      "')'", "'strict'", "'pure'", "'=>'", "'{'", "'}'", "':'", "'='", "'returns'"
+      "')'", "'strict'", "'pure'", "'=>'", "'{'", "'}'", "':'", "'='", "'return'"
     },
     std::vector<std::string>{
       "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", 

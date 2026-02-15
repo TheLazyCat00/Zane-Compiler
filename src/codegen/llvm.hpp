@@ -1,7 +1,8 @@
 #pragma once
 
-#include <ir/nodes.hpp>
-#include <codegen/visitor.hpp>
+#include "ir/nodes.hpp"
+#include "codegen/visitor.hpp"
+
 #include <llvm-18/llvm/TargetParser/Host.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/IRBuilder.h>

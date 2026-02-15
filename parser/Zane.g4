@@ -79,4 +79,4 @@ callSuffix
 varDef: type name=IDENTIFIER '=' value;
 
 // --- Blocks ---
-retStat: 'returns' value;
+retStat: 'return' value;

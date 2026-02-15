@@ -1,5 +1,6 @@
 # pragma once
 
+#include "types.hpp"
 #include "ast/visitor.hpp"
 #include "cli/constants.hpp"
 #include "cli/manifest.hpp"
@@ -18,10 +19,6 @@
 #include <memory>
 #include <string>
 #include <nlohmann/json.hpp>
-
-using Packages = std::map<std::string, std::shared_ptr<ir::GlobalScope>>;
-using Modules = std::map<std::string, std::unique_ptr<llvm::Module>>;
-namespace fs = std::filesystem;
 
 class Compiler {
 private:
@@ -66,6 +63,11 @@ private:
 	}
 
 	bool isCacheValid(const fs::path& packageDir) {
+		#ifdef DEBUG
+			return false;
+			std::cout << "hi";
+		#endif
+
 		const fs::path symbolsDir(constants::SYMBOLS_DIR);
 		const fs::path symbolsName(constants::SYMBOLS_NAME);
 		const fs::path srcDir(constants::executable::ENTRY_DIR);
@@ -84,7 +86,7 @@ private:
 	}
 
 	void compilePackage(const std::string& pkgName, const std::vector<fs::path>& files, const std::string& packageDir) {
-		Visitor visitor;
+		Visitor visitor(std::make_shared<Packages>(packages));
 
 		for (const auto& path : files) {
 			std::ifstream stream(path);

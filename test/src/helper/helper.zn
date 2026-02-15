@@ -1,5 +1,0 @@
-package tester
-
-Void greet() {
-	puts("Hello from tester!")
-}

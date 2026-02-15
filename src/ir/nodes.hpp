@@ -1,30 +1,55 @@
 #pragma once
 
-#include <iostream>
+#include "ir/node.hpp"
 #include <map>
 #include <memory>
 #include <nlohmann/json.hpp>
 #include <unordered_map>
 #include <vector>
 #include <string>
-#include <ir/node.hpp>
 #include <any>
 
 namespace ir {
 
+struct GlobalScope : public IRNode {
+	std::string pkgName;
+	std::vector<std::string> importedPackages;
+	std::unordered_map<std::string, std::shared_ptr<FuncDef>> functionDefs;
+	std::vector<std::shared_ptr<IRNode>> body;
+
+	std::any accept(IRVisitor* visitor) override {
+		return visitor->visitGlobalScope(this);
+	}
+
+	std::string getNodeName() const override {
+		return "GlobalScope";
+	}
+
+	std::string printChildren(const std::string& prefix) const override {
+		return printNodeVector(body, prefix);
+	}
+};
+
 struct NameRule : public IRNode {
 	std::string name;
-	std::string package;
+	std::shared_ptr<GlobalScope> globalScope;
+
+	NameRule() {}
+
+	NameRule(std::string name, std::shared_ptr<GlobalScope> globalScope) {
+		this->name = name;
+		this->globalScope = globalScope;
+	}
 
 	std::any accept(IRVisitor* visitor) override {
 		return visitor->visitNameRule(this);
 	}
 
 	std::string getMangledName() const {
-		if (package.empty()) {
+		if (globalScope == nullptr) {
 			return name;
 		}
-		return package + "." + name;
+		return globalScope->pkgName + "$" + name;
 	}
 
 	std::string getNodeName() const override {
@@ -33,7 +58,7 @@ struct NameRule : public IRNode {
 
 	template<class Archive>
 	void serialize(Archive& ar) {
-		ar(name, package);
+		ar(name, globalScope->pkgName);
 	}
 };
 
@@ -91,24 +116,6 @@ struct Parameter : public IRNode {
 	}
 };
 
-struct GlobalScope : public IRNode {
-	std::string pkgName;
-	std::vector<std::string> importedPackages;
-	std::unordered_map<std::string, std::shared_ptr<FuncDef>> functionDefs;
-	std::vector<std::shared_ptr<IRNode>> body;
-
-	std::any accept(IRVisitor* visitor) override {
-		return visitor->visitGlobalScope(this);
-	}
-
-	std::string getNodeName() const override {
-		return "GlobalScope";
-	}
-
-	std::string printChildren(const std::string& prefix) const override {
-		return printNodeVector(body, prefix);
-	}
-};
 
 struct Scope : public IRNode {
 	std::shared_ptr<IRNode> parent;
@@ -125,6 +132,18 @@ struct Scope : public IRNode {
 
 	std::string printChildren(const std::string& prefix) const override {
 		return printNodeVector(statements, prefix);
+	}
+};
+
+struct ReturnStatement : public IRNode {
+	std::shared_ptr<IRNode> value;
+
+	std::any accept(IRVisitor* visitor) override {
+		return visitor->visitReturnStatement(this);
+	}
+
+	std::string getNodeName() const override {
+		return "ReturnStatement(" + value->getNodeName() + ")";
 	}
 };
 
@@ -159,11 +178,10 @@ private:
 };
 
 struct FuncDef : public IRNode {
-	std::string name;
+	std::shared_ptr<NameRule> nameRule;
 	std::shared_ptr<Type> returnType;
 	std::vector<std::shared_ptr<Parameter>> parameters;
 	std::shared_ptr<Scope> scope;
-	std::string pkgName;
 	FuncMod mod;
 
 	std::any accept(IRVisitor* visitor) override {
@@ -174,11 +192,11 @@ struct FuncDef : public IRNode {
 		std::string retTypeName = returnType->getMangledName();
 		std::string argCount = std::to_string(parameters.size());
 
-		return retTypeName + "|" +  pkgName  + "$" + name + "|" + argCount;
+		return retTypeName + "|" +  nameRule->getMangledName() + "|" + argCount;
 	}
 
 	std::string getNodeName() const override {
-		return "FuncDef(" + name + ")";
+		return "FuncDef(" + nameRule->name + ")";
 	}
 
 	std::string printChildren(const std::string& prefix) const override {
@@ -190,12 +208,12 @@ struct FuncDef : public IRNode {
 
 	template<class Archive>
 	void serialize(Archive& ar) {
-		ar(name, pkgName, returnType, parameters, mod);
+		ar(nameRule, returnType, parameters, mod);
 	}
 };
 
 struct VarDef : public IRNode {
-	std::string name;
+	std::shared_ptr<NameRule> nameRule;
 	std::shared_ptr<Type> type;
 	std::shared_ptr<IRNode> value;
 
@@ -204,7 +222,7 @@ struct VarDef : public IRNode {
 	}
 
 	std::string getNodeName() const override {
-		return "VarDef(" + name + ")";
+		return "VarDef(" + nameRule->getMangledName() + ")";
 	}
 };
 
@@ -222,20 +240,16 @@ struct FuncCall : public IRNode {
 	}
 
 	std::string getMangledName() const {
-		// Get the function name from valueBeingCalledOn (should be a NameRule)
 		auto nameRule = std::dynamic_pointer_cast<NameRule>(valueBeingCalledOn);
 		
-		// Builtins have no package - use simple name
-		if (nameRule->package.empty()) {
+		if (nameRule->globalScope == nullptr) {
 			return nameRule->name;
 		}
 		
 		std::string retTypeName = returnType->getMangledName();
-		std::string pkgName = nameRule->package;
-		std::string funcName = nameRule->name;
 		std::string argCount = std::to_string(arguments.size());
 		
-		return retTypeName + "|" + pkgName + "$" + funcName + "|" + argCount;
+		return retTypeName + "|" + nameRule->getMangledName() + "|" + argCount;
 	}
 
 	std::string printChildren(const std::string& prefix) const override {

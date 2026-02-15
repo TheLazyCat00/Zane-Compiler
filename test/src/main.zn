@@ -1,6 +1,7 @@
 package test
 
 Void main() {
-	hi()
-	hi()
+	String hi = "test"
+
+	puts(hi)
 }
