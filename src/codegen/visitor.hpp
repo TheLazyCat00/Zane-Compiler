@@ -115,15 +115,13 @@ public:
 		auto it = namedValues.find(node->getMangledName());
 
 		if (it == namedValues.end()) {
-			// Handle error: Variable not defined
-			// You might want to throw an exception or return nullptr
-			std::cerr << unordered_map_to_string(namedValues);
+			// Variable not defined - return nullptr
 			return (llvm::Value*)nullptr;
 		}
 
 		llvm::AllocaInst* alloca = it->second;
 
-		// 2. Generate a Load instruction to get the current value
+		// Generate a Load instruction to get the current value
 		// Note: In modern LLVM, you must provide the type being loaded
 		return (llvm::Value*)builder.CreateLoad(
 			alloca->getAllocatedType(), 

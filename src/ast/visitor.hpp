@@ -241,7 +241,7 @@ public:
 			processStatement(statement, scope);
 		}
 
-		currentScope = scope->parent;
+		currentScope = scope->parent.lock();
 
 		return std::static_pointer_cast<ir::IRNode>(scope);
 	}

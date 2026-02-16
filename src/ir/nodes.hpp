@@ -32,7 +32,7 @@ struct GlobalScope : public IRNode {
 
 struct NameRule : public IRNode {
 	std::string name;
-	std::shared_ptr<GlobalScope> globalScope;
+	std::weak_ptr<GlobalScope> globalScope;
 
 	NameRule() {}
 
@@ -46,10 +46,11 @@ struct NameRule : public IRNode {
 	}
 
 	std::string getMangledName() const {
-		if (globalScope == nullptr) {
+		auto scope = globalScope.lock();
+		if (!scope) {
 			return name;
 		}
-		return globalScope->pkgName + "$" + name;
+		return scope->pkgName + "$" + name;
 	}
 
 	std::string getNodeName() const override {
@@ -58,7 +59,9 @@ struct NameRule : public IRNode {
 
 	template<class Archive>
 	void serialize(Archive& ar) {
-		ar(name, globalScope->pkgName);
+		auto scope = globalScope.lock();
+		std::string pkgName = scope ? scope->pkgName : "";
+		ar(name, pkgName);
 	}
 };
 
@@ -71,9 +74,6 @@ struct Type : public IRNode {
 	}
 
 	std::string getMangledName() const {
-		if (!nameRule) {
-			return "?";
-		}
 		std::string name = nameRule->getMangledName();
 
 		if (generics.size() > 0) {
@@ -118,7 +118,7 @@ struct Parameter : public IRNode {
 
 
 struct Scope : public IRNode {
-	std::shared_ptr<IRNode> parent;
+	std::weak_ptr<IRNode> parent;
 	std::unordered_map<std::string, std::shared_ptr<FuncDef>> functionDefs;
 	std::vector<std::shared_ptr<IRNode>> statements;
 
@@ -242,7 +242,7 @@ struct FuncCall : public IRNode {
 	std::string getMangledName() const {
 		auto nameRule = std::dynamic_pointer_cast<NameRule>(valueBeingCalledOn);
 		
-		if (nameRule->globalScope == nullptr) {
+		if (nameRule->globalScope.expired()) {
 			return nameRule->name;
 		}
 		

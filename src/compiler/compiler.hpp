@@ -161,6 +161,15 @@ public:
 	// Constructor
 	Compiler(manifest::Manifest manifest) : manifest(manifest) {}
 
+	// Destructor - explicitly clean up to break circular references
+	~Compiler() {
+		// Clear modules first (LLVM modules)
+		modules.clear();
+		
+		// Clear packages to break circular references in IR nodes
+		packages.clear();
+	}
+
 	// Compilation pipeline
 	void compile() {
 		fs::path srcDir = getEntryDirectory();
@@ -265,8 +274,9 @@ public:
 		auto CPU = "generic";
 		auto features = "";
 		llvm::TargetOptions opt;
-		auto targetMachine = llvmTarget->createTargetMachine(
-			target.triple, CPU, features, opt, llvm::Reloc::PIC_);
+		std::unique_ptr<llvm::TargetMachine> targetMachine(
+			llvmTarget->createTargetMachine(
+				target.triple, CPU, features, opt, llvm::Reloc::PIC_));
 
 		for (auto& [pkgName, module] : modules) {
 			fs::path packagePath = cacheDir;
@@ -420,8 +430,9 @@ public:
 		auto CPU = "generic";
 		auto features = "";
 		llvm::TargetOptions opt;
-		auto targetMachine = target->createTargetMachine(
-			targetTriple, CPU, features, opt, llvm::Reloc::PIC_);
+		std::unique_ptr<llvm::TargetMachine> targetMachine(
+			target->createTargetMachine(
+				targetTriple, CPU, features, opt, llvm::Reloc::PIC_));
 
 		linkedModule.setDataLayout(targetMachine->createDataLayout());
 
