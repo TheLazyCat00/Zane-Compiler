@@ -13,70 +13,144 @@ NUMBER: SIMPLE_NUMBER | MANAGED_NUMBER;
 
 WS: [ \t\r\n]+ -> skip;
 
-// --- Parser Rules ---
-globalScope: pkgDef pkgImport* declaration* EOF;
+
+// =====================================================
+// ================= Parser Rules ======================
+// =====================================================
+
+globalScope
+	: pkgDef pkgImport* declaration* EOF
+	;
 
 declaration
 	: funcDef
 	| varDef
 	;
 
+// -----------------------------------------------------
 // Statements
+// -----------------------------------------------------
+
 statement
-	: funcCall
-	| constructorCall
+	: value        // function calls are now expressions
+	| tuple
 	| varDef
 	| retStat
 	;
 
-pkgDef: 'package' name=IDENTIFIER;
-pkgImport: 'import' name=IDENTIFIER;
+pkgDef
+	: 'package' name=IDENTIFIER
+	;
 
-// --- Types ---
-// Allows 'List<Int>' or 'sys.collections.Map<String, Int>'
-type: nameRule ('<' type (',' type)* '>')?;
+pkgImport
+	: 'import' name=IDENTIFIER
+	;
 
-nameRule: (package=IDENTIFIER '$')? name=IDENTIFIER;
+// -----------------------------------------------------
+// Types
+// -----------------------------------------------------
 
-// --- Values ---
+// Allows: List<Int>
+// Allows: sys$collections$Map<String, Int>
+type
+	: nameRule ('<' type (',' type)* '>')?
+	;
+
+nameRule
+	: (package=IDENTIFIER '$')? name=IDENTIFIER
+	;
+
+// -----------------------------------------------------
+// Values (NEW STRUCTURE)
+// -----------------------------------------------------
+
 value
-	: left=value operator=OPERATOR right=value # operation
-	| primary                                 # atom
+	: primary (OPERATOR primary)*
 	;
 
 primary
-	: STRING                                  # str
-	| NUMBER                                  # num
-	| nameRule                                # name
-	| constructorCall                         # cons
-	| obj=primary callSuffix                  # call
-	| obj=primary '.' member=IDENTIFIER       # propertyAccess
+	: atom postfix*
 	;
 
-collection: (value (',' value)*)?;
+atom
+	: STRING
+	| NUMBER
+	| nameRule
+	| tuple
+	;
 
-// --- Functions ---
-funcDef: returnType=type name=IDENTIFIER '(' params? ')' funcMod? funcBody;
-param: type name=IDENTIFIER;
-params: param (',' param)*;
+postfix
+	: '.' IDENTIFIER      # propertyAccess
+	| '(' collection ')'  # funcCall
+	| ':' value           # callWithValue
+	;
 
-funcMod: strict | pure;
-strict: 'strict';
-pure: 'pure';
+collection
+	: (value (',' value)*)?
+	;
 
-funcBody: arrowFunction | scope;
-arrowFunction: '=>' value;
-scope: '{' statement* '}';
+// -----------------------------------------------------
+// Functions
+// -----------------------------------------------------
 
-funcCall: primary callSuffix;
-constructorCall: '(' collection ')';
+funcDef
+	: returnType=type name=IDENTIFIER '(' params? ')' funcMod? funcBody
+	;
 
-callSuffix
+param
+	: type name=IDENTIFIER
+	;
+
+params
+	: param (',' param)*
+	;
+
+funcMod
+	: strict
+	| pure
+	;
+
+strict
+	: 'strict'
+	;
+
+pure
+	: 'pure'
+	;
+
+funcBody
+	: arrowFunction
+	| scope
+	;
+
+arrowFunction
+	: '=>' value
+	;
+
+scope
+	: '{' statement* '}'
+	;
+
+// -----------------------------------------------------
+// Tuples
+// -----------------------------------------------------
+
+tuple
 	: '(' collection ')'
-	| ':' value;
+	;
 
-// --- Variables ---
-varDef: type name=IDENTIFIER '=' value;
+// -----------------------------------------------------
+// Variables
+// -----------------------------------------------------
 
-// --- Blocks ---
-retStat: 'return' value;
+varDef
+	: type name=IDENTIFIER '=' value
+	;
+
+// -----------------------------------------------------
+// Blocks
+// -----------------------------------------------------
+
+retStat
+	: 'return' value
+	;

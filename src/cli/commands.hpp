@@ -53,7 +53,8 @@ inline void execute(Mode mode, const manifest::Manifest& manifest) {
 			std::cerr << "Failed to link modules\n";
 			return;
 		}
-		compiler.writeLLVMIR(*linkedModule, "/dev/stdout");
+		// Write directly to stdout instead of using file descriptor
+		linkedModule->print(llvm::outs(), nullptr);
 	}
 	else {
 		// Compile each package to object file in .cache for host target

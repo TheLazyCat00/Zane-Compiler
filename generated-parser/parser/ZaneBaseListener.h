@@ -39,29 +39,23 @@ public:
   virtual void enterNameRule(ZaneParser::NameRuleContext * /*ctx*/) override { }
   virtual void exitNameRule(ZaneParser::NameRuleContext * /*ctx*/) override { }
 
+  virtual void enterValue(ZaneParser::ValueContext * /*ctx*/) override { }
+  virtual void exitValue(ZaneParser::ValueContext * /*ctx*/) override { }
+
+  virtual void enterPrimary(ZaneParser::PrimaryContext * /*ctx*/) override { }
+  virtual void exitPrimary(ZaneParser::PrimaryContext * /*ctx*/) override { }
+
   virtual void enterAtom(ZaneParser::AtomContext * /*ctx*/) override { }
   virtual void exitAtom(ZaneParser::AtomContext * /*ctx*/) override { }
-
-  virtual void enterOperation(ZaneParser::OperationContext * /*ctx*/) override { }
-  virtual void exitOperation(ZaneParser::OperationContext * /*ctx*/) override { }
-
-  virtual void enterStr(ZaneParser::StrContext * /*ctx*/) override { }
-  virtual void exitStr(ZaneParser::StrContext * /*ctx*/) override { }
-
-  virtual void enterCall(ZaneParser::CallContext * /*ctx*/) override { }
-  virtual void exitCall(ZaneParser::CallContext * /*ctx*/) override { }
-
-  virtual void enterNum(ZaneParser::NumContext * /*ctx*/) override { }
-  virtual void exitNum(ZaneParser::NumContext * /*ctx*/) override { }
-
-  virtual void enterName(ZaneParser::NameContext * /*ctx*/) override { }
-  virtual void exitName(ZaneParser::NameContext * /*ctx*/) override { }
 
   virtual void enterPropertyAccess(ZaneParser::PropertyAccessContext * /*ctx*/) override { }
   virtual void exitPropertyAccess(ZaneParser::PropertyAccessContext * /*ctx*/) override { }
 
-  virtual void enterCons(ZaneParser::ConsContext * /*ctx*/) override { }
-  virtual void exitCons(ZaneParser::ConsContext * /*ctx*/) override { }
+  virtual void enterFuncCall(ZaneParser::FuncCallContext * /*ctx*/) override { }
+  virtual void exitFuncCall(ZaneParser::FuncCallContext * /*ctx*/) override { }
+
+  virtual void enterCallWithValue(ZaneParser::CallWithValueContext * /*ctx*/) override { }
+  virtual void exitCallWithValue(ZaneParser::CallWithValueContext * /*ctx*/) override { }
 
   virtual void enterCollection(ZaneParser::CollectionContext * /*ctx*/) override { }
   virtual void exitCollection(ZaneParser::CollectionContext * /*ctx*/) override { }
@@ -93,14 +87,8 @@ public:
   virtual void enterScope(ZaneParser::ScopeContext * /*ctx*/) override { }
   virtual void exitScope(ZaneParser::ScopeContext * /*ctx*/) override { }
 
-  virtual void enterFuncCall(ZaneParser::FuncCallContext * /*ctx*/) override { }
-  virtual void exitFuncCall(ZaneParser::FuncCallContext * /*ctx*/) override { }
-
-  virtual void enterConstructorCall(ZaneParser::ConstructorCallContext * /*ctx*/) override { }
-  virtual void exitConstructorCall(ZaneParser::ConstructorCallContext * /*ctx*/) override { }
-
-  virtual void enterCallSuffix(ZaneParser::CallSuffixContext * /*ctx*/) override { }
-  virtual void exitCallSuffix(ZaneParser::CallSuffixContext * /*ctx*/) override { }
+  virtual void enterTuple(ZaneParser::TupleContext * /*ctx*/) override { }
+  virtual void exitTuple(ZaneParser::TupleContext * /*ctx*/) override { }
 
   virtual void enterVarDef(ZaneParser::VarDefContext * /*ctx*/) override { }
   virtual void exitVarDef(ZaneParser::VarDefContext * /*ctx*/) override { }

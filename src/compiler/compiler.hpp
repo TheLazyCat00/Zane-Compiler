@@ -65,7 +65,6 @@ private:
 	bool isCacheValid(const fs::path& packageDir) {
 		#ifdef DEBUG
 			return false;
-			std::cout << "hi";
 		#endif
 
 		const fs::path symbolsDir(constants::SYMBOLS_DIR);

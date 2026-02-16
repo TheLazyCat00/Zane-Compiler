@@ -112,7 +112,13 @@ public:
 	}
 
 	std::any visitNameRule(ir::NameRule *node) override {
+		// Try mangled name first (for package-scoped variables)
 		auto it = namedValues.find(node->getMangledName());
+		
+		// If not found, try plain name (for local variables and parameters)
+		if (it == namedValues.end()) {
+			it = namedValues.find(node->name);
+		}
 
 		if (it == namedValues.end()) {
 			// Variable not defined - return nullptr
@@ -126,7 +132,7 @@ public:
 		return (llvm::Value*)builder.CreateLoad(
 			alloca->getAllocatedType(), 
 			alloca,
-			node->getMangledName() + ".load"
+			node->name + ".load"
 		);
 	}
 

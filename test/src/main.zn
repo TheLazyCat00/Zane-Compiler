@@ -1,7 +1,11 @@
 package test
 
-Void main() {
-	String hi = "test"
+String process(String input) {
+	String temp = "processed"
+	return input
+}
 
-	puts(hi)
+Void main() {
+	String result = process("data")
+	puts(result)
 }

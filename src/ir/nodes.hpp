@@ -227,7 +227,7 @@ struct VarDef : public IRNode {
 };
 
 struct FuncCall : public IRNode {
-	std::shared_ptr<IRNode> valueBeingCalledOn;
+	std::shared_ptr<IRNode> valueBeingCalledOn;  // Can be any value now, not just NameRule
 	std::vector<std::shared_ptr<IRNode>> arguments;
 	std::shared_ptr<Type> returnType;
 
@@ -240,16 +240,21 @@ struct FuncCall : public IRNode {
 	}
 
 	std::string getMangledName() const {
-		auto nameRule = std::dynamic_pointer_cast<NameRule>(valueBeingCalledOn);
-		
-		if (nameRule->globalScope.expired()) {
-			return nameRule->name;
+		// Try to cast to NameRule for mangling
+		if (auto nameRule = std::dynamic_pointer_cast<NameRule>(valueBeingCalledOn)) {
+			if (nameRule->globalScope.expired()) {
+				return nameRule->name;
+			}
+			
+			std::string retTypeName = returnType->getMangledName();
+			std::string argCount = std::to_string(arguments.size());
+			
+			return retTypeName + "|" + nameRule->getMangledName() + "|" + argCount;
 		}
 		
-		std::string retTypeName = returnType->getMangledName();
-		std::string argCount = std::to_string(arguments.size());
-		
-		return retTypeName + "|" + nameRule->getMangledName() + "|" + argCount;
+		// For non-NameRule values (like function pointers, lambdas, etc.), 
+		// we can't generate a mangled name, so return a placeholder
+		return "<dynamic_call>";
 	}
 
 	std::string printChildren(const std::string& prefix) const override {

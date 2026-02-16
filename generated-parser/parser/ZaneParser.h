@@ -22,10 +22,10 @@ public:
   enum {
     RuleGlobalScope = 0, RuleDeclaration = 1, RuleStatement = 2, RulePkgDef = 3, 
     RulePkgImport = 4, RuleType = 5, RuleNameRule = 6, RuleValue = 7, RulePrimary = 8, 
-    RuleCollection = 9, RuleFuncDef = 10, RuleParam = 11, RuleParams = 12, 
-    RuleFuncMod = 13, RuleStrict = 14, RulePure = 15, RuleFuncBody = 16, 
-    RuleArrowFunction = 17, RuleScope = 18, RuleFuncCall = 19, RuleConstructorCall = 20, 
-    RuleCallSuffix = 21, RuleVarDef = 22, RuleRetStat = 23
+    RuleAtom = 9, RulePostfix = 10, RuleCollection = 11, RuleFuncDef = 12, 
+    RuleParam = 13, RuleParams = 14, RuleFuncMod = 15, RuleStrict = 16, 
+    RulePure = 17, RuleFuncBody = 18, RuleArrowFunction = 19, RuleScope = 20, 
+    RuleTuple = 21, RuleVarDef = 22, RuleRetStat = 23
   };
 
   explicit ZaneParser(antlr4::TokenStream *input);
@@ -54,6 +54,8 @@ public:
   class NameRuleContext;
   class ValueContext;
   class PrimaryContext;
+  class AtomContext;
+  class PostfixContext;
   class CollectionContext;
   class FuncDefContext;
   class ParamContext;
@@ -64,9 +66,7 @@ public:
   class FuncBodyContext;
   class ArrowFunctionContext;
   class ScopeContext;
-  class FuncCallContext;
-  class ConstructorCallContext;
-  class CallSuffixContext;
+  class TupleContext;
   class VarDefContext;
   class RetStatContext; 
 
@@ -110,8 +110,8 @@ public:
   public:
     StatementContext(antlr4::ParserRuleContext *parent, size_t invokingState);
     virtual size_t getRuleIndex() const override;
-    FuncCallContext *funcCall();
-    ConstructorCallContext *constructorCall();
+    ValueContext *value();
+    TupleContext *tuple();
     VarDefContext *varDef();
     RetStatContext *retStat();
 
@@ -194,51 +194,62 @@ public:
   class  ValueContext : public antlr4::ParserRuleContext {
   public:
     ValueContext(antlr4::ParserRuleContext *parent, size_t invokingState);
-   
-    ValueContext() = default;
-    void copyFrom(ValueContext *context);
-    using antlr4::ParserRuleContext::copyFrom;
-
     virtual size_t getRuleIndex() const override;
+    std::vector<PrimaryContext *> primary();
+    PrimaryContext* primary(size_t i);
+    std::vector<antlr4::tree::TerminalNode *> OPERATOR();
+    antlr4::tree::TerminalNode* OPERATOR(size_t i);
 
+    virtual void enterRule(antlr4::tree::ParseTreeListener *listener) override;
+    virtual void exitRule(antlr4::tree::ParseTreeListener *listener) override;
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
    
-  };
-
-  class  AtomContext : public ValueContext {
-  public:
-    AtomContext(ValueContext *ctx);
-
-    PrimaryContext *primary();
-    virtual void enterRule(antlr4::tree::ParseTreeListener *listener) override;
-    virtual void exitRule(antlr4::tree::ParseTreeListener *listener) override;
-
-    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
-  };
-
-  class  OperationContext : public ValueContext {
-  public:
-    OperationContext(ValueContext *ctx);
-
-    ZaneParser::ValueContext *left = nullptr;
-    antlr4::Token *operator_ = nullptr;
-    ZaneParser::ValueContext *right = nullptr;
-    std::vector<ValueContext *> value();
-    ValueContext* value(size_t i);
-    antlr4::tree::TerminalNode *OPERATOR();
-    virtual void enterRule(antlr4::tree::ParseTreeListener *listener) override;
-    virtual void exitRule(antlr4::tree::ParseTreeListener *listener) override;
-
-    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
   };
 
   ValueContext* value();
-  ValueContext* value(int precedence);
+
   class  PrimaryContext : public antlr4::ParserRuleContext {
   public:
     PrimaryContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    virtual size_t getRuleIndex() const override;
+    AtomContext *atom();
+    std::vector<PostfixContext *> postfix();
+    PostfixContext* postfix(size_t i);
+
+    virtual void enterRule(antlr4::tree::ParseTreeListener *listener) override;
+    virtual void exitRule(antlr4::tree::ParseTreeListener *listener) override;
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
    
-    PrimaryContext() = default;
-    void copyFrom(PrimaryContext *context);
+  };
+
+  PrimaryContext* primary();
+
+  class  AtomContext : public antlr4::ParserRuleContext {
+  public:
+    AtomContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    virtual size_t getRuleIndex() const override;
+    antlr4::tree::TerminalNode *STRING();
+    antlr4::tree::TerminalNode *NUMBER();
+    NameRuleContext *nameRule();
+    TupleContext *tuple();
+
+    virtual void enterRule(antlr4::tree::ParseTreeListener *listener) override;
+    virtual void exitRule(antlr4::tree::ParseTreeListener *listener) override;
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+   
+  };
+
+  AtomContext* atom();
+
+  class  PostfixContext : public antlr4::ParserRuleContext {
+  public:
+    PostfixContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+   
+    PostfixContext() = default;
+    void copyFrom(PostfixContext *context);
     using antlr4::ParserRuleContext::copyFrom;
 
     virtual size_t getRuleIndex() const override;
@@ -246,59 +257,10 @@ public:
    
   };
 
-  class  StrContext : public PrimaryContext {
+  class  PropertyAccessContext : public PostfixContext {
   public:
-    StrContext(PrimaryContext *ctx);
+    PropertyAccessContext(PostfixContext *ctx);
 
-    antlr4::tree::TerminalNode *STRING();
-    virtual void enterRule(antlr4::tree::ParseTreeListener *listener) override;
-    virtual void exitRule(antlr4::tree::ParseTreeListener *listener) override;
-
-    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
-  };
-
-  class  CallContext : public PrimaryContext {
-  public:
-    CallContext(PrimaryContext *ctx);
-
-    ZaneParser::PrimaryContext *obj = nullptr;
-    CallSuffixContext *callSuffix();
-    PrimaryContext *primary();
-    virtual void enterRule(antlr4::tree::ParseTreeListener *listener) override;
-    virtual void exitRule(antlr4::tree::ParseTreeListener *listener) override;
-
-    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
-  };
-
-  class  NumContext : public PrimaryContext {
-  public:
-    NumContext(PrimaryContext *ctx);
-
-    antlr4::tree::TerminalNode *NUMBER();
-    virtual void enterRule(antlr4::tree::ParseTreeListener *listener) override;
-    virtual void exitRule(antlr4::tree::ParseTreeListener *listener) override;
-
-    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
-  };
-
-  class  NameContext : public PrimaryContext {
-  public:
-    NameContext(PrimaryContext *ctx);
-
-    NameRuleContext *nameRule();
-    virtual void enterRule(antlr4::tree::ParseTreeListener *listener) override;
-    virtual void exitRule(antlr4::tree::ParseTreeListener *listener) override;
-
-    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
-  };
-
-  class  PropertyAccessContext : public PrimaryContext {
-  public:
-    PropertyAccessContext(PrimaryContext *ctx);
-
-    ZaneParser::PrimaryContext *obj = nullptr;
-    antlr4::Token *member = nullptr;
-    PrimaryContext *primary();
     antlr4::tree::TerminalNode *IDENTIFIER();
     virtual void enterRule(antlr4::tree::ParseTreeListener *listener) override;
     virtual void exitRule(antlr4::tree::ParseTreeListener *listener) override;
@@ -306,19 +268,30 @@ public:
     virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
   };
 
-  class  ConsContext : public PrimaryContext {
+  class  FuncCallContext : public PostfixContext {
   public:
-    ConsContext(PrimaryContext *ctx);
+    FuncCallContext(PostfixContext *ctx);
 
-    ConstructorCallContext *constructorCall();
+    CollectionContext *collection();
     virtual void enterRule(antlr4::tree::ParseTreeListener *listener) override;
     virtual void exitRule(antlr4::tree::ParseTreeListener *listener) override;
 
     virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
   };
 
-  PrimaryContext* primary();
-  PrimaryContext* primary(int precedence);
+  class  CallWithValueContext : public PostfixContext {
+  public:
+    CallWithValueContext(PostfixContext *ctx);
+
+    ValueContext *value();
+    virtual void enterRule(antlr4::tree::ParseTreeListener *listener) override;
+    virtual void exitRule(antlr4::tree::ParseTreeListener *listener) override;
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+  };
+
+  PostfixContext* postfix();
+
   class  CollectionContext : public antlr4::ParserRuleContext {
   public:
     CollectionContext(antlr4::ParserRuleContext *parent, size_t invokingState);
@@ -480,25 +453,9 @@ public:
 
   ScopeContext* scope();
 
-  class  FuncCallContext : public antlr4::ParserRuleContext {
+  class  TupleContext : public antlr4::ParserRuleContext {
   public:
-    FuncCallContext(antlr4::ParserRuleContext *parent, size_t invokingState);
-    virtual size_t getRuleIndex() const override;
-    PrimaryContext *primary();
-    CallSuffixContext *callSuffix();
-
-    virtual void enterRule(antlr4::tree::ParseTreeListener *listener) override;
-    virtual void exitRule(antlr4::tree::ParseTreeListener *listener) override;
-
-    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
-   
-  };
-
-  FuncCallContext* funcCall();
-
-  class  ConstructorCallContext : public antlr4::ParserRuleContext {
-  public:
-    ConstructorCallContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    TupleContext(antlr4::ParserRuleContext *parent, size_t invokingState);
     virtual size_t getRuleIndex() const override;
     CollectionContext *collection();
 
@@ -509,23 +466,7 @@ public:
    
   };
 
-  ConstructorCallContext* constructorCall();
-
-  class  CallSuffixContext : public antlr4::ParserRuleContext {
-  public:
-    CallSuffixContext(antlr4::ParserRuleContext *parent, size_t invokingState);
-    virtual size_t getRuleIndex() const override;
-    CollectionContext *collection();
-    ValueContext *value();
-
-    virtual void enterRule(antlr4::tree::ParseTreeListener *listener) override;
-    virtual void exitRule(antlr4::tree::ParseTreeListener *listener) override;
-
-    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
-   
-  };
-
-  CallSuffixContext* callSuffix();
+  TupleContext* tuple();
 
   class  VarDefContext : public antlr4::ParserRuleContext {
   public:
@@ -560,11 +501,6 @@ public:
 
   RetStatContext* retStat();
 
-
-  bool sempred(antlr4::RuleContext *_localctx, size_t ruleIndex, size_t predicateIndex) override;
-
-  bool valueSempred(ValueContext *_localctx, size_t predicateIndex);
-  bool primarySempred(PrimaryContext *_localctx, size_t predicateIndex);
 
   // By default the static state used to implement the parser is lazily initialized during the first
   // call to the constructor. You can call this function if you wish to initialize the static state

@@ -34,21 +34,17 @@ public:
 
     virtual std::any visitNameRule(ZaneParser::NameRuleContext *context) = 0;
 
+    virtual std::any visitValue(ZaneParser::ValueContext *context) = 0;
+
+    virtual std::any visitPrimary(ZaneParser::PrimaryContext *context) = 0;
+
     virtual std::any visitAtom(ZaneParser::AtomContext *context) = 0;
-
-    virtual std::any visitOperation(ZaneParser::OperationContext *context) = 0;
-
-    virtual std::any visitStr(ZaneParser::StrContext *context) = 0;
-
-    virtual std::any visitCall(ZaneParser::CallContext *context) = 0;
-
-    virtual std::any visitNum(ZaneParser::NumContext *context) = 0;
-
-    virtual std::any visitName(ZaneParser::NameContext *context) = 0;
 
     virtual std::any visitPropertyAccess(ZaneParser::PropertyAccessContext *context) = 0;
 
-    virtual std::any visitCons(ZaneParser::ConsContext *context) = 0;
+    virtual std::any visitFuncCall(ZaneParser::FuncCallContext *context) = 0;
+
+    virtual std::any visitCallWithValue(ZaneParser::CallWithValueContext *context) = 0;
 
     virtual std::any visitCollection(ZaneParser::CollectionContext *context) = 0;
 
@@ -70,11 +66,7 @@ public:
 
     virtual std::any visitScope(ZaneParser::ScopeContext *context) = 0;
 
-    virtual std::any visitFuncCall(ZaneParser::FuncCallContext *context) = 0;
-
-    virtual std::any visitConstructorCall(ZaneParser::ConstructorCallContext *context) = 0;
-
-    virtual std::any visitCallSuffix(ZaneParser::CallSuffixContext *context) = 0;
+    virtual std::any visitTuple(ZaneParser::TupleContext *context) = 0;
 
     virtual std::any visitVarDef(ZaneParser::VarDefContext *context) = 0;
 
