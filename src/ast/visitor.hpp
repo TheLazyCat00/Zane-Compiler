@@ -111,14 +111,10 @@ public:
 		funcDef->returnType = get<ir::Type>(ctx->type());
 
 		std::string funcMod = "open";
-		if (ctx->funcMod()){
+		if (ctx->funcMod()) {
 			funcMod = ctx->funcMod()->getText();
 		}
-
 		funcDef->mod = ir::FuncMod(funcMod);
-		if (ctx->funcMod()) {
-			funcDef->mod = ir::FuncMod(ctx->funcMod()->getText());
-		}
 
 		if (ctx->params()) {
 			for (auto paramCtx : ctx->params()->param()) {
@@ -129,16 +125,17 @@ public:
 			}
 		}
 
+		std::string key = funcDef->getMangledName();  // retType|pkg$name|argCount
+
 		if (auto global = std::dynamic_pointer_cast<ir::GlobalScope>(currentScope)) {
-			global->functionDefs[funcDef->nameRule->getMangledName()] = funcDef;
+			global->functionDefs[key] = funcDef;
 			global->body.push_back(funcDef);
 		} else if (auto scope = std::dynamic_pointer_cast<ir::Scope>(currentScope)) {
-			scope->functionDefs[funcDef->nameRule->getMangledName()] = funcDef;
+			scope->functionDefs[key] = funcDef;
 			scope->statements.push_back(funcDef);
 		}
 
 		visitChildren(ctx);
-		
 		return std::static_pointer_cast<ir::IRNode>(funcDef);
 	}
 
@@ -166,44 +163,39 @@ public:
 
 	// Visit primary: atom postfix*
 	std::any visitPrimary(ZaneParser::PrimaryContext *ctx) override {
-		// Start with the atom
 		auto result = visit(ctx->atom());
-		if (!result.has_value()) {
-			return {};
-		}
-		
-		std::shared_ptr<ir::IRNode> current = toIRNode<ir::IRNode>(result);
-		if (!current) {
-			return {};
-		}
+		if (!result.has_value()) return {};
 
-		// Apply each postfix in sequence
+		std::shared_ptr<ir::IRNode> current = toIRNode<ir::IRNode>(result);
+		if (!current) return {};
+
 		for (auto postfixCtx : ctx->postfix()) {
 			if (auto funcCallCtx = dynamic_cast<ZaneParser::FuncCallContext*>(postfixCtx)) {
-				// '(' collection ')' - function call
 				auto funcCall = std::make_shared<ir::FuncCall>();
-				funcCall->valueBeingCalledOn = current;
-				
-				funcCall->returnType = currentExpectedType();
-				if (!funcCall->returnType) {
-					funcCall->returnType = makeVoidType();
-				}
 
+				// Collect arguments first — we need the count for mangling
 				auto collectionCtx = funcCallCtx->collection();
 				if (collectionCtx) {
 					for (auto valueCtx : collectionCtx->value()) {
 						funcCall->arguments.push_back(get<ir::IRNode>(valueCtx));
 					}
 				}
-				
+
+				// If callee is a NameRule, resolve the overload now
+				if (auto nameRule = std::dynamic_pointer_cast<ir::NameRule>(current)) {
+					auto expectedType = currentExpectedType();
+					std::string retTypeName = expectedType 
+						? expectedType->getMangledName() 
+						: makeVoidType()->nameRule->getMangledName();
+					std::string argCount = std::to_string(funcCall->arguments.size());
+					nameRule->resolvedName = retTypeName + "|" + nameRule->getMangledName() + "|" + argCount;
+				}
+
+				funcCall->callee = current;
 				current = funcCall;
 			} else if (auto propAccessCtx = dynamic_cast<ZaneParser::PropertyAccessContext*>(postfixCtx)) {
-				// '.' IDENTIFIER - property access
-				// TODO: Implement property access IR node
 				std::cerr << "Warning: Property access not yet implemented\n";
 			} else if (auto callWithValueCtx = dynamic_cast<ZaneParser::CallWithValueContext*>(postfixCtx)) {
-				// ':' value - call with value (special syntax)
-				// TODO: Implement call with value
 				std::cerr << "Warning: Call with value syntax not yet implemented\n";
 			}
 		}
@@ -262,10 +254,7 @@ public:
 	}
 
 	void processStatement(ZaneParser::StatementContext *statement, std::shared_ptr<ir::Scope> scope) {
-		// In the new grammar: statement: value | tuple | varDef | retStat
-		
 		if (auto valueCtx = statement->value()) {
-			// Value statements (includes function calls as expressions)
 			pushExpectedType(makeVoidType());
 			auto irNode = get<ir::IRNode>(valueCtx);
 			popExpectedType();
@@ -276,7 +265,6 @@ public:
 		}
 
 		if (auto tupleCtx = statement->tuple()) {
-			// TODO: Implement tuple handling
 			std::cerr << "Warning: Tuple statements not yet implemented\n";
 			return;
 		}

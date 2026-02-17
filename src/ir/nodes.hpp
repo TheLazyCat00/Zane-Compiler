@@ -33,13 +33,12 @@ struct GlobalScope : public IRNode {
 struct NameRule : public IRNode {
 	std::string name;
 	std::weak_ptr<GlobalScope> globalScope;
+	std::optional<std::string> resolvedName;  // Set when call context is known
 
 	NameRule() {}
 
-	NameRule(std::string name, std::shared_ptr<GlobalScope> globalScope) {
-		this->name = name;
-		this->globalScope = globalScope;
-	}
+	NameRule(std::string name, std::shared_ptr<GlobalScope> globalScope)
+		: name(name), globalScope(globalScope) {}
 
 	std::any accept(IRVisitor* visitor) override {
 		return visitor->visitNameRule(this);
@@ -47,10 +46,13 @@ struct NameRule : public IRNode {
 
 	std::string getMangledName() const {
 		auto scope = globalScope.lock();
-		if (!scope) {
-			return name;
-		}
+		if (!scope) return name;
 		return scope->pkgName + "$" + name;
+	}
+
+	// Returns the fully resolved name if available, otherwise the basic mangled name
+	std::string getEffectiveName() const {
+		return resolvedName.value_or(getMangledName());
 	}
 
 	std::string getNodeName() const override {
@@ -63,7 +65,7 @@ struct NameRule : public IRNode {
 		std::string pkgName = scope ? scope->pkgName : "";
 		ar(name, pkgName);
 	}
-};
+};;
 
 struct Type : public IRNode {
 	std::shared_ptr<NameRule> nameRule;
@@ -191,8 +193,7 @@ struct FuncDef : public IRNode {
 	std::string getMangledName() const {
 		std::string retTypeName = returnType->getMangledName();
 		std::string argCount = std::to_string(parameters.size());
-
-		return retTypeName + "|" +  nameRule->getMangledName() + "|" + argCount;
+		return retTypeName + "|" + nameRule->getMangledName() + "|" + argCount;
 	}
 
 	std::string getNodeName() const override {
@@ -200,9 +201,7 @@ struct FuncDef : public IRNode {
 	}
 
 	std::string printChildren(const std::string& prefix) const override {
-		if (scope) {
-			return scope->printTree(prefix, true);
-		}
+		if (scope) return scope->printTree(prefix, true);
 		return "";
 	}
 
@@ -210,7 +209,7 @@ struct FuncDef : public IRNode {
 	void serialize(Archive& ar) {
 		ar(nameRule, returnType, parameters, mod);
 	}
-};
+};;
 
 struct VarDef : public IRNode {
 	std::shared_ptr<NameRule> nameRule;
@@ -227,45 +226,24 @@ struct VarDef : public IRNode {
 };
 
 struct FuncCall : public IRNode {
-	std::shared_ptr<IRNode> valueBeingCalledOn;  // Can be any value now, not just NameRule
+	std::shared_ptr<IRNode> callee;  // Any value
 	std::vector<std::shared_ptr<IRNode>> arguments;
-	std::shared_ptr<Type> returnType;
 
 	std::any accept(IRVisitor* visitor) override {
 		return visitor->visitFuncCall(this);
 	}
 
 	std::string getNodeName() const override {
-		return "FunctionCall";
-	}
-
-	std::string getMangledName() const {
-		// Try to cast to NameRule for mangling
-		if (auto nameRule = std::dynamic_pointer_cast<NameRule>(valueBeingCalledOn)) {
-			if (nameRule->globalScope.expired()) {
-				return nameRule->name;
-			}
-			
-			std::string retTypeName = returnType->getMangledName();
-			std::string argCount = std::to_string(arguments.size());
-			
-			return retTypeName + "|" + nameRule->getMangledName() + "|" + argCount;
-		}
-		
-		// For non-NameRule values (like function pointers, lambdas, etc.), 
-		// we can't generate a mangled name, so return a placeholder
-		return "<dynamic_call>";
+		return "FuncCall";
 	}
 
 	std::string printChildren(const std::string& prefix) const override {
 		std::string result;
-		bool isValueLast = arguments.empty();
-		if (valueBeingCalledOn) {
-			result += valueBeingCalledOn->printTree(prefix, isValueLast);
+		bool isCalleeLast = arguments.empty();
+		if (callee) {
+			result += callee->printTree(prefix, isCalleeLast);
 		}
-
 		result += printNodeVector(arguments, prefix);
-
 		return result;
 	}
 };

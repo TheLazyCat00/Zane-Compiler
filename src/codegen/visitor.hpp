@@ -4,7 +4,6 @@
 #include "ir/node.hpp"
 #include "ir/nodes.hpp"
 
-#include <iostream>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/IRBuilder.h>
 #include <any>
@@ -111,44 +110,60 @@ public:
 		return oss.str();
 	}
 
-	std::any visitNameRule(ir::NameRule *node) override {
-		// Try mangled name first (for package-scoped variables)
+	std::any visitNameRule(ir::NameRule* node) override {
+		// 1. Local variables
 		auto it = namedValues.find(node->getMangledName());
-		
-		// If not found, try plain name (for local variables and parameters)
 		if (it == namedValues.end()) {
 			it = namedValues.find(node->name);
 		}
 
-		if (it == namedValues.end()) {
-			// Variable not defined - return nullptr
-			return (llvm::Value*)nullptr;
+		if (it != namedValues.end()) {
+			llvm::AllocaInst* alloca = it->second;
+			return (llvm::Value*)builder.CreateLoad(
+				alloca->getAllocatedType(),
+				alloca,
+				node->name + ".load"
+			);
 		}
 
-		llvm::AllocaInst* alloca = it->second;
+		// 2. Module functions — try resolved name (with overload), then plain mangled
+		if (llvm::Function* func = module.getFunction(node->getEffectiveName())) {
+			return (llvm::Value*)func;
+		}
+		if (llvm::Function* func = module.getFunction(node->getMangledName())) {
+			return (llvm::Value*)func;
+		}
 
-		// Generate a Load instruction to get the current value
-		// Note: In modern LLVM, you must provide the type being loaded
-		return (llvm::Value*)builder.CreateLoad(
-			alloca->getAllocatedType(), 
-			alloca,
-			node->name + ".load"
-		);
+		return (llvm::Value*)nullptr;
 	}
 
 	std::any visitFuncCall(ir::FuncCall* node) override {
-		std::string mangledName = node->getMangledName();
-		llvm::Function* callee = module.getFunction(mangledName);
-		if (!callee) {
-			return {};
-		}
-
+		// Evaluate arguments
 		std::vector<llvm::Value*> args;
 		for (const auto& arg : node->arguments) {
-			args.push_back(get<llvm::Value*>(arg.get()));
+			auto val = get<llvm::Value*>(arg.get());
+			if (!val) return {};
+			args.push_back(val);
 		}
 
-		return (llvm::Value*)builder.CreateCall(callee, args);
+		// Evaluate callee as a value
+		llvm::Value* calleeValue = get<llvm::Value*>(node->callee.get());
+		if (!calleeValue) return {};
+
+		// Direct call — callee resolved to a Function*
+		if (auto* func = llvm::dyn_cast<llvm::Function>(calleeValue)) {
+			return (llvm::Value*)builder.CreateCall(func, args);
+		}
+
+		// Indirect call — function pointer loaded from a variable, etc.
+		std::vector<llvm::Type*> argTypes;
+		for (auto* arg : args) {
+			argTypes.push_back(arg->getType());
+		}
+		llvm::FunctionType* funcType = llvm::FunctionType::get(
+			llvm::Type::getVoidTy(context), argTypes, false
+		);
+		return (llvm::Value*)builder.CreateCall(funcType, calleeValue, args);
 	}
 
 	std::any visitStringLiteral(ir::StringLiteral* node) override {
