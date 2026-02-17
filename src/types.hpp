@@ -1,7 +1,7 @@
 #pragma once
 
 #include "ir/nodes.hpp"
-#include <llvm-18/llvm/IR/Module.h>
+#include <llvm-21/llvm/IR/Module.h>
 #include <map>
 #include <string>
 #include <filesystem>

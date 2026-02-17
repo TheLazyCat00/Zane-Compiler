@@ -2,7 +2,7 @@
 
 #include <string>
 #include <filesystem>
-#include <llvm-18/llvm/TargetParser/Host.h>
+#include <llvm-21/llvm/TargetParser/Host.h>
 
 namespace fs = std::filesystem;
 

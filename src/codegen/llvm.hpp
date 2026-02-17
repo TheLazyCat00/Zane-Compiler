@@ -3,7 +3,7 @@
 #include "ir/nodes.hpp"
 #include "codegen/visitor.hpp"
 
-#include <llvm-18/llvm/TargetParser/Host.h>
+#include <llvm/TargetParser/Host.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/LegacyPassManager.h>
@@ -57,6 +57,9 @@ public:
 		llvm::ExitOnError ExitOnErr;
 		auto JIT = ExitOnErr(llvm::orc::LLJITBuilder().create());
 
+		// Must set target triple before handing module to JIT
+		module->setTargetTriple(llvm::Triple(llvm::sys::getDefaultTargetTriple()));
+
 		auto TSM = llvm::orc::ThreadSafeModule(
 			llvm::CloneModule(*module),
 			std::make_unique<llvm::LLVMContext>()
@@ -90,7 +93,7 @@ public:
 		llvm::InitializeNativeTargetAsmPrinter();
 
 		auto targetTriple = llvm::sys::getDefaultTargetTriple();
-		module->setTargetTriple(targetTriple);
+		module->setTargetTriple(llvm::Triple(targetTriple));
 
 		std::string error;
 		auto target = llvm::TargetRegistry::lookupTarget(targetTriple, error);
@@ -102,8 +105,9 @@ public:
 		auto CPU = "generic";
 		auto features = "";
 		llvm::TargetOptions opt;
+		llvm::Triple triple(targetTriple);
 		auto targetMachine = target->createTargetMachine(
-			targetTriple, CPU, features, opt, llvm::Reloc::PIC_);
+			triple, CPU, features, opt, llvm::Reloc::PIC_);
 
 		module->setDataLayout(targetMachine->createDataLayout());
 

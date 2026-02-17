@@ -167,7 +167,7 @@ public:
 	}
 
 	std::any visitStringLiteral(ir::StringLiteral* node) override {
-		return (llvm::Value*)builder.CreateGlobalStringPtr(node->value);
+		return (llvm::Value*)builder.CreateGlobalString(node->value);
 	}
 
 	std::any visitReturnStatement(ir::ReturnStatement *node) override {

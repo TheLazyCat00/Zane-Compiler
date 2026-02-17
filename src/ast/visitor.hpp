@@ -1,5 +1,6 @@
 #pragma once
 
+#include "ir/node.hpp"
 #include "ir/nodes.hpp"
 #include "types.hpp"
 
@@ -264,22 +265,8 @@ public:
 			return;
 		}
 
-		if (auto tupleCtx = statement->tuple()) {
-			std::cerr << "Warning: Tuple statements not yet implemented\n";
-			return;
-		}
-
-		if (auto varDef = statement->varDef()) {
-			auto irNode = get<ir::VarDef>(varDef);
-			scope->statements.push_back(irNode);
-			return;
-		}
-
-		if (auto retStat = statement->retStat()) {
-			auto irNode = get<ir::ReturnStatement>(retStat);
-			scope->statements.push_back(irNode);
-			return;
-		}
+		auto irNode = toIRNode<ir::IRNode>(visitChildren(statement));
+		scope->statements.push_back(irNode);
 	}
 
 	std::any visitScope(ZaneParser::ScopeContext *ctx) override {

@@ -12,7 +12,7 @@
 #include <cereal/types/string.hpp>
 #include <cereal/types/memory.hpp>
 #include <cereal/types/unordered_map.hpp>
-#include <llvm-18/llvm/IR/Module.h>
+#include <llvm-21/llvm/IR/Module.h>
 #include <llvm/Linker/Linker.h>
 #include <map>
 #include <memory>
@@ -134,7 +134,7 @@ private:
 	}
 
 	void compilePackage(const std::string& pkgName, const std::vector<fs::path>& files, const std::string& packageDir) {
-		Visitor visitor;
+		Visitor visitor(std::make_shared<Packages>(packages));
 
 		for (const auto& path : files) {
 			std::ifstream stream(path);
@@ -287,7 +287,7 @@ public:
 			// Generate object file path
 			fs::path objectFile = packagePath / (pkgName + ".o");
 
-			module->setTargetTriple(target.triple);
+			module->setTargetTriple(llvm::Triple(target.triple));
 			module->setDataLayout(targetMachine->createDataLayout());
 
 			std::error_code EC;
@@ -407,7 +407,7 @@ public:
 		llvm::InitializeNativeTargetAsmPrinter();
 
 		auto targetTriple = llvm::sys::getDefaultTargetTriple();
-		linkedModule.setTargetTriple(targetTriple);
+		linkedModule.setTargetTriple(llvm::Triple(targetTriple));
 
 		std::string error;
 		auto target = llvm::TargetRegistry::lookupTarget(targetTriple, error);

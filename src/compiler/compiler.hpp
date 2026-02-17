@@ -13,7 +13,7 @@
 #include <cereal/types/string.hpp>
 #include <cereal/types/memory.hpp>
 #include <cereal/types/unordered_map.hpp>
-#include <llvm-18/llvm/IR/Module.h>
+#include <llvm/IR/Module.h>
 #include <llvm/Linker/Linker.h>
 #include <map>
 #include <memory>
@@ -141,7 +141,7 @@ private:
 		llvm::Type* i8Ptr = llvm::PointerType::get(context, 0);
 		llvm::FunctionType* mainType = llvm::FunctionType::get(
 			builder.getInt32Ty(), 
-			{builder.getInt32Ty(), llvm::PointerType::get(i8Ptr, 0)}, 
+			{builder.getInt32Ty(), llvm::PointerType::get(context, 0)}, 
 			false);
 		llvm::Function* mainFunc = llvm::Function::Create(
 			mainType, llvm::Function::ExternalLinkage, "main", wrapperModule.get());
@@ -273,9 +273,10 @@ public:
 		auto CPU = "generic";
 		auto features = "";
 		llvm::TargetOptions opt;
+		llvm::Triple triple(target.triple);
 		std::unique_ptr<llvm::TargetMachine> targetMachine(
 			llvmTarget->createTargetMachine(
-				target.triple, CPU, features, opt, llvm::Reloc::PIC_));
+				triple, CPU, features, opt, llvm::Reloc::PIC_));
 
 		for (auto& [pkgName, module] : modules) {
 			fs::path packagePath = cacheDir;
@@ -286,7 +287,7 @@ public:
 
 			fs::path objectFile = packagePath / (pkgName + ".o");
 
-			module->setTargetTriple(target.triple);
+			module->setTargetTriple(llvm::Triple(target.triple));
 			module->setDataLayout(targetMachine->createDataLayout());
 
 			std::error_code EC;
@@ -417,7 +418,7 @@ public:
 		llvm::InitializeNativeTargetAsmPrinter();
 
 		auto targetTriple = llvm::sys::getDefaultTargetTriple();
-		linkedModule.setTargetTriple(targetTriple);
+		linkedModule.setTargetTriple(llvm::Triple(targetTriple));
 
 		std::string error;
 		auto target = llvm::TargetRegistry::lookupTarget(targetTriple, error);
@@ -429,9 +430,10 @@ public:
 		auto CPU = "generic";
 		auto features = "";
 		llvm::TargetOptions opt;
+		llvm::Triple triple(targetTriple);
 		std::unique_ptr<llvm::TargetMachine> targetMachine(
 			target->createTargetMachine(
-				targetTriple, CPU, features, opt, llvm::Reloc::PIC_));
+				triple, CPU, features, opt, llvm::Reloc::PIC_));
 
 		linkedModule.setDataLayout(targetMachine->createDataLayout());
 

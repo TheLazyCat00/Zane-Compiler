@@ -13,7 +13,8 @@
 				"CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
 				"CMAKE_C_COMPILER": "cl",
 				"CMAKE_CXX_COMPILER": "cl",
-				"CMAKE_CXX_STANDARD": "23"
+				"CMAKE_CXX_STANDARD": "23",
+				"CMAKE_CXX_STANDARD_REQUIRED": "ON"
 			}
 		},
 		{
@@ -25,11 +26,17 @@
 				"VCPKG_TARGET_TRIPLET": "x64-linux",
 				"CMAKE_TOOLCHAIN_FILE": "~/vcpkg/scripts/buildsystems/vcpkg.cmake",
 				"CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
-				"CMAKE_C_COMPILER": "clang",
-				"CMAKE_CXX_COMPILER": "clang++",
 				"CMAKE_CXX_STANDARD": "23",
-				"LLVM_DIR": "/usr/lib/llvm-18/lib/cmake/llvm",
+				"CMAKE_CXX_STANDARD_REQUIRED": "ON",
+				"CMAKE_CXX_EXTENSIONS": "OFF",
+
+				"LLVM_DIR": "/usr/lib/llvm-21/lib/cmake/llvm",
+				"CMAKE_C_COMPILER": "/usr/lib/llvm-21/bin/clang",
+				"CMAKE_CXX_COMPILER": "/usr/lib/llvm-21/bin/clang++",
+
 				"CMAKE_BUILD_TYPE": "Debug",
+				"CMAKE_C_COMPILER_LAUNCHER": "ccache",
+				"CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
 
 				"CMAKE_C_FLAGS_DEBUG": "-fsanitize=address,undefined -fstack-protector-strong -g -O1",
 				"CMAKE_CXX_FLAGS_DEBUG": "-fsanitize=address,undefined -fstack-protector-strong -g -O1"

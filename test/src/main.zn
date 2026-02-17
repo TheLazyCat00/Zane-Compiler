@@ -6,6 +6,6 @@ String process(String input) {
 }
 
 Void main() {
-	String result = process("data")
+	String result = process("hi")
 	puts(result)
 }
