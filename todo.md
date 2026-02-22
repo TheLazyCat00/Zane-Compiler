@@ -1,3 +1,3 @@
 # todo
-- returns statement
+- implement function types
 - implement basic types (primitives)

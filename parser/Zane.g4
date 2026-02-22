@@ -50,8 +50,14 @@ pkgImport
 // Types
 // -----------------------------------------------------
 
-// Allows: List<Int>
-// Allows: sys$collections$Map<String, Int>
+functionTypeParams
+	: type (',' type)*
+	;
+
+functionType
+	:'(' functionTypeParams? ')' '->' returnType=type
+	;
+
 type
 	: nameRule ('<' type (',' type)* '>')?
 	;
