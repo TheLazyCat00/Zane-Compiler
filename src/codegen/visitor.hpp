@@ -66,7 +66,7 @@ public:
 		namedValues.clear();
 		unsigned idx = 0;
 		for (auto& arg : func->args()) {
-			std::string argName = node->parameters[idx]->name;
+			std::string argName = node->parameters[idx];
 			arg.setName(argName);
 
 			llvm::AllocaInst* alloca = builder.CreateAlloca(arg.getType(), nullptr, argName);
@@ -185,7 +185,6 @@ public:
 	}
 
 	std::any visitType(ir::Type* node) override { return {}; }
-	std::any visitParameter(ir::Parameter* node) override { return {}; }
 	std::any visitVarDef(ir::VarDef* node) override {
 		llvm::Type* type = typeMapper.toLLVMType(node->type->getMangledName());
 		if (!type) return {};
@@ -204,10 +203,10 @@ public:
 
 private:
 	void declareSignature(ir::FuncDef* node) {
-		llvm::Type* retType = typeMapper.toLLVMType(node->returnType->getMangledName());
+		llvm::Type* retType = typeMapper.toLLVMType(node->type->returnType->getMangledName());
 		std::vector<llvm::Type*> params;
-		for (auto& p : node->parameters) {
-			params.push_back(typeMapper.toLLVMType(p->type->getMangledName()));
+		for (auto& p : node->type->paramTypes) {
+			params.push_back(typeMapper.toLLVMType(p->getMangledName()));
 		}
 		llvm::FunctionType* ft = llvm::FunctionType::get(retType, params, false);
 		llvm::Function::Create(ft, llvm::Function::ExternalLinkage, node->getMangledName(), module);

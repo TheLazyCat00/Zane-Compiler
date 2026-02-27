@@ -2,7 +2,7 @@
 
 #include "ir/node.hpp"
 #include "ir/nodes.hpp"
-#include "types.hpp"
+#include "utils/aliases.hpp"
 
 #include <parser/ZaneBaseVisitor.h>
 #include <antlr4-runtime.h>
@@ -39,7 +39,7 @@ private:
 
 	std::shared_ptr<ir::Type> makeVoidType() {
 		auto voidType = std::make_shared<ir::Type>();
-		voidType->nameRule = std::make_shared<ir::NameRule>("Void", globalScope);
+		voidType->value = { std::make_shared<ir::NameRule>("Void", globalScope) };
 		return voidType;
 	}
 
@@ -97,7 +97,7 @@ public:
 
 	std::any visitType(ZaneParser::TypeContext *ctx) override {
 		auto type = std::make_shared<ir::Type>();
-		type->nameRule = get<ir::NameRule>(ctx->nameRule());
+		type->value = { get<ir::NameRule>(ctx->nameRule()) };
 		for (auto generic : ctx->type()) {
 			type->generics.push_back(get<ir::Type>(generic));
 		}
@@ -105,28 +105,51 @@ public:
 		return std::static_pointer_cast<ir::IRNode>(type);
 	}
 
-	std::any visitFuncDef(ZaneParser::FuncDefContext *ctx) override {
-		auto funcDef = std::make_shared<ir::FuncDef>();
-		funcDef->nameRule = std::make_shared<ir::NameRule>(ctx->name->getText(), globalScope);
-		funcDef->scope = get<ir::Scope>(ctx->funcBody()->scope());
-		funcDef->returnType = get<ir::Type>(ctx->type());
+	std::any visitFuncType(ZaneParser::FuncTypeContext *ctx) override {
+		auto funcType = std::make_shared<ir::FuncType>();
+		funcType->returnType = get<ir::Type>(ctx->returnType);
 
 		std::string funcMod = "open";
 		if (ctx->funcMod()) {
 			funcMod = ctx->funcMod()->getText();
 		}
-		funcDef->mod = ir::FuncMod(funcMod);
+		funcType->mod = ir::FuncMod(funcMod);
 
-		if (ctx->params()) {
-			for (auto paramCtx : ctx->params()->param()) {
-				auto p = std::make_shared<ir::Parameter>();
-				p->name = paramCtx->name->getText();
-				p->type = get<ir::Type>(paramCtx->type());
-				funcDef->parameters.push_back(p);
+		if (ctx->funcTypeParams()) {
+			for (auto paramCtx : ctx->funcTypeParams()->type()) {
+				auto paramType = get<ir::Type>(paramCtx);
+				funcType->paramTypes.push_back(paramType);
 			}
 		}
 
-		std::string key = funcDef->getMangledName();  // retType|pkg$name|argCount
+		return std::static_pointer_cast<ir::IRNode>(funcType);
+	}
+
+	std::any visitFuncDef(ZaneParser::FuncDefContext *ctx) override {
+		auto funcDef = std::make_shared<ir::FuncDef>();
+		funcDef->nameRule = std::make_shared<ir::NameRule>(ctx->name->getText(), globalScope);
+		funcDef->scope = get<ir::Scope>(ctx->funcBody()->scope());
+
+		funcDef->type = std::make_shared<ir::FuncType>();
+		auto type = funcDef->type;
+		type->returnType = get<ir::Type>(ctx->type());
+
+		std::string funcMod = "open";
+		if (ctx->funcMod()) {
+			funcMod = ctx->funcMod()->getText();
+		}
+		type->mod = ir::FuncMod(funcMod);
+
+		if (ctx->params()) {
+			for (auto paramCtx : ctx->params()->param()) {
+				auto name = paramCtx->name->getText();
+				auto paramType = get<ir::Type>(paramCtx->type());
+				funcDef->parameters.push_back(name);
+				type->paramTypes.push_back(paramType);
+			}
+		}
+
+		std::string key = funcDef->getMangledName();
 
 		if (auto global = std::dynamic_pointer_cast<ir::GlobalScope>(currentScope)) {
 			global->functionDefs[key] = funcDef;
@@ -187,7 +210,7 @@ public:
 					auto expectedType = currentExpectedType();
 					std::string retTypeName = expectedType 
 						? expectedType->getMangledName() 
-						: makeVoidType()->nameRule->getMangledName();
+						: makeVoidType()->getMangledName();
 					std::string argCount = std::to_string(funcCall->arguments.size());
 					nameRule->resolvedName = retTypeName + "|" + nameRule->getMangledName() + "|" + argCount;
 				}

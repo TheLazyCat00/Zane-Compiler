@@ -33,6 +33,12 @@ public:
   virtual void enterPkgImport(ZaneParser::PkgImportContext * /*ctx*/) override { }
   virtual void exitPkgImport(ZaneParser::PkgImportContext * /*ctx*/) override { }
 
+  virtual void enterFuncTypeParams(ZaneParser::FuncTypeParamsContext * /*ctx*/) override { }
+  virtual void exitFuncTypeParams(ZaneParser::FuncTypeParamsContext * /*ctx*/) override { }
+
+  virtual void enterFuncType(ZaneParser::FuncTypeContext * /*ctx*/) override { }
+  virtual void exitFuncType(ZaneParser::FuncTypeContext * /*ctx*/) override { }
+
   virtual void enterType(ZaneParser::TypeContext * /*ctx*/) override { }
   virtual void exitType(ZaneParser::TypeContext * /*ctx*/) override { }
 
@@ -89,6 +95,9 @@ public:
 
   virtual void enterTuple(ZaneParser::TupleContext * /*ctx*/) override { }
   virtual void exitTuple(ZaneParser::TupleContext * /*ctx*/) override { }
+
+  virtual void enterUnit(ZaneParser::UnitContext * /*ctx*/) override { }
+  virtual void exitUnit(ZaneParser::UnitContext * /*ctx*/) override { }
 
   virtual void enterVarDef(ZaneParser::VarDefContext * /*ctx*/) override { }
   virtual void exitVarDef(ZaneParser::VarDefContext * /*ctx*/) override { }

@@ -51,10 +51,14 @@ constexpr char SYMBOLS_DIR[] = ".cache/symbols";
 constexpr char SYMBOLS_NAME[] = "symbols.bin";
 
 inline fs::path getSymbolsPath(const fs::path& packageDir) {
-	const fs::path symbolsDir(constants::SYMBOLS_DIR);
-	const fs::path symbolsName(constants::SYMBOLS_NAME);
+	const fs::path symbolsDir(SYMBOLS_DIR);
+	const fs::path symbolsName(SYMBOLS_NAME);
 	return symbolsDir / packageDir / symbolsName;
 };
+
+inline std::string getMangledMain(const std::string& projectName) {
+	return projectName + "$main(Void)";
+}
 
 namespace targets {
 	struct Target {

@@ -30,6 +30,10 @@ public:
 
     virtual std::any visitPkgImport(ZaneParser::PkgImportContext *context) = 0;
 
+    virtual std::any visitFuncTypeParams(ZaneParser::FuncTypeParamsContext *context) = 0;
+
+    virtual std::any visitFuncType(ZaneParser::FuncTypeContext *context) = 0;
+
     virtual std::any visitType(ZaneParser::TypeContext *context) = 0;
 
     virtual std::any visitNameRule(ZaneParser::NameRuleContext *context) = 0;
@@ -67,6 +71,8 @@ public:
     virtual std::any visitScope(ZaneParser::ScopeContext *context) = 0;
 
     virtual std::any visitTuple(ZaneParser::TupleContext *context) = 0;
+
+    virtual std::any visitUnit(ZaneParser::UnitContext *context) = 0;
 
     virtual std::any visitVarDef(ZaneParser::VarDefContext *context) = 0;
 

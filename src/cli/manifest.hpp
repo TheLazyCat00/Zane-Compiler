@@ -1,6 +1,6 @@
 #pragma once
 
-#include "cli/constants.hpp"
+#include "globals/constants.hpp"
 #include "utils/utils.hpp"
 
 #include <iostream>

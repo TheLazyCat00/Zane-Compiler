@@ -1,7 +1,7 @@
 #pragma once
 
 #include "cli/manifest.hpp"
-#include "cli/constants.hpp"
+#include "globals/constants.hpp"
 #include "utils/utils.hpp"
 
 namespace templ {

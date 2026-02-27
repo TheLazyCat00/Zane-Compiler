@@ -7,17 +7,17 @@
 
 namespace ir {
 
-class IRNode;
-class FuncDef;
-class VarDef;
-class GlobalScope;
-class Scope;
-class FuncCall;
-class StringLiteral;
-class NameRule;
-class Type;
-class Parameter;
-class ReturnStatement;
+struct IRNode;
+struct FuncDef;
+struct VarDef;
+struct GlobalScope;
+struct Scope;
+struct FuncCall;
+struct StringLiteral;
+struct NameRule;
+struct FuncType;
+struct ReturnStatement;
+struct Type;
 
 class IRVisitor {
 public:
@@ -31,7 +31,7 @@ public:
 	virtual std::any visitStringLiteral(StringLiteral* node) { return {}; }
 	virtual std::any visitNameRule(NameRule* node) { return {}; }
 	virtual std::any visitType(Type* node) { return {}; }
-	virtual std::any visitParameter(Parameter* node) { return {}; }
+	virtual std::any visitFuncType(FuncType* node) { return {}; }
 	virtual std::any visitVarDef(VarDef* node) { return {}; }
 	virtual std::any visitReturnStatement(ReturnStatement* node) { return {}; }
 };

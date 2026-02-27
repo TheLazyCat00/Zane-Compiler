@@ -1,21 +1,20 @@
 # pragma once
 
-#include "types.hpp"
 #include "ast/visitor.hpp"
-#include "cli/constants.hpp"
 #include "cli/manifest.hpp"
 #include "codegen/llvm.hpp"
+#include "globals/constants.hpp"
 #include "ir/nodes.hpp"
 #include "parser/ZaneLexer.h"
-#include "parser/ZaneParser.h"
+
 #include <cereal/archives/binary.hpp>
 #include <cereal/types/vector.hpp>
 #include <cereal/types/string.hpp>
 #include <cereal/types/memory.hpp>
 #include <cereal/types/unordered_map.hpp>
+#include <llvm-21/llvm/IR/IRBuilder.h>
 #include <llvm/IR/Module.h>
 #include <llvm/Linker/Linker.h>
-#include <map>
 #include <memory>
 #include <string>
 #include <nlohmann/json.hpp>
@@ -133,7 +132,7 @@ private:
 		auto wrapperModule = std::make_unique<llvm::Module>("__main_wrapper", context);
 		llvm::IRBuilder<> builder(context);
 
-		std::string mangledMain = "Void|" + manifest.name + "$main|0";
+		std::string mangledMain = constants::getMangledMain(manifest.name);
 		llvm::FunctionType* mangledMainType = llvm::FunctionType::get(
 			builder.getVoidTy(), {}, false);
 		wrapperModule->getOrInsertFunction(mangledMain, mangledMainType);

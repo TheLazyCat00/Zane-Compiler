@@ -15,17 +15,18 @@ public:
   enum {
     T__0 = 1, T__1 = 2, T__2 = 3, T__3 = 4, T__4 = 5, T__5 = 6, T__6 = 7, 
     T__7 = 8, T__8 = 9, T__9 = 10, T__10 = 11, T__11 = 12, T__12 = 13, T__13 = 14, 
-    T__14 = 15, T__15 = 16, T__16 = 17, OPERATOR = 18, IDENTIFIER = 19, 
-    STRING = 20, NUMBER = 21, WS = 22
+    T__14 = 15, T__15 = 16, T__16 = 17, T__17 = 18, OPERATOR = 19, IDENTIFIER = 20, 
+    STRING = 21, NUMBER = 22, WS = 23
   };
 
   enum {
     RuleGlobalScope = 0, RuleDeclaration = 1, RuleStatement = 2, RulePkgDef = 3, 
-    RulePkgImport = 4, RuleType = 5, RuleNameRule = 6, RuleValue = 7, RulePrimary = 8, 
-    RuleAtom = 9, RulePostfix = 10, RuleCollection = 11, RuleFuncDef = 12, 
-    RuleParam = 13, RuleParams = 14, RuleFuncMod = 15, RuleStrict = 16, 
-    RulePure = 17, RuleFuncBody = 18, RuleArrowFunction = 19, RuleScope = 20, 
-    RuleTuple = 21, RuleVarDef = 22, RuleRetStat = 23
+    RulePkgImport = 4, RuleFuncTypeParams = 5, RuleFuncType = 6, RuleType = 7, 
+    RuleNameRule = 8, RuleValue = 9, RulePrimary = 10, RuleAtom = 11, RulePostfix = 12, 
+    RuleCollection = 13, RuleFuncDef = 14, RuleParam = 15, RuleParams = 16, 
+    RuleFuncMod = 17, RuleStrict = 18, RulePure = 19, RuleFuncBody = 20, 
+    RuleArrowFunction = 21, RuleScope = 22, RuleTuple = 23, RuleUnit = 24, 
+    RuleVarDef = 25, RuleRetStat = 26
   };
 
   explicit ZaneParser(antlr4::TokenStream *input);
@@ -50,6 +51,8 @@ public:
   class StatementContext;
   class PkgDefContext;
   class PkgImportContext;
+  class FuncTypeParamsContext;
+  class FuncTypeContext;
   class TypeContext;
   class NameRuleContext;
   class ValueContext;
@@ -67,6 +70,7 @@ public:
   class ArrowFunctionContext;
   class ScopeContext;
   class TupleContext;
+  class UnitContext;
   class VarDefContext;
   class RetStatContext; 
 
@@ -156,11 +160,46 @@ public:
 
   PkgImportContext* pkgImport();
 
+  class  FuncTypeParamsContext : public antlr4::ParserRuleContext {
+  public:
+    FuncTypeParamsContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    virtual size_t getRuleIndex() const override;
+    std::vector<TypeContext *> type();
+    TypeContext* type(size_t i);
+
+    virtual void enterRule(antlr4::tree::ParseTreeListener *listener) override;
+    virtual void exitRule(antlr4::tree::ParseTreeListener *listener) override;
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+   
+  };
+
+  FuncTypeParamsContext* funcTypeParams();
+
+  class  FuncTypeContext : public antlr4::ParserRuleContext {
+  public:
+    ZaneParser::TypeContext *returnType = nullptr;
+    FuncTypeContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    virtual size_t getRuleIndex() const override;
+    TypeContext *type();
+    FuncTypeParamsContext *funcTypeParams();
+    FuncModContext *funcMod();
+
+    virtual void enterRule(antlr4::tree::ParseTreeListener *listener) override;
+    virtual void exitRule(antlr4::tree::ParseTreeListener *listener) override;
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+   
+  };
+
+  FuncTypeContext* funcType();
+
   class  TypeContext : public antlr4::ParserRuleContext {
   public:
     TypeContext(antlr4::ParserRuleContext *parent, size_t invokingState);
     virtual size_t getRuleIndex() const override;
     NameRuleContext *nameRule();
+    FuncTypeContext *funcType();
     std::vector<TypeContext *> type();
     TypeContext* type(size_t i);
 
@@ -468,6 +507,23 @@ public:
 
   TupleContext* tuple();
 
+  class  UnitContext : public antlr4::ParserRuleContext {
+  public:
+    UnitContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    virtual size_t getRuleIndex() const override;
+    std::vector<antlr4::tree::TerminalNode *> IDENTIFIER();
+    antlr4::tree::TerminalNode* IDENTIFIER(size_t i);
+    antlr4::tree::TerminalNode *OPERATOR();
+
+    virtual void enterRule(antlr4::tree::ParseTreeListener *listener) override;
+    virtual void exitRule(antlr4::tree::ParseTreeListener *listener) override;
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+   
+  };
+
+  UnitContext* unit();
+
   class  VarDefContext : public antlr4::ParserRuleContext {
   public:
     antlr4::Token *name = nullptr;
@@ -476,6 +532,7 @@ public:
     TypeContext *type();
     ValueContext *value();
     antlr4::tree::TerminalNode *IDENTIFIER();
+    UnitContext *unit();
 
     virtual void enterRule(antlr4::tree::ParseTreeListener *listener) override;
     virtual void exitRule(antlr4::tree::ParseTreeListener *listener) override;

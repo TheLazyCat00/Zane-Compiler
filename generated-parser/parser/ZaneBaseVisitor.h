@@ -37,6 +37,14 @@ public:
     return visitChildren(ctx);
   }
 
+  virtual std::any visitFuncTypeParams(ZaneParser::FuncTypeParamsContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitFuncType(ZaneParser::FuncTypeContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
   virtual std::any visitType(ZaneParser::TypeContext *ctx) override {
     return visitChildren(ctx);
   }
@@ -110,6 +118,10 @@ public:
   }
 
   virtual std::any visitTuple(ZaneParser::TupleContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitUnit(ZaneParser::UnitContext *ctx) override {
     return visitChildren(ctx);
   }
 

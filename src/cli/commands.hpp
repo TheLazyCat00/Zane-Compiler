@@ -1,14 +1,11 @@
 #pragma once
 
-#include "ast/visitor.hpp"
-#include "codegen/llvm.hpp"
 #include "cli/manifest.hpp"
 #include "cli/repl.hpp"
-#include "cli/constants.hpp"
 #include "cli/template.hpp"
+#include "globals/constants.hpp"
 #include "cli/help.hpp"
 #include "compiler/compiler.hpp"
-#include "ir/nodes.hpp"
 #include "utils/utils.hpp"
 
 #include <cstdio>
@@ -16,11 +13,8 @@
 #include <string>
 #include <map>
 #include <iostream>
-#include <fstream>
 #include <filesystem>
 #include <vector>
-#include <algorithm>
-#include <sstream>
 #include <antlr4-runtime.h>
 #include <parser/ZaneLexer.h>
 #include <parser/ZaneParser.h>
@@ -60,7 +54,7 @@ inline void execute(Mode mode, const manifest::Manifest& manifest) {
 		// Compile each package to object file in .cache for host target
 		auto hostTarget = constants::targets::getHostTarget();
 		compiler.compileToObjectFiles(hostTarget, true); // Clear modules after
-		
+	
 		// Create build directory
 		namespace fs = std::filesystem;
 		fs::path buildDir = fs::path(constants::BUILD_DIR) / hostTarget.name;

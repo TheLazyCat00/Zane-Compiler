@@ -50,16 +50,16 @@ pkgImport
 // Types
 // -----------------------------------------------------
 
-functionTypeParams
+funcTypeParams
 	: type (',' type)*
 	;
 
-functionType
-	:'(' functionTypeParams? ')' '->' returnType=type
+funcType
+	:'(' funcTypeParams? ')' funcMod? '->' returnType=type
 	;
 
 type
-	: nameRule ('<' type (',' type)* '>')?
+	: (nameRule | funcType) ('<' type (',' type)* '>')?
 	;
 
 nameRule
@@ -149,8 +149,10 @@ tuple
 // Variables
 // -----------------------------------------------------
 
+unit: ':' IDENTIFIER ( OPERATOR IDENTIFIER )?;
+
 varDef
-	: type name=IDENTIFIER '=' value
+	: type unit? name=IDENTIFIER '=' value
 	;
 
 // -----------------------------------------------------
