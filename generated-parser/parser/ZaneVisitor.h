@@ -36,7 +36,9 @@ public:
 
     virtual std::any visitType(ZaneParser::TypeContext *context) = 0;
 
-    virtual std::any visitValueByName(ZaneParser::ValueByNameContext *context) = 0;
+    virtual std::any visitTypeSymbol(ZaneParser::TypeSymbolContext *context) = 0;
+
+    virtual std::any visitValueSymbol(ZaneParser::ValueSymbolContext *context) = 0;
 
     virtual std::any visitValue(ZaneParser::ValueContext *context) = 0;
 
@@ -51,6 +53,8 @@ public:
     virtual std::any visitCallWithValue(ZaneParser::CallWithValueContext *context) = 0;
 
     virtual std::any visitCollection(ZaneParser::CollectionContext *context) = 0;
+
+    virtual std::any visitFuncRhs(ZaneParser::FuncRhsContext *context) = 0;
 
     virtual std::any visitFuncDef(ZaneParser::FuncDefContext *context) = 0;
 

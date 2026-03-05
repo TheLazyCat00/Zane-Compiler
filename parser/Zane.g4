@@ -59,10 +59,14 @@ funcType
 	;
 
 type
-	: (valueByName | funcType) ('<' type (',' type)* '>')?
+	: (typeSymbol | funcType) ('<' type (',' type)* '>')?
 	;
 
-valueByName
+typeSymbol
+	: (package=IDENTIFIER '$')? name=IDENTIFIER
+	;
+
+valueSymbol
 	: (package=IDENTIFIER '$')? name=IDENTIFIER
 	;
 
@@ -81,7 +85,7 @@ primary
 atom
 	: STRING
 	| NUMBER
-	| valueByName
+	| valueSymbol
 	| tuple
 	;
 
@@ -99,8 +103,12 @@ collection
 // Functions
 // -----------------------------------------------------
 
+funcRhs
+	: '(' params? ')' funcMod? funcBody
+	;
+
 funcDef
-	: returnType=type name=IDENTIFIER '(' params? ')' funcMod? funcBody
+	: returnType=type name=IDENTIFIER funcRhs
 	;
 
 param

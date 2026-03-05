@@ -2,6 +2,38 @@
 
 namespace ir {
 
+// ValueSymbol
+std::any ValueSymbol::accept(IRVisitor* visitor) {
+	return visitor->visitValueSymbol(this);
+}
+
+std::string ValueSymbol::getNodeName() const {
+	return "Symbol(" + name + ")";
+}
+
+std::string ValueSymbol::getMangledName() const {
+	if (packageName.has_value()) {
+		return packageName.value() + "$" + name;
+	}
+	return name;
+}
+
+// TypeSymbol
+std::any TypeSymbol::accept(IRVisitor* visitor) {
+	return visitor->visitTypeSymbol(this);
+}
+
+std::string TypeSymbol::getNodeName() const {
+	return "Symbol(" + name + ")";
+}
+
+std::string TypeSymbol::getMangledName() const {
+	if (packageName.has_value()) {
+		return packageName.value() + "$" + name;
+	}
+	return name;
+}
+
 // GlobalScope
 std::any GlobalScope::accept(IRVisitor* visitor) {
 	return visitor->visitGlobalScope(this);
@@ -13,21 +45,6 @@ std::string GlobalScope::getNodeName() const {
 
 std::string GlobalScope::printChildren(const std::string& prefix) const {
 	return printNodeVector(body, prefix);
-}
-
-// NameRule
-std::any ValueByName::accept(IRVisitor* visitor) {
-	return visitor->visitNameRule(this);
-}
-
-std::string ValueByName::getMangledName() const {
-	auto scope = globalScope.lock();
-	if (!scope) return name;
-	return scope->pkgName + "$" + name;
-}
-
-std::string ValueByName::getNodeName() const {
-	return "NameRule(" + getMangledName() + ")";
 }
 
 // FuncType
@@ -115,11 +132,11 @@ std::any FuncDef::accept(IRVisitor* visitor) {
 }
 
 std::string FuncDef::getMangledName() const {
-	return nameRule->getMangledName() + type->getParamString();
+	return symbol->getMangledName();
 }
 
 std::string FuncDef::getNodeName() const {
-	return "FuncDef(" + nameRule->getNodeName() + ")";
+	return "FuncDef(" + symbol->getNodeName() + ")";
 }
 
 std::string FuncDef::printChildren(const std::string& prefix) const {
@@ -133,7 +150,7 @@ std::any VarDef::accept(IRVisitor* visitor) {
 }
 
 std::string VarDef::getNodeName() const {
-	return "VarDef(" + nameRule->getMangledName() + ")";
+	return "VarDef(" + symbol->getMangledName() + ")";
 }
 
 // FuncCall

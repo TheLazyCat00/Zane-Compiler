@@ -1,6 +1,6 @@
 #pragma once
 
-#include "ast/from_antlr.hpp"
+#include "ast/symbol_collector.hpp"
 #include "ast/visitor.hpp"
 #include "cli/manifest.hpp"
 #include "codegen/llvm.hpp"
@@ -49,7 +49,7 @@ struct ParserContext {
 class Compiler {
 private:
 	// Member variables
-	Packages packages;
+	std::shared_ptr<Packages> packages;
 	Modules modules;
 	manifest::Manifest manifest;
 	llvm::LLVMContext context;
@@ -131,8 +131,8 @@ private:
 	}
 
 	void compilePackage(const std::string& pkgName, const std::vector<fs::path>& files, const std::string& packageDir) {
-		AstFromAntlr astFromAntlr;
-		Visitor visitor(std::make_shared<Packages>(packages), symbolCollector);
+		auto symbolCollector = std::make_shared<SymbolCollector>();
+		Visitor visitor(packages, symbolCollector);
 
 		std::vector<std::unique_ptr<ParserContext>> contexts;
 		contexts.reserve(files.size());
@@ -148,15 +148,15 @@ private:
 
 		// NOTE: Left here
 		for (const auto& ctx : contexts) {
-			astFromAntlr.registerSymbols(ctx->getTree());
+			symbolCollector->collectSymbols(ctx->getTree());
 		}
 
-		// for (const auto& ctx : contexts) {
-		// 	visitor.buildTree(ctx->getTree());
-		// }
+		for (const auto& ctx : contexts) {
+			visitor.buildTree(ctx->getTree());
+		}
 
 		auto irProgram = visitor.getGlobalScope();
-		packages[irProgram->pkgName] = irProgram;
+		(*packages)[irProgram->packageName] = irProgram;
 
 		writeSymbolsCache(irProgram, packageDir, files);
 	}
@@ -172,7 +172,7 @@ private:
 		cereal::BinaryOutputArchive archive(os);
 
 		archive(
-			globalScope->pkgName,
+			globalScope->packageName,
 			globalScope->importedPackages,
 			globalScope->functionDefs
 		);
@@ -207,7 +207,8 @@ private:
 
 public:
 	// Constructor
-	Compiler(manifest::Manifest manifest) : manifest(manifest) {}
+	Compiler(manifest::Manifest manifest) 
+		: manifest(manifest), packages(std::make_shared<Packages>()) {}
 
 	// Destructor - explicitly clean up to break circular references
 	~Compiler() {
@@ -215,7 +216,7 @@ public:
 		modules.clear();
 		
 		// Clear packages to break circular references in IR nodes
-		packages.clear();
+		packages->clear();
 	}
 
 	// Compilation pipeline
@@ -266,12 +267,12 @@ public:
 		}
 	}
 
-	Packages getPackages() {
+	std::shared_ptr<Packages> getPackages() {
 		return packages;
 	}
 
 	void generateCode() {
-		for (auto& [pkgName, globalScope] : packages) {
+		for (auto& [pkgName, globalScope] : *packages) {
 			LLVMCodeGen codegen(context);
 			codegen.setupBuiltins();
 			codegen.generate(globalScope, packages);

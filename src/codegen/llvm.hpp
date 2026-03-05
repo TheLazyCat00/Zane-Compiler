@@ -2,6 +2,7 @@
 
 #include "ir/nodes.hpp"
 #include "codegen/visitor.hpp"
+#include "utils/aliases.hpp"
 
 #include <llvm/TargetParser/Host.h>
 #include <llvm/IR/Module.h>
@@ -12,6 +13,7 @@
 #include <llvm/Target/TargetMachine.h>
 #include <llvm/MC/TargetRegistry.h>
 #include <llvm/Transforms/Utils/Cloning.h>
+#include <memory>
 
 class LLVMCodeGen {
 private:
@@ -25,12 +27,12 @@ public:
 
 	void generate(
 			std::shared_ptr<ir::GlobalScope> globalScope,
-			const std::map<std::string, std::shared_ptr<ir::GlobalScope>>& allPackages) {
+			const std::shared_ptr<Packages> allPackages) {
 		LLVMVisitor visitor(context, builder, *module);
 		visitor.declareSignatures(globalScope.get());
 		
-		for (const auto& [pkgName, pkg] : allPackages) {
-			if (pkgName != globalScope->pkgName) {
+		for (const auto& [pkgName, pkg] : *allPackages) {
+			if (pkgName != globalScope->packageName) {
 				visitor.declareSignatures(pkg.get());
 			}
 		}

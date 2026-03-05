@@ -1,6 +1,21 @@
 #pragma once
 
 #include <variant>
+#include <vector>
+
+// Helper function to load a variant at a specific index
+template<std::size_t I = 0, typename... Types, typename Archive>
+void loadVariantAt(std::size_t idx, std::variant<Types...>& var, Archive& ar) {
+	if constexpr (I < sizeof...(Types)) {
+		if (I == idx) {
+			std::variant_alternative_t<I, std::variant<Types...>> val;
+			ar(val);
+			var = std::move(val);
+		} else {
+			loadVariantAt<I + 1>(idx, var, ar);
+		}
+	}
+}
 
 template<typename... Types>
 struct Variant {
@@ -66,4 +81,30 @@ struct WrappingVariant {
         ar(idx);
         loadVariantAt<0>(idx, value, ar);
     }
+};
+
+template<typename T>
+class Stack {
+	std::vector<T> stack;
+public:
+	Stack() = default;
+
+	void push(T element) {
+		stack.push_back(element);
+	}
+
+	bool empty() const {
+		return stack.empty();
+	}
+
+	T top() const {
+		return stack.back();
+	}
+
+	T pop() {
+		if (stack.empty()) return {};
+		auto value = stack.back();
+		stack.pop_back();
+		return value;
+	}
 };

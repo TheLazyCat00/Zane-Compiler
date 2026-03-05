@@ -40,8 +40,11 @@ public:
   virtual void enterType(ZaneParser::TypeContext *ctx) = 0;
   virtual void exitType(ZaneParser::TypeContext *ctx) = 0;
 
-  virtual void enterValueByName(ZaneParser::ValueByNameContext *ctx) = 0;
-  virtual void exitValueByName(ZaneParser::ValueByNameContext *ctx) = 0;
+  virtual void enterTypeSymbol(ZaneParser::TypeSymbolContext *ctx) = 0;
+  virtual void exitTypeSymbol(ZaneParser::TypeSymbolContext *ctx) = 0;
+
+  virtual void enterValueSymbol(ZaneParser::ValueSymbolContext *ctx) = 0;
+  virtual void exitValueSymbol(ZaneParser::ValueSymbolContext *ctx) = 0;
 
   virtual void enterValue(ZaneParser::ValueContext *ctx) = 0;
   virtual void exitValue(ZaneParser::ValueContext *ctx) = 0;
@@ -63,6 +66,9 @@ public:
 
   virtual void enterCollection(ZaneParser::CollectionContext *ctx) = 0;
   virtual void exitCollection(ZaneParser::CollectionContext *ctx) = 0;
+
+  virtual void enterFuncRhs(ZaneParser::FuncRhsContext *ctx) = 0;
+  virtual void exitFuncRhs(ZaneParser::FuncRhsContext *ctx) = 0;
 
   virtual void enterFuncDef(ZaneParser::FuncDefContext *ctx) = 0;
   virtual void exitFuncDef(ZaneParser::FuncDefContext *ctx) = 0;

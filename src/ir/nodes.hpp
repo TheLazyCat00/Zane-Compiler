@@ -7,19 +7,53 @@
 #include <memory>
 #include <nlohmann/json.hpp>
 #include <unordered_map>
-#include <unordered_set>
 #include <vector>
 #include <string>
 #include <any>
+#include <cereal/types/optional.hpp>
+#include <cereal/types/memory.hpp>
+#include <cereal/types/vector.hpp>
+#include <cereal/types/map.hpp>
+#include <cereal/types/unordered_map.hpp>
+#include <cereal/types/string.hpp>
 
 namespace ir {
 
+struct ValueSymbol : public IRNode {
+	std::optional<std::string> packageName;
+	std::string name;
+	std::shared_ptr<ir::Type> type;
+
+	std::any accept(IRVisitor* visitor) override;
+	std::string getNodeName() const override;
+	std::string getMangledName() const;
+
+	template<typename Archive>
+	void serialize(Archive& ar) {
+		ar(packageName, name, type);
+	}
+};
+
+struct TypeSymbol : public IRNode {
+	std::optional<std::string> packageName;
+	std::string name;
+
+	std::any accept(IRVisitor* visitor) override;
+	std::string getNodeName() const override;
+	std::string getMangledName() const;
+
+	template<typename Archive>
+	void serialize(Archive& ar) {
+		ar(packageName, name);
+	}
+};
+
 struct GlobalScope : public IRNode {
-	std::string pkgName;
+	std::string packageName;
 	std::vector<std::string> importedPackages;
 	std::unordered_map<std::string, std::shared_ptr<FuncDef>> functionDefs;
 	std::vector<std::shared_ptr<IRNode>> body;
-	std::unordered_set<std::string> symbols;
+	std::map<std::string, ValueSymbol> symbols;
 
 	std::any accept(IRVisitor* visitor) override;
 	std::string getNodeName() const override;
@@ -27,28 +61,7 @@ struct GlobalScope : public IRNode {
 
 	template<typename Archive>
 	void serialize(Archive& ar) {
-		ar(pkgName, importedPackages, functionDefs, body);
-	}
-};
-
-struct ValueByName : public IRNode {
-	std::string name;
-	std::weak_ptr<GlobalScope> globalScope;
-
-	ValueByName() {}
-	ValueByName(std::string name, std::shared_ptr<GlobalScope> globalScope)
-		: name(name), globalScope(globalScope) {}
-
-	std::any accept(IRVisitor* visitor) override;
-	std::string getMangledName() const;
-	std::string getEffectiveName() const;
-	std::string getNodeName() const override;
-
-	template<typename Archive>
-	void serialize(Archive& ar) {
-		auto scope = globalScope.lock();
-		std::string pkgName = scope ? scope->pkgName : "";
-		ar(name, pkgName);
+		ar(packageName, importedPackages, functionDefs, body);
 	}
 };
 
@@ -109,8 +122,17 @@ struct FuncType : public IRNode {
 };
 
 struct Type : public IRNode {
-	WrappingVariant<std::shared_ptr, ValueByName, FuncType> value;
+	WrappingVariant<std::shared_ptr, TypeSymbol, FuncType> value;
 	std::vector<std::shared_ptr<Type>> generics;
+
+	Type() = default;
+	Type(std::shared_ptr<TypeSymbol> typeSymbol) {
+		value = { typeSymbol };
+	}
+
+	Type(std::shared_ptr<FuncType> funcType) {
+		value = { funcType };
+	}
 
 	std::any accept(IRVisitor* visitor) override;
 	std::string getMangledName() const;
@@ -151,11 +173,24 @@ struct ReturnStatement : public IRNode {
 	}
 };
 
+struct VarDef : public IRNode {
+	std::shared_ptr<ValueSymbol> symbol;
+	std::shared_ptr<IRNode> value;
+
+	std::any accept(IRVisitor* visitor) override;
+	std::string getNodeName() const override;
+
+	template<typename Archive>
+	void serialize(Archive& ar) {
+		ar(symbol, value);
+	}
+};
+
 struct FuncDef : public IRNode {
-	std::shared_ptr<ValueByName> nameRule;
-	std::shared_ptr<FuncType> type;
+	std::shared_ptr<ValueSymbol> symbol;
 	std::vector<std::string> parameters;
 	std::shared_ptr<Scope> scope;
+	std::shared_ptr<FuncType> type;
 
 	std::any accept(IRVisitor* visitor) override;
 	std::string getMangledName() const;
@@ -164,21 +199,7 @@ struct FuncDef : public IRNode {
 
 	template<typename Archive>
 	void serialize(Archive& ar) {
-		ar(nameRule, type, parameters);
-	}
-};
-
-struct VarDef : public IRNode {
-	std::shared_ptr<ValueByName> nameRule;
-	std::shared_ptr<Type> type;
-	std::shared_ptr<IRNode> value;
-
-	std::any accept(IRVisitor* visitor) override;
-	std::string getNodeName() const override;
-
-	template<typename Archive>
-	void serialize(Archive& ar) {
-		ar(nameRule, type, value);
+		ar(symbol, parameters, scope);
 	}
 };
 
@@ -209,3 +230,32 @@ struct StringLiteral : public IRNode {
 };
 
 } // namespace ir
+
+// Register polymorphic types with cereal
+#include <cereal/types/polymorphic.hpp>
+#include <cereal/types/base_class.hpp>
+
+CEREAL_REGISTER_TYPE(ir::ValueSymbol)
+CEREAL_REGISTER_TYPE(ir::TypeSymbol)
+CEREAL_REGISTER_TYPE(ir::FuncDef)
+CEREAL_REGISTER_TYPE(ir::VarDef)
+CEREAL_REGISTER_TYPE(ir::GlobalScope)
+CEREAL_REGISTER_TYPE(ir::Scope)
+CEREAL_REGISTER_TYPE(ir::FuncCall)
+CEREAL_REGISTER_TYPE(ir::StringLiteral)
+CEREAL_REGISTER_TYPE(ir::ReturnStatement)
+CEREAL_REGISTER_TYPE(ir::Type)
+CEREAL_REGISTER_TYPE(ir::FuncType)
+
+// Register inheritance relationships
+CEREAL_REGISTER_POLYMORPHIC_RELATION(ir::IRNode, ir::ValueSymbol)
+CEREAL_REGISTER_POLYMORPHIC_RELATION(ir::IRNode, ir::TypeSymbol)
+CEREAL_REGISTER_POLYMORPHIC_RELATION(ir::IRNode, ir::FuncDef)
+CEREAL_REGISTER_POLYMORPHIC_RELATION(ir::IRNode, ir::VarDef)
+CEREAL_REGISTER_POLYMORPHIC_RELATION(ir::IRNode, ir::GlobalScope)
+CEREAL_REGISTER_POLYMORPHIC_RELATION(ir::IRNode, ir::Scope)
+CEREAL_REGISTER_POLYMORPHIC_RELATION(ir::IRNode, ir::FuncCall)
+CEREAL_REGISTER_POLYMORPHIC_RELATION(ir::IRNode, ir::StringLiteral)
+CEREAL_REGISTER_POLYMORPHIC_RELATION(ir::IRNode, ir::ReturnStatement)
+CEREAL_REGISTER_POLYMORPHIC_RELATION(ir::IRNode, ir::Type)
+CEREAL_REGISTER_POLYMORPHIC_RELATION(ir::IRNode, ir::FuncType)

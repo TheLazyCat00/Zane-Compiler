@@ -42,8 +42,11 @@ public:
   virtual void enterType(ZaneParser::TypeContext * /*ctx*/) override { }
   virtual void exitType(ZaneParser::TypeContext * /*ctx*/) override { }
 
-  virtual void enterValueByName(ZaneParser::ValueByNameContext * /*ctx*/) override { }
-  virtual void exitValueByName(ZaneParser::ValueByNameContext * /*ctx*/) override { }
+  virtual void enterTypeSymbol(ZaneParser::TypeSymbolContext * /*ctx*/) override { }
+  virtual void exitTypeSymbol(ZaneParser::TypeSymbolContext * /*ctx*/) override { }
+
+  virtual void enterValueSymbol(ZaneParser::ValueSymbolContext * /*ctx*/) override { }
+  virtual void exitValueSymbol(ZaneParser::ValueSymbolContext * /*ctx*/) override { }
 
   virtual void enterValue(ZaneParser::ValueContext * /*ctx*/) override { }
   virtual void exitValue(ZaneParser::ValueContext * /*ctx*/) override { }
@@ -65,6 +68,9 @@ public:
 
   virtual void enterCollection(ZaneParser::CollectionContext * /*ctx*/) override { }
   virtual void exitCollection(ZaneParser::CollectionContext * /*ctx*/) override { }
+
+  virtual void enterFuncRhs(ZaneParser::FuncRhsContext * /*ctx*/) override { }
+  virtual void exitFuncRhs(ZaneParser::FuncRhsContext * /*ctx*/) override { }
 
   virtual void enterFuncDef(ZaneParser::FuncDefContext * /*ctx*/) override { }
   virtual void exitFuncDef(ZaneParser::FuncDefContext * /*ctx*/) override { }

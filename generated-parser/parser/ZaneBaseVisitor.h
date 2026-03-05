@@ -49,7 +49,11 @@ public:
     return visitChildren(ctx);
   }
 
-  virtual std::any visitValueByName(ZaneParser::ValueByNameContext *ctx) override {
+  virtual std::any visitTypeSymbol(ZaneParser::TypeSymbolContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitValueSymbol(ZaneParser::ValueSymbolContext *ctx) override {
     return visitChildren(ctx);
   }
 
@@ -78,6 +82,10 @@ public:
   }
 
   virtual std::any visitCollection(ZaneParser::CollectionContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitFuncRhs(ZaneParser::FuncRhsContext *ctx) override {
     return visitChildren(ctx);
   }
 

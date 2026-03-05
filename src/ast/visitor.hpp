@@ -1,10 +1,13 @@
 #pragma once
 
+#include "ast/symbol_collector.hpp"
+#include "ast/ast_helpers.hpp"
 #include "ir/node.hpp"
 #include "ir/nodes.hpp"
 #include "parser/ZaneBaseVisitor.h"
 #include "parser/ZaneParser.h"
 #include "utils/aliases.hpp"
+#include "utils/types.hpp"
 
 #include <antlr4-runtime.h>
 #include <memory>
@@ -13,81 +16,30 @@
 #include <tree/ParseTree.h>
 #include <utils/embedded_types.hpp>
 #include <unordered_set>
+#include <vector>
 
 using namespace parser;
 
-class Visitor : public ZaneBaseVisitor {
-private:
+class Visitor : public CustomZaneVisitor {
 	std::shared_ptr<ir::GlobalScope> globalScope;
 	std::shared_ptr<ir::IRNode> currentScope;
 	std::unordered_set<std::string> builtinSymbols;
 	std::shared_ptr<Packages> packages;
-	std::vector<std::shared_ptr<ir::Type>> expectedTypeStack;  // Stack for type propagation
-
-	void pushExpectedType(std::shared_ptr<ir::Type> type) {
-		expectedTypeStack.push_back(type);
-	}
-
-	std::shared_ptr<ir::Type> popExpectedType() {
-		if (expectedTypeStack.empty()) return nullptr;
-		auto type = expectedTypeStack.back();
-		expectedTypeStack.pop_back();
-		return type;
-	}
-
-	std::shared_ptr<ir::Type> currentExpectedType() const {
-		return expectedTypeStack.empty() ? nullptr : expectedTypeStack.back();
-	}
+	Stack<std::map<std::string, std::shared_ptr<ir::ValueSymbol>>> scopeSymbols;
+	std::shared_ptr<SymbolCollector> symbolCollector;
 
 	std::shared_ptr<ir::Type> makeVoidType() {
 		auto voidType = std::make_shared<ir::Type>();
-		voidType->value = { std::make_shared<ir::ValueByName>("Void", globalScope) };
+		std::shared_ptr<ir::TypeSymbol> typeSymbol;
+		typeSymbol->name = "Void";
+		typeSymbol->packageName = globalScope->packageName;
+		voidType->value = { typeSymbol } ;
 		return voidType;
-	}
-
-	template<typename T>
-	std::shared_ptr<T> toIRNode(const std::any& result) {
-		if (!result.has_value()) return nullptr;
-		
-		if (result.type() == typeid(std::shared_ptr<T>)) {
-			return std::any_cast<std::shared_ptr<T>>(result);
-		}
-
-		if (result.type() == typeid(std::shared_ptr<ir::IRNode>)) {
-			auto base = std::any_cast<std::shared_ptr<ir::IRNode>>(result);
-			return std::dynamic_pointer_cast<T>(base);
-		}
-
-		std::string expectedType = typeid(std::shared_ptr<T>).name();
-		std::string actualType = result.type().name();
-		
-		throw std::runtime_error(
-			"IR Type Mismatch!\n"
-			"  Expected: " + expectedType + "\n"
-			"  Actual:   " + actualType + "\n"
-		);
-	}
-
-	template<typename T>
-	std::shared_ptr<T> get(antlr4::tree::ParseTree * tree) {
-		return toIRNode<T>(visit(tree));
-	}
-
-public:
-	Visitor(std::shared_ptr<Packages> packages) : globalScope(std::make_shared<ir::GlobalScope>()), packages(packages) {
-		builtinSymbols = utils::getBuiltinSymbols();
-	}
-
-	void buildTree(parser::ZaneParser::GlobalScopeContext* globalScopeCtx) {
-		if (!globalScopeCtx) {
-			throw std::runtime_error("Global scope context is null");
-		}
-		visit(globalScopeCtx);
 	}
 
 	std::any visitGlobalScope(ZaneParser::GlobalScopeContext *ctx) override {
 		currentScope = globalScope;
-		globalScope->pkgName = ctx->pkgDef()->name->getText();
+		globalScope->packageName = ctx->pkgDef()->name->getText();
 		
 		for (auto pkgCtx : ctx->pkgImport()) {
 			globalScope->importedPackages.push_back(pkgCtx->name->getText());
@@ -104,65 +56,53 @@ public:
 		return std::static_pointer_cast<ir::IRNode>(retStat);
 	}
 
-	std::any visitType(ZaneParser::TypeContext *ctx) override {
-		auto type = std::make_shared<ir::Type>();
-		
-		if (ctx->valueByName()) {
-			type->value = { get<ir::ValueByName>(ctx->valueByName()) };
-		} else if (ctx->funcType()) {
-			type->value = { get<ir::FuncType>(ctx->funcType()) };
-		}
-		
-		for (auto generic : ctx->type()) {
-			type->generics.push_back(get<ir::Type>(generic));
-		}
-
-		return std::static_pointer_cast<ir::IRNode>(type);
-	}
-
-	std::any visitFuncType(ZaneParser::FuncTypeContext *ctx) override {
-		auto funcType = std::make_shared<ir::FuncType>();
-		funcType->returnType = get<ir::Type>(ctx->returnType);
-
-		std::string funcMod = "open";
-		if (ctx->funcMod()) {
-			funcMod = ctx->funcMod()->getText();
-		}
-		funcType->mod = ir::FuncMod(funcMod);
-
-		if (ctx->funcTypeParams()) {
-			for (auto paramCtx : ctx->funcTypeParams()->type()) {
-				auto paramType = get<ir::Type>(paramCtx);
-				funcType->paramTypes.push_back(paramType);
+	std::any visitFuncRhs(ZaneParser::FuncRhsContext *ctx) override {
+		std::cout << "visited funcrhs, ast/visitor 61";
+		scopeSymbols.push({});
+		if (ctx->params()) {
+			for (auto param : ctx->params()->param()) {
+				auto valueSymbol = std::make_shared<ir::ValueSymbol>();
+				auto name = param->name->getText();
+				valueSymbol->name = name;
+				valueSymbol->type = get<ir::Type>(param->type());
+				scopeSymbols.top()[name] = valueSymbol;	
 			}
 		}
 
-		return std::static_pointer_cast<ir::IRNode>(funcType);
+		auto children = visitChildren(ctx);
+		scopeSymbols.pop();
+
+		return children;
 	}
 
 	std::any visitFuncDef(ZaneParser::FuncDefContext *ctx) override {
 		auto funcDef = std::make_shared<ir::FuncDef>();
-		funcDef->nameRule = std::make_shared<ir::ValueByName>(ctx->name->getText(), globalScope);
-		funcDef->scope = get<ir::Scope>(ctx->funcBody()->scope());
+		funcDef->symbol = std::make_shared<ir::ValueSymbol>();
+		funcDef->symbol->name = ctx->name->getText();
+		funcDef->symbol->packageName = globalScope->packageName;
+		funcDef->symbol->type = std::make_shared<ir::Type>();
+		funcDef->scope = get<ir::Scope>(ctx->funcRhs()->funcBody()->scope());
 
-		funcDef->type = std::make_shared<ir::FuncType>();
-		auto type = funcDef->type;
-		type->returnType = get<ir::Type>(ctx->type());
+		auto funcType = std::make_shared<ir::FuncType>();
+		funcType->returnType = get<ir::Type>(ctx->type());
 
 		std::string funcMod = "open";
-		if (ctx->funcMod()) {
-			funcMod = ctx->funcMod()->getText();
+		if (ctx->funcRhs()->funcMod()) {
+			funcMod = ctx->funcRhs()->funcMod()->getText();
 		}
-		type->mod = ir::FuncMod(funcMod);
+		funcType->mod = ir::FuncMod(funcMod);
 
-		if (ctx->params()) {
-			for (auto paramCtx : ctx->params()->param()) {
+		if (ctx->funcRhs()->params()) {
+			for (auto paramCtx : ctx->funcRhs()->params()->param()) {
 				auto name = paramCtx->name->getText();
 				auto paramType = get<ir::Type>(paramCtx->type());
 				funcDef->parameters.push_back(name);
-				type->paramTypes.push_back(paramType);
+				funcType->paramTypes.push_back(paramType);
 			}
 		}
+
+		funcDef->symbol->type = std::make_shared<ir::Type>(funcType);
+		funcDef->type = funcType;
 
 		std::string key = funcDef->getMangledName();
 
@@ -179,15 +119,21 @@ public:
 	}
 
 	std::any visitVarDef(ZaneParser::VarDefContext *ctx) override {
-		auto varDef = std::make_shared<ir::VarDef>();
-		varDef->type = get<ir::Type>(ctx->type());
-		varDef->nameRule = std::make_shared<ir::ValueByName>(ctx->name->getText(), globalScope);
-		
-		pushExpectedType(varDef->type);
-		varDef->value = get<ir::IRNode>(ctx->value());
-		popExpectedType();
+		auto symbol = std::make_shared<ir::ValueSymbol>();
+		symbol->name = ctx->name->getText();
+		symbol->packageName = globalScope->packageName;
+		symbol->type = get<ir::Type>(ctx->type());
 
-		return std::static_pointer_cast<ir::IRNode>(varDef);
+		// Only add to local scope symbols if we're not in global scope
+		if (!scopeSymbols.empty()) {
+			scopeSymbols.top()[symbol->name] = symbol;
+		}
+
+		auto varDef = std::make_shared<ir::VarDef>();
+		varDef->value = get<ir::IRNode>(ctx->value());
+		varDef->symbol = symbol;
+		
+		return std::static_pointer_cast<ir::IRNode>(symbol);
 	}
 
 	std::any visitValue(ZaneParser::ValueContext *ctx) override {
@@ -217,15 +163,6 @@ public:
 						funcCall->arguments.push_back(get<ir::IRNode>(valueCtx));
 					}
 				}
-
-				// If callee is a NameRule, resolve the overload now
-				if (auto nameRule = std::dynamic_pointer_cast<ir::ValueByName>(current)) {
-					auto expectedType = currentExpectedType();
-					std::string retTypeName = expectedType 
-						? expectedType->getMangledName() 
-						: makeVoidType()->getMangledName();
-				}
-
 				funcCall->callee = current;
 				current = funcCall;
 			} else if (auto propAccessCtx = dynamic_cast<ZaneParser::PropertyAccessContext*>(postfixCtx)) {
@@ -257,8 +194,8 @@ public:
 			return {};
 		}
 		
-		if (ctx->valueByName()) {
-			return visit(ctx->valueByName());
+		if (ctx->valueSymbol()) {
+			return visit(ctx->valueSymbol());
 		}
 		
 		if (ctx->tuple()) {
@@ -270,23 +207,9 @@ public:
 		return {};
 	}
 
-	std::any visitValueByName(ZaneParser::ValueByNameContext *ctx) override {
-		auto valueByName = std::make_shared<ir::ValueByName>();
-		auto name = ctx->name->getText();
-
-		if (ctx->package) {
-			valueByName->globalScope = packages->at(ctx->package->getText());
-		}
-
-		valueByName->name = name;
-		return std::static_pointer_cast<ir::IRNode>(valueByName);
-	}
-
 	void processStatement(ZaneParser::StatementContext *statement, std::shared_ptr<ir::Scope> scope) {
 		if (auto valueCtx = statement->value()) {
-			pushExpectedType(makeVoidType());
 			auto irNode = get<ir::IRNode>(valueCtx);
-			popExpectedType();
 			if (irNode) {
 				scope->statements.push_back(irNode);
 			}
@@ -314,6 +237,21 @@ public:
 
 	std::any visitStatement(ZaneParser::StatementContext *ctx) override {
 		return visitChildren(ctx);
+	}
+
+public:
+	Visitor(std::shared_ptr<Packages> packages, std::shared_ptr<SymbolCollector> symbolCollector)
+			: globalScope(std::make_shared<ir::GlobalScope>())
+			, packages(packages)
+			, symbolCollector(symbolCollector) {
+		builtinSymbols = utils::getBuiltinSymbols();
+	}
+
+	void buildTree(parser::ZaneParser::GlobalScopeContext* globalScopeCtx) {
+		if (!globalScopeCtx) {
+			throw std::runtime_error("Global scope context is null");
+		}
+		visit(globalScopeCtx);
 	}
 
 	std::shared_ptr<ir::GlobalScope> getGlobalScope() {
