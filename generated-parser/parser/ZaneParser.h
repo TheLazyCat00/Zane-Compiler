@@ -22,9 +22,9 @@ public:
   enum {
     RuleGlobalScope = 0, RuleDeclaration = 1, RuleStatement = 2, RulePkgDef = 3, 
     RulePkgImport = 4, RuleFuncTypeParams = 5, RuleFuncType = 6, RuleType = 7, 
-    RuleNameRule = 8, RuleValue = 9, RulePrimary = 10, RuleAtom = 11, RulePostfix = 12, 
-    RuleCollection = 13, RuleFuncDef = 14, RuleParam = 15, RuleParams = 16, 
-    RuleFuncMod = 17, RuleStrict = 18, RulePure = 19, RuleFuncBody = 20, 
+    RuleValueByName = 8, RuleValue = 9, RulePrimary = 10, RuleAtom = 11, 
+    RulePostfix = 12, RuleCollection = 13, RuleFuncDef = 14, RuleParam = 15, 
+    RuleParams = 16, RuleFuncMod = 17, RuleStrict = 18, RulePure = 19, RuleFuncBody = 20, 
     RuleArrowFunction = 21, RuleScope = 22, RuleTuple = 23, RuleUnit = 24, 
     RuleVarDef = 25, RuleRetStat = 26
   };
@@ -54,7 +54,7 @@ public:
   class FuncTypeParamsContext;
   class FuncTypeContext;
   class TypeContext;
-  class NameRuleContext;
+  class ValueByNameContext;
   class ValueContext;
   class PrimaryContext;
   class AtomContext;
@@ -198,7 +198,7 @@ public:
   public:
     TypeContext(antlr4::ParserRuleContext *parent, size_t invokingState);
     virtual size_t getRuleIndex() const override;
-    NameRuleContext *nameRule();
+    ValueByNameContext *valueByName();
     FuncTypeContext *funcType();
     std::vector<TypeContext *> type();
     TypeContext* type(size_t i);
@@ -212,11 +212,11 @@ public:
 
   TypeContext* type();
 
-  class  NameRuleContext : public antlr4::ParserRuleContext {
+  class  ValueByNameContext : public antlr4::ParserRuleContext {
   public:
     antlr4::Token *package = nullptr;
     antlr4::Token *name = nullptr;
-    NameRuleContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    ValueByNameContext(antlr4::ParserRuleContext *parent, size_t invokingState);
     virtual size_t getRuleIndex() const override;
     std::vector<antlr4::tree::TerminalNode *> IDENTIFIER();
     antlr4::tree::TerminalNode* IDENTIFIER(size_t i);
@@ -228,7 +228,7 @@ public:
    
   };
 
-  NameRuleContext* nameRule();
+  ValueByNameContext* valueByName();
 
   class  ValueContext : public antlr4::ParserRuleContext {
   public:
@@ -271,7 +271,7 @@ public:
     virtual size_t getRuleIndex() const override;
     antlr4::tree::TerminalNode *STRING();
     antlr4::tree::TerminalNode *NUMBER();
-    NameRuleContext *nameRule();
+    ValueByNameContext *valueByName();
     TupleContext *tuple();
 
     virtual void enterRule(antlr4::tree::ParseTreeListener *listener) override;

@@ -16,22 +16,18 @@ std::string GlobalScope::printChildren(const std::string& prefix) const {
 }
 
 // NameRule
-std::any NameRule::accept(IRVisitor* visitor) {
+std::any ValueByName::accept(IRVisitor* visitor) {
 	return visitor->visitNameRule(this);
 }
 
-std::string NameRule::getMangledName() const {
+std::string ValueByName::getMangledName() const {
 	auto scope = globalScope.lock();
 	if (!scope) return name;
 	return scope->pkgName + "$" + name;
 }
 
-std::string NameRule::getEffectiveName() const {
-	return resolvedName.value_or(getMangledName());
-}
-
-std::string NameRule::getNodeName() const {
-	return "NameRule(" + name + ")";
+std::string ValueByName::getNodeName() const {
+	return "NameRule(" + getMangledName() + ")";
 }
 
 // FuncType
@@ -43,22 +39,22 @@ std::string FuncType::getParamString() const {
 	if (paramTypes.size() == 0) {
 		return "()";
 	}
-	std::string result = paramTypes[0]->getNodeName();
+	std::string result = paramTypes[0]->getMangledName();
 
 	for(int i = 1; i < paramTypes.size(); i++) {
 		auto type = paramTypes[i];
-		result += ", " + type->getNodeName();
+		result += ", " + type->getMangledName();
 	}
 
 	return "(" + result + ")";
 }
 
 std::string FuncType::getNodeName() const {
-	return "FuncType(" + getParamString() + " " + mod.getString() + " -> " + returnType->getNodeName() + ")";
+	return "FuncType(" + getMangledName() + ")";
 }
 
 std::string FuncType::getMangledName() const {
-	return "";
+	return getParamString() + " " + mod.getString() + " -> " + returnType->getNodeName();
 }
 
 // Type
@@ -119,12 +115,11 @@ std::any FuncDef::accept(IRVisitor* visitor) {
 }
 
 std::string FuncDef::getMangledName() const {
-	std::string argCount = std::to_string(parameters.size());
 	return nameRule->getMangledName() + type->getParamString();
 }
 
 std::string FuncDef::getNodeName() const {
-	return "FuncDef(" + nameRule->name + ")";
+	return "FuncDef(" + nameRule->getNodeName() + ")";
 }
 
 std::string FuncDef::printChildren(const std::string& prefix) const {

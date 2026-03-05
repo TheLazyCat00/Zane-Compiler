@@ -55,7 +55,7 @@ void zaneParserInitialize() {
   auto staticData = std::make_unique<ZaneParserStaticData>(
     std::vector<std::string>{
       "globalScope", "declaration", "statement", "pkgDef", "pkgImport", 
-      "funcTypeParams", "funcType", "type", "nameRule", "value", "primary", 
+      "funcTypeParams", "funcType", "type", "valueByName", "value", "primary", 
       "atom", "postfix", "collection", "funcDef", "param", "params", "funcMod", 
       "strict", "pure", "funcBody", "arrowFunction", "scope", "tuple", "unit", 
       "varDef", "retStat"
@@ -791,8 +791,8 @@ ZaneParser::TypeContext::TypeContext(ParserRuleContext *parent, size_t invokingS
   : ParserRuleContext(parent, invokingState) {
 }
 
-ZaneParser::NameRuleContext* ZaneParser::TypeContext::nameRule() {
-  return getRuleContext<ZaneParser::NameRuleContext>(0);
+ZaneParser::ValueByNameContext* ZaneParser::TypeContext::valueByName() {
+  return getRuleContext<ZaneParser::ValueByNameContext>(0);
 }
 
 ZaneParser::FuncTypeContext* ZaneParser::TypeContext::funcType() {
@@ -851,7 +851,7 @@ ZaneParser::TypeContext* ZaneParser::type() {
     switch (_input->LA(1)) {
       case ZaneParser::IDENTIFIER: {
         setState(104);
-        nameRule();
+        valueByName();
         break;
       }
 
@@ -904,48 +904,48 @@ ZaneParser::TypeContext* ZaneParser::type() {
   return _localctx;
 }
 
-//----------------- NameRuleContext ------------------------------------------------------------------
+//----------------- ValueByNameContext ------------------------------------------------------------------
 
-ZaneParser::NameRuleContext::NameRuleContext(ParserRuleContext *parent, size_t invokingState)
+ZaneParser::ValueByNameContext::ValueByNameContext(ParserRuleContext *parent, size_t invokingState)
   : ParserRuleContext(parent, invokingState) {
 }
 
-std::vector<tree::TerminalNode *> ZaneParser::NameRuleContext::IDENTIFIER() {
+std::vector<tree::TerminalNode *> ZaneParser::ValueByNameContext::IDENTIFIER() {
   return getTokens(ZaneParser::IDENTIFIER);
 }
 
-tree::TerminalNode* ZaneParser::NameRuleContext::IDENTIFIER(size_t i) {
+tree::TerminalNode* ZaneParser::ValueByNameContext::IDENTIFIER(size_t i) {
   return getToken(ZaneParser::IDENTIFIER, i);
 }
 
 
-size_t ZaneParser::NameRuleContext::getRuleIndex() const {
-  return ZaneParser::RuleNameRule;
+size_t ZaneParser::ValueByNameContext::getRuleIndex() const {
+  return ZaneParser::RuleValueByName;
 }
 
-void ZaneParser::NameRuleContext::enterRule(tree::ParseTreeListener *listener) {
+void ZaneParser::ValueByNameContext::enterRule(tree::ParseTreeListener *listener) {
   auto parserListener = dynamic_cast<ZaneListener *>(listener);
   if (parserListener != nullptr)
-    parserListener->enterNameRule(this);
+    parserListener->enterValueByName(this);
 }
 
-void ZaneParser::NameRuleContext::exitRule(tree::ParseTreeListener *listener) {
+void ZaneParser::ValueByNameContext::exitRule(tree::ParseTreeListener *listener) {
   auto parserListener = dynamic_cast<ZaneListener *>(listener);
   if (parserListener != nullptr)
-    parserListener->exitNameRule(this);
+    parserListener->exitValueByName(this);
 }
 
 
-std::any ZaneParser::NameRuleContext::accept(tree::ParseTreeVisitor *visitor) {
+std::any ZaneParser::ValueByNameContext::accept(tree::ParseTreeVisitor *visitor) {
   if (auto parserVisitor = dynamic_cast<ZaneVisitor*>(visitor))
-    return parserVisitor->visitNameRule(this);
+    return parserVisitor->visitValueByName(this);
   else
     return visitor->visitChildren(this);
 }
 
-ZaneParser::NameRuleContext* ZaneParser::nameRule() {
-  NameRuleContext *_localctx = _tracker.createInstance<NameRuleContext>(_ctx, getState());
-  enterRule(_localctx, 16, ZaneParser::RuleNameRule);
+ZaneParser::ValueByNameContext* ZaneParser::valueByName() {
+  ValueByNameContext *_localctx = _tracker.createInstance<ValueByNameContext>(_ctx, getState());
+  enterRule(_localctx, 16, ZaneParser::RuleValueByName);
 
 #if __cplusplus > 201703L
   auto onExit = finally([=, this] {
@@ -962,7 +962,7 @@ ZaneParser::NameRuleContext* ZaneParser::nameRule() {
     switch (getInterpreter<atn::ParserATNSimulator>()->adaptivePredict(_input, 10, _ctx)) {
     case 1: {
       setState(121);
-      antlrcpp::downCast<NameRuleContext *>(_localctx)->package = match(ZaneParser::IDENTIFIER);
+      antlrcpp::downCast<ValueByNameContext *>(_localctx)->package = match(ZaneParser::IDENTIFIER);
       setState(122);
       match(ZaneParser::T__8);
       break;
@@ -972,7 +972,7 @@ ZaneParser::NameRuleContext* ZaneParser::nameRule() {
       break;
     }
     setState(125);
-    antlrcpp::downCast<NameRuleContext *>(_localctx)->name = match(ZaneParser::IDENTIFIER);
+    antlrcpp::downCast<ValueByNameContext *>(_localctx)->name = match(ZaneParser::IDENTIFIER);
    
   }
   catch (RecognitionException &e) {
@@ -1168,8 +1168,8 @@ tree::TerminalNode* ZaneParser::AtomContext::NUMBER() {
   return getToken(ZaneParser::NUMBER, 0);
 }
 
-ZaneParser::NameRuleContext* ZaneParser::AtomContext::nameRule() {
-  return getRuleContext<ZaneParser::NameRuleContext>(0);
+ZaneParser::ValueByNameContext* ZaneParser::AtomContext::valueByName() {
+  return getRuleContext<ZaneParser::ValueByNameContext>(0);
 }
 
 ZaneParser::TupleContext* ZaneParser::AtomContext::tuple() {
@@ -1233,7 +1233,7 @@ ZaneParser::AtomContext* ZaneParser::atom() {
       case ZaneParser::IDENTIFIER: {
         enterOuterAlt(_localctx, 3);
         setState(144);
-        nameRule();
+        valueByName();
         break;
       }
 

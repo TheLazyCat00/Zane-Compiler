@@ -59,10 +59,10 @@ funcType
 	;
 
 type
-	: (nameRule | funcType) ('<' type (',' type)* '>')?
+	: (valueByName | funcType) ('<' type (',' type)* '>')?
 	;
 
-nameRule
+valueByName
 	: (package=IDENTIFIER '$')? name=IDENTIFIER
 	;
 
@@ -81,7 +81,7 @@ primary
 atom
 	: STRING
 	| NUMBER
-	| nameRule
+	| valueByName
 	| tuple
 	;
 

@@ -41,7 +41,7 @@ inline std::vector<TypeInfo> parseEmbeddedTypes() {
 	return types;
 }
 
-inline std::unordered_set<std::string> getBuiltinNames() {
+inline std::unordered_set<std::string> getBuiltinSymbols() {
 	std::unordered_set<std::string> names;
 	std::istringstream stream(embedded::BUILTINS_CSV);
 	std::string line;

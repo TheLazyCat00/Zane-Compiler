@@ -59,7 +59,7 @@ pkgImport
 funcTypeParams
 funcType
 type
-nameRule
+valueByName
 value
 primary
 atom

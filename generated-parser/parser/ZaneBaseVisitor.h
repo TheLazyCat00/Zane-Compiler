@@ -49,7 +49,7 @@ public:
     return visitChildren(ctx);
   }
 
-  virtual std::any visitNameRule(ZaneParser::NameRuleContext *ctx) override {
+  virtual std::any visitValueByName(ZaneParser::ValueByNameContext *ctx) override {
     return visitChildren(ctx);
   }
 

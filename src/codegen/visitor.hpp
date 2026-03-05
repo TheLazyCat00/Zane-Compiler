@@ -4,6 +4,7 @@
 #include "ir/node.hpp"
 #include "ir/nodes.hpp"
 
+#include <iostream>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/IRBuilder.h>
 #include <any>
@@ -110,7 +111,7 @@ public:
 		return oss.str();
 	}
 
-	std::any visitNameRule(ir::NameRule* node) override {
+	std::any visitNameRule(ir::ValueByName* node) override {
 		// 1. Local variables
 		auto it = namedValues.find(node->getMangledName());
 		if (it == namedValues.end()) {
@@ -126,12 +127,13 @@ public:
 			);
 		}
 
-		// 2. Module functions — try resolved name (with overload), then plain mangled
-		if (llvm::Function* func = module.getFunction(node->getEffectiveName())) {
-			return (llvm::Value*)func;
-		}
+		std::cout << "function: " << node->getMangledName() << " |end" << std::endl;
+		// NOTE: bug here, likely not found because searching for test$process when name is test$process(String)
 		if (llvm::Function* func = module.getFunction(node->getMangledName())) {
 			return (llvm::Value*)func;
+		}
+		else {
+			std::cout << "not found" << std::endl;
 		}
 
 		return (llvm::Value*)nullptr;
@@ -185,6 +187,7 @@ public:
 	}
 
 	std::any visitType(ir::Type* node) override { return {}; }
+
 	std::any visitVarDef(ir::VarDef* node) override {
 		llvm::Type* type = typeMapper.toLLVMType(node->type->getMangledName());
 		if (!type) return {};

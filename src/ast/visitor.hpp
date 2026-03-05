@@ -2,12 +2,14 @@
 
 #include "ir/node.hpp"
 #include "ir/nodes.hpp"
+#include "parser/ZaneBaseVisitor.h"
+#include "parser/ZaneParser.h"
 #include "utils/aliases.hpp"
 
-#include <parser/ZaneBaseVisitor.h>
 #include <antlr4-runtime.h>
 #include <memory>
 #include <stdexcept>
+#include <string>
 #include <tree/ParseTree.h>
 #include <utils/embedded_types.hpp>
 #include <unordered_set>
@@ -18,7 +20,7 @@ class Visitor : public ZaneBaseVisitor {
 private:
 	std::shared_ptr<ir::GlobalScope> globalScope;
 	std::shared_ptr<ir::IRNode> currentScope;
-	std::unordered_set<std::string> builtinTypes;
+	std::unordered_set<std::string> builtinSymbols;
 	std::shared_ptr<Packages> packages;
 	std::vector<std::shared_ptr<ir::Type>> expectedTypeStack;  // Stack for type propagation
 
@@ -39,7 +41,7 @@ private:
 
 	std::shared_ptr<ir::Type> makeVoidType() {
 		auto voidType = std::make_shared<ir::Type>();
-		voidType->value = { std::make_shared<ir::NameRule>("Void", globalScope) };
+		voidType->value = { std::make_shared<ir::ValueByName>("Void", globalScope) };
 		return voidType;
 	}
 
@@ -73,7 +75,14 @@ private:
 
 public:
 	Visitor(std::shared_ptr<Packages> packages) : globalScope(std::make_shared<ir::GlobalScope>()), packages(packages) {
-		builtinTypes = utils::getBuiltinNames();
+		builtinSymbols = utils::getBuiltinSymbols();
+	}
+
+	void buildTree(parser::ZaneParser::GlobalScopeContext* globalScopeCtx) {
+		if (!globalScopeCtx) {
+			throw std::runtime_error("Global scope context is null");
+		}
+		visit(globalScopeCtx);
 	}
 
 	std::any visitGlobalScope(ZaneParser::GlobalScopeContext *ctx) override {
@@ -97,7 +106,13 @@ public:
 
 	std::any visitType(ZaneParser::TypeContext *ctx) override {
 		auto type = std::make_shared<ir::Type>();
-		type->value = { get<ir::NameRule>(ctx->nameRule()) };
+		
+		if (ctx->valueByName()) {
+			type->value = { get<ir::ValueByName>(ctx->valueByName()) };
+		} else if (ctx->funcType()) {
+			type->value = { get<ir::FuncType>(ctx->funcType()) };
+		}
+		
 		for (auto generic : ctx->type()) {
 			type->generics.push_back(get<ir::Type>(generic));
 		}
@@ -127,7 +142,7 @@ public:
 
 	std::any visitFuncDef(ZaneParser::FuncDefContext *ctx) override {
 		auto funcDef = std::make_shared<ir::FuncDef>();
-		funcDef->nameRule = std::make_shared<ir::NameRule>(ctx->name->getText(), globalScope);
+		funcDef->nameRule = std::make_shared<ir::ValueByName>(ctx->name->getText(), globalScope);
 		funcDef->scope = get<ir::Scope>(ctx->funcBody()->scope());
 
 		funcDef->type = std::make_shared<ir::FuncType>();
@@ -166,7 +181,7 @@ public:
 	std::any visitVarDef(ZaneParser::VarDefContext *ctx) override {
 		auto varDef = std::make_shared<ir::VarDef>();
 		varDef->type = get<ir::Type>(ctx->type());
-		varDef->nameRule = std::make_shared<ir::NameRule>(ctx->name->getText(), globalScope);
+		varDef->nameRule = std::make_shared<ir::ValueByName>(ctx->name->getText(), globalScope);
 		
 		pushExpectedType(varDef->type);
 		varDef->value = get<ir::IRNode>(ctx->value());
@@ -175,7 +190,6 @@ public:
 		return std::static_pointer_cast<ir::IRNode>(varDef);
 	}
 
-	// Visit value: primary (OPERATOR primary)*
 	std::any visitValue(ZaneParser::ValueContext *ctx) override {
 		// For now, just handle the first primary
 		// TODO: Handle operators between primaries for binary operations
@@ -185,7 +199,6 @@ public:
 		return {};
 	}
 
-	// Visit primary: atom postfix*
 	std::any visitPrimary(ZaneParser::PrimaryContext *ctx) override {
 		auto result = visit(ctx->atom());
 		if (!result.has_value()) return {};
@@ -206,13 +219,11 @@ public:
 				}
 
 				// If callee is a NameRule, resolve the overload now
-				if (auto nameRule = std::dynamic_pointer_cast<ir::NameRule>(current)) {
+				if (auto nameRule = std::dynamic_pointer_cast<ir::ValueByName>(current)) {
 					auto expectedType = currentExpectedType();
 					std::string retTypeName = expectedType 
 						? expectedType->getMangledName() 
 						: makeVoidType()->getMangledName();
-					std::string argCount = std::to_string(funcCall->arguments.size());
-					nameRule->resolvedName = retTypeName + "|" + nameRule->getMangledName() + "|" + argCount;
 				}
 
 				funcCall->callee = current;
@@ -227,7 +238,6 @@ public:
 		return std::static_pointer_cast<ir::IRNode>(current);
 	}
 
-	// Visit atom: STRING | NUMBER | nameRule | tuple
 	std::any visitAtom(ZaneParser::AtomContext *ctx) override {
 		if (ctx->STRING()) {
 			auto stringLit = std::make_shared<ir::StringLiteral>();
@@ -247,8 +257,8 @@ public:
 			return {};
 		}
 		
-		if (ctx->nameRule()) {
-			return visit(ctx->nameRule());
+		if (ctx->valueByName()) {
+			return visit(ctx->valueByName());
 		}
 		
 		if (ctx->tuple()) {
@@ -260,21 +270,16 @@ public:
 		return {};
 	}
 
-	std::any visitNameRule(ZaneParser::NameRuleContext *ctx) override {
-		auto nameRule = std::make_shared<ir::NameRule>();
+	std::any visitValueByName(ZaneParser::ValueByNameContext *ctx) override {
+		auto valueByName = std::make_shared<ir::ValueByName>();
+		auto name = ctx->name->getText();
 
 		if (ctx->package) {
-			nameRule->globalScope = packages->at(ctx->package->getText());
-		}
-		else {
-			std::string name = ctx->name->getText();
-			if (builtinTypes.find(name) == builtinTypes.end()) {
-				nameRule->globalScope = globalScope;
-			}
+			valueByName->globalScope = packages->at(ctx->package->getText());
 		}
 
-		nameRule->name = ctx->name->getText();
-		return std::static_pointer_cast<ir::IRNode>(nameRule);
+		valueByName->name = name;
+		return std::static_pointer_cast<ir::IRNode>(valueByName);
 	}
 
 	void processStatement(ZaneParser::StatementContext *statement, std::shared_ptr<ir::Scope> scope) {

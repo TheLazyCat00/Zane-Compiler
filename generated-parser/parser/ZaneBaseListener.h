@@ -42,8 +42,8 @@ public:
   virtual void enterType(ZaneParser::TypeContext * /*ctx*/) override { }
   virtual void exitType(ZaneParser::TypeContext * /*ctx*/) override { }
 
-  virtual void enterNameRule(ZaneParser::NameRuleContext * /*ctx*/) override { }
-  virtual void exitNameRule(ZaneParser::NameRuleContext * /*ctx*/) override { }
+  virtual void enterValueByName(ZaneParser::ValueByNameContext * /*ctx*/) override { }
+  virtual void exitValueByName(ZaneParser::ValueByNameContext * /*ctx*/) override { }
 
   virtual void enterValue(ZaneParser::ValueContext * /*ctx*/) override { }
   virtual void exitValue(ZaneParser::ValueContext * /*ctx*/) override { }

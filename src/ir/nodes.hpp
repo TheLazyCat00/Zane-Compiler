@@ -7,6 +7,7 @@
 #include <memory>
 #include <nlohmann/json.hpp>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 #include <string>
 #include <any>
@@ -18,19 +19,24 @@ struct GlobalScope : public IRNode {
 	std::vector<std::string> importedPackages;
 	std::unordered_map<std::string, std::shared_ptr<FuncDef>> functionDefs;
 	std::vector<std::shared_ptr<IRNode>> body;
+	std::unordered_set<std::string> symbols;
 
 	std::any accept(IRVisitor* visitor) override;
 	std::string getNodeName() const override;
 	std::string printChildren(const std::string& prefix) const override;
+
+	template<typename Archive>
+	void serialize(Archive& ar) {
+		ar(pkgName, importedPackages, functionDefs, body);
+	}
 };
 
-struct NameRule : public IRNode {
+struct ValueByName : public IRNode {
 	std::string name;
 	std::weak_ptr<GlobalScope> globalScope;
-	std::optional<std::string> resolvedName;
 
-	NameRule() {}
-	NameRule(std::string name, std::shared_ptr<GlobalScope> globalScope)
+	ValueByName() {}
+	ValueByName(std::string name, std::shared_ptr<GlobalScope> globalScope)
 		: name(name), globalScope(globalScope) {}
 
 	std::any accept(IRVisitor* visitor) override;
@@ -103,7 +109,7 @@ struct FuncType : public IRNode {
 };
 
 struct Type : public IRNode {
-	WrappingVariant<std::shared_ptr, NameRule, FuncType> value;
+	WrappingVariant<std::shared_ptr, ValueByName, FuncType> value;
 	std::vector<std::shared_ptr<Type>> generics;
 
 	std::any accept(IRVisitor* visitor) override;
@@ -124,6 +130,13 @@ struct Scope : public IRNode {
 	std::any accept(IRVisitor* visitor) override;
 	std::string getNodeName() const override;
 	std::string printChildren(const std::string& prefix) const override;
+
+	template<typename Archive>
+	void serialize(Archive& ar) {
+		// parent is a weak_ptr and represents a runtime graph edge;
+		// it is intentionally skipped and must be re-linked after deserialization
+		ar(functionDefs, statements);
+	}
 };
 
 struct ReturnStatement : public IRNode {
@@ -131,10 +144,15 @@ struct ReturnStatement : public IRNode {
 
 	std::any accept(IRVisitor* visitor) override;
 	std::string getNodeName() const override;
+
+	template<typename Archive>
+	void serialize(Archive& ar) {
+		ar(value);
+	}
 };
 
 struct FuncDef : public IRNode {
-	std::shared_ptr<NameRule> nameRule;
+	std::shared_ptr<ValueByName> nameRule;
 	std::shared_ptr<FuncType> type;
 	std::vector<std::string> parameters;
 	std::shared_ptr<Scope> scope;
@@ -151,12 +169,17 @@ struct FuncDef : public IRNode {
 };
 
 struct VarDef : public IRNode {
-	std::shared_ptr<NameRule> nameRule;
+	std::shared_ptr<ValueByName> nameRule;
 	std::shared_ptr<Type> type;
 	std::shared_ptr<IRNode> value;
 
 	std::any accept(IRVisitor* visitor) override;
 	std::string getNodeName() const override;
+
+	template<typename Archive>
+	void serialize(Archive& ar) {
+		ar(nameRule, type, value);
+	}
 };
 
 struct FuncCall : public IRNode {
@@ -166,6 +189,11 @@ struct FuncCall : public IRNode {
 	std::any accept(IRVisitor* visitor) override;
 	std::string getNodeName() const override;
 	std::string printChildren(const std::string& prefix) const override;
+
+	template<typename Archive>
+	void serialize(Archive& ar) {
+		ar(callee, arguments);
+	}
 };
 
 struct StringLiteral : public IRNode {
@@ -173,6 +201,11 @@ struct StringLiteral : public IRNode {
 
 	std::any accept(IRVisitor* visitor) override;
 	std::string getNodeName() const override;
+
+	template<typename Archive>
+	void serialize(Archive& ar) {
+		ar(value);
+	}
 };
 
 } // namespace ir

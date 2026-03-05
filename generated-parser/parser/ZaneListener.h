@@ -40,8 +40,8 @@ public:
   virtual void enterType(ZaneParser::TypeContext *ctx) = 0;
   virtual void exitType(ZaneParser::TypeContext *ctx) = 0;
 
-  virtual void enterNameRule(ZaneParser::NameRuleContext *ctx) = 0;
-  virtual void exitNameRule(ZaneParser::NameRuleContext *ctx) = 0;
+  virtual void enterValueByName(ZaneParser::ValueByNameContext *ctx) = 0;
+  virtual void exitValueByName(ZaneParser::ValueByNameContext *ctx) = 0;
 
   virtual void enterValue(ZaneParser::ValueContext *ctx) = 0;
   virtual void exitValue(ZaneParser::ValueContext *ctx) = 0;

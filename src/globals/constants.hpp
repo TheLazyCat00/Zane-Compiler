@@ -57,7 +57,7 @@ inline fs::path getSymbolsPath(const fs::path& packageDir) {
 };
 
 inline std::string getMangledMain(const std::string& projectName) {
-	return projectName + "$main(Void)";
+	return projectName + "$main()";
 }
 
 namespace targets {

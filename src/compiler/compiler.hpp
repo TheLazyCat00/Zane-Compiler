@@ -1,23 +1,50 @@
-# pragma once
+#pragma once
 
+#include "ast/from_antlr.hpp"
 #include "ast/visitor.hpp"
 #include "cli/manifest.hpp"
 #include "codegen/llvm.hpp"
 #include "globals/constants.hpp"
 #include "ir/nodes.hpp"
 #include "parser/ZaneLexer.h"
+#include "utils/aliases.hpp"
 
 #include <cereal/archives/binary.hpp>
 #include <cereal/types/vector.hpp>
 #include <cereal/types/string.hpp>
 #include <cereal/types/memory.hpp>
 #include <cereal/types/unordered_map.hpp>
+#include <expected>
 #include <llvm-21/llvm/IR/IRBuilder.h>
 #include <llvm/IR/Module.h>
 #include <llvm/Linker/Linker.h>
 #include <memory>
 #include <string>
 #include <nlohmann/json.hpp>
+
+struct ParserContext {
+	std::string source;
+	antlr4::ANTLRInputStream input;
+	parser::ZaneLexer lexer;
+	antlr4::CommonTokenStream tokens;
+	parser::ZaneParser parser;
+	parser::ZaneParser::GlobalScopeContext* tree;
+
+	ParserContext(const std::string& src)
+		: source(src),
+		  input(source),
+		  lexer(&input),
+		  tokens(&lexer),
+		  parser(&tokens),
+		  tree(nullptr) {
+		tokens.fill();
+		tree = parser.globalScope();
+	}
+
+	parser::ZaneParser::GlobalScopeContext* getTree() const {
+		return tree;
+	}
+};
 
 class Compiler {
 private:
@@ -83,27 +110,50 @@ private:
 		return cacheTime > sourceTime;
 	}
 
+	std::expected<std::unique_ptr<ParserContext>, std::string> parseFile(const fs::path& path) {
+		std::ifstream stream(path);
+		if (!stream) {
+			std::ostringstream oss;
+			oss << "Failed to open file: " << path << "\n";
+			return std::unexpected(oss.str());
+		}
+
+		std::stringstream ss;
+		ss << stream.rdbuf();
+
+		auto ctx = std::make_unique<ParserContext>(ss.str());
+		
+		if (!ctx->getTree()) {
+			return std::unexpected("Failed to parse file: " + path.string());
+		}
+
+		return ctx;
+	}
+
 	void compilePackage(const std::string& pkgName, const std::vector<fs::path>& files, const std::string& packageDir) {
-		Visitor visitor(std::make_shared<Packages>(packages));
+		AstFromAntlr astFromAntlr;
+		Visitor visitor(std::make_shared<Packages>(packages), symbolCollector);
+
+		std::vector<std::unique_ptr<ParserContext>> contexts;
+		contexts.reserve(files.size());
 
 		for (const auto& path : files) {
-			std::ifstream stream(path);
-			if (!stream) {
-				std::cerr << "Failed to open file: " << path << "\n";
-				return;
+			auto parseResult = parseFile(path);
+			if (!parseResult) {
+				std::cerr << "Parse error: " << parseResult.error();
+				continue;
 			}
-
-			std::stringstream ss;
-			ss << stream.rdbuf();
-
-			antlr4::ANTLRInputStream input(ss.str());
-			parser::ZaneLexer lexer(&input);
-			antlr4::CommonTokenStream tokens(&lexer);
-			parser::ZaneParser parser(&tokens);
-
-			antlr4::tree::ParseTree *tree = parser.globalScope();
-			visitor.visit(tree);
+			contexts.push_back(std::move(*parseResult));
 		}
+
+		// NOTE: Left here
+		for (const auto& ctx : contexts) {
+			astFromAntlr.registerSymbols(ctx->getTree());
+		}
+
+		// for (const auto& ctx : contexts) {
+		// 	visitor.buildTree(ctx->getTree());
+		// }
 
 		auto irProgram = visitor.getGlobalScope();
 		packages[irProgram->pkgName] = irProgram;

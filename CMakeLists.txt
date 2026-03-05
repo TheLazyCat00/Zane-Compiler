@@ -59,8 +59,9 @@ add_custom_target(generate_embedded_types
 	DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/embedded_types.hpp
 )
 # --- Executable ---
+file(GLOB_RECURSE SOURCES src/*.cpp)
 add_executable(${CMAKE_PROJECT_NAME}
-	src/main.cpp
+	${SOURCES}
 )
 add_dependencies(${CMAKE_PROJECT_NAME} generate_embedded_types)
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
