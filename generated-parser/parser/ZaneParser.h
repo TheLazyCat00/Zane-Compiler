@@ -22,11 +22,12 @@ public:
   enum {
     RuleGlobalScope = 0, RuleDeclaration = 1, RuleStatement = 2, RulePkgDef = 3, 
     RulePkgImport = 4, RuleFuncTypeParams = 5, RuleFuncType = 6, RuleType = 7, 
-    RuleTypeSymbol = 8, RuleValueSymbol = 9, RuleValue = 10, RulePrimary = 11, 
-    RuleAtom = 12, RulePostfix = 13, RuleCollection = 14, RuleFuncRhs = 15, 
-    RuleFuncDef = 16, RuleParam = 17, RuleParams = 18, RuleFuncMod = 19, 
-    RuleStrict = 20, RulePure = 21, RuleFuncBody = 22, RuleArrowFunction = 23, 
-    RuleScope = 24, RuleTuple = 25, RuleUnit = 26, RuleVarDef = 27, RuleRetStat = 28
+    RuleTypeSymbol = 8, RuleValueSymbol = 9, RuleString = 10, RuleNumber = 11, 
+    RuleValue = 12, RulePrimary = 13, RuleAtom = 14, RulePostfix = 15, RuleCollection = 16, 
+    RuleFuncRhs = 17, RuleFuncDef = 18, RuleParam = 19, RuleParams = 20, 
+    RuleFuncMod = 21, RuleStrict = 22, RulePure = 23, RuleFuncBody = 24, 
+    RuleArrowFunction = 25, RuleScope = 26, RuleTuple = 27, RuleUnit = 28, 
+    RuleVarDef = 29, RuleRetStat = 30
   };
 
   explicit ZaneParser(antlr4::TokenStream *input);
@@ -56,6 +57,8 @@ public:
   class TypeContext;
   class TypeSymbolContext;
   class ValueSymbolContext;
+  class StringContext;
+  class NumberContext;
   class ValueContext;
   class PrimaryContext;
   class AtomContext;
@@ -250,6 +253,36 @@ public:
 
   ValueSymbolContext* valueSymbol();
 
+  class  StringContext : public antlr4::ParserRuleContext {
+  public:
+    StringContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    virtual size_t getRuleIndex() const override;
+    antlr4::tree::TerminalNode *STRING();
+
+    virtual void enterRule(antlr4::tree::ParseTreeListener *listener) override;
+    virtual void exitRule(antlr4::tree::ParseTreeListener *listener) override;
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+   
+  };
+
+  StringContext* string();
+
+  class  NumberContext : public antlr4::ParserRuleContext {
+  public:
+    NumberContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    virtual size_t getRuleIndex() const override;
+    antlr4::tree::TerminalNode *NUMBER();
+
+    virtual void enterRule(antlr4::tree::ParseTreeListener *listener) override;
+    virtual void exitRule(antlr4::tree::ParseTreeListener *listener) override;
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+   
+  };
+
+  NumberContext* number();
+
   class  ValueContext : public antlr4::ParserRuleContext {
   public:
     ValueContext(antlr4::ParserRuleContext *parent, size_t invokingState);
@@ -289,8 +322,8 @@ public:
   public:
     AtomContext(antlr4::ParserRuleContext *parent, size_t invokingState);
     virtual size_t getRuleIndex() const override;
-    antlr4::tree::TerminalNode *STRING();
-    antlr4::tree::TerminalNode *NUMBER();
+    StringContext *string();
+    NumberContext *number();
     ValueSymbolContext *valueSymbol();
     TupleContext *tuple();
 

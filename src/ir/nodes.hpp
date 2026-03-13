@@ -48,12 +48,20 @@ struct TypeSymbol : public IRNode {
 	}
 };
 
-struct GlobalScope : public IRNode {
+struct PackageInfo {
 	std::string packageName;
 	std::vector<std::string> importedPackages;
-	std::unordered_map<std::string, std::shared_ptr<FuncDef>> functionDefs;
+	std::map<std::string, std::shared_ptr<ValueSymbol>> symbols;
+
+	template<typename Archive>
+	void serialize(Archive& ar) {
+		ar(packageName, importedPackages, symbols);
+	}
+};
+
+struct GlobalScope : public IRNode {
 	std::vector<std::shared_ptr<IRNode>> body;
-	std::map<std::string, ValueSymbol> symbols;
+	std::string packageName;
 
 	std::any accept(IRVisitor* visitor) override;
 	std::string getNodeName() const override;
@@ -61,7 +69,7 @@ struct GlobalScope : public IRNode {
 
 	template<typename Archive>
 	void serialize(Archive& ar) {
-		ar(packageName, importedPackages, functionDefs, body);
+		ar(packageName, body);
 	}
 };
 

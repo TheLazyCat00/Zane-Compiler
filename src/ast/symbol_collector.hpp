@@ -15,7 +15,7 @@
 using namespace parser;
 
 class SymbolCollector : public CustomZaneVisitor {
-	std::map<std::string, std::shared_ptr<ir::ValueSymbol>> symbols;
+	std::shared_ptr<ir::PackageInfo> packageInfo;
 	std::string packageName;
 
 	std::any visitVarDef(ZaneParser::VarDefContext *ctx) override {
@@ -25,7 +25,7 @@ class SymbolCollector : public CustomZaneVisitor {
 		symbol->packageName = packageName;
 		symbol->type = get<ir::Type>(ctx->type());
 
-		symbols[name] = symbol;
+		packageInfo->symbols[name] = symbol;
 
 		return 0;
 	}
@@ -37,24 +37,32 @@ class SymbolCollector : public CustomZaneVisitor {
 		symbol->packageName = packageName;
 		symbol->type = get<ir::Type>(ctx->type());
 
-		symbols[name] = symbol;
+		packageInfo->symbols[name] = symbol;
 
 		return 0;
 	}
-public:
 
+	std::any visitGlobalScope(ZaneParser::GlobalScopeContext *ctx) override {
+		for (auto import : ctx->pkgImport()) {
+			packageInfo->importedPackages.push_back(import->name->getText());
+		}
+		return 0;
+	}
+
+public:
 	void collectSymbols(parser::ZaneParser::GlobalScopeContext* globalScopeCtx) {
 		if (!globalScopeCtx) {
 			throw std::runtime_error("Global scope context is null");
 		}
 
 		packageName = globalScopeCtx->pkgDef()->name->getText();
+		packageInfo->packageName = packageName;
 		for (auto ctx : globalScopeCtx->declaration()) {
 			visit(ctx);
 		}
 	}
 
-	std::map<std::string, std::shared_ptr<ir::ValueSymbol>> getSymbols() const {
-		return symbols;
+	std::shared_ptr<ir::PackageInfo> getSymbols() const {
+		return packageInfo;
 	}
 };

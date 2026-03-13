@@ -4,14 +4,7 @@
 #include <string>
 #include <fstream>
 #include <filesystem>
-
-inline void print(const std::string& text) {
-	std::cout << text << std::endl;
-}
-
-inline void alert(const std::string& text) {
-	std::cerr << text << std::endl;
-}
+#include "utils/console.hpp"
 
 inline void writeFile(const std::string& path, const std::string& content) {
 	std::filesystem::path filePath(path);
@@ -19,14 +12,14 @@ inline void writeFile(const std::string& path, const std::string& content) {
 	std::error_code ec;
 	std::filesystem::create_directories(filePath.parent_path(), ec);
 	if (ec) {
-		std::cout << "Error creating directories for: " << path
-			<< " (" << ec.message() << ")" << std::endl;
+		LOG("Error creating directories for: " << path
+			<< " (" << ec.message() << ")");
 		return;
 	}
 
 	std::ofstream file(path);
 	if (!file) {
-		std::cout << "Error creating file: " << path << std::endl;
+		LOG("Error creating file: " << path);
 		return;
 	}
 

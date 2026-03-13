@@ -3,12 +3,13 @@
 #endif
 
 #include "cli/cli.hpp"
+#include "utils/console.hpp"
 
 int main(int argc, char* argv[]) {
 	#ifdef DEBUG
-		std::cout << "Debug build\n";
+		PRINT("Debug build");
 	#else
-		std::cout << "Release build\n";
+		PRINT("Release build");
 	#endif
 
 	CLI cli;

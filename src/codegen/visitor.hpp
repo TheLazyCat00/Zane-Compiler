@@ -3,8 +3,8 @@
 #include "codegen/type_mapper.hpp"
 #include "ir/node.hpp"
 #include "ir/nodes.hpp"
+#include "utils/console.hpp"
 
-#include <iostream>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/IRBuilder.h>
 #include <any>
@@ -116,13 +116,20 @@ public:
 		std::vector<llvm::Value*> args;
 		for (const auto& arg : node->arguments) {
 			auto val = get<llvm::Value*>(arg.get());
-			if (!val) return {};
+			if (!val) {
+				LOG("");
+				return {};
+			}
 			args.push_back(val);
 		}
 
 		// Evaluate callee as a value
 		llvm::Value* calleeValue = get<llvm::Value*>(node->callee.get());
-		if (!calleeValue) return {};
+		LOG("");
+		if (!calleeValue) {
+			LOG("");
+			return {};
+		}
 
 		// Direct call — callee resolved to a Function*
 		if (auto* func = llvm::dyn_cast<llvm::Function>(calleeValue)) {

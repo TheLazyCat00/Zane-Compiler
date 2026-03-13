@@ -132,7 +132,7 @@ std::any FuncDef::accept(IRVisitor* visitor) {
 }
 
 std::string FuncDef::getMangledName() const {
-	return symbol->getMangledName();
+	return symbol->getMangledName() + type->getParamString();
 }
 
 std::string FuncDef::getNodeName() const {

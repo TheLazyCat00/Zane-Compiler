@@ -1,6 +1,7 @@
 #pragma once
 
 #include "cli/commands.hpp"
+#include "utils/console.hpp"
 
 #include <string>
 #include <iostream>
@@ -14,7 +15,7 @@ public:
 
 	int run(int argc, char* argv[]) {
 		if (argc < 2) {
-			std::cout << "Usage: " << argv[0] << " <cmd>\n";
+			PRINT("Usage: " << argv[0] << " <cmd>");
 			return 1;
 		}
 

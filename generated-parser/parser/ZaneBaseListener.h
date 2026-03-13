@@ -48,6 +48,12 @@ public:
   virtual void enterValueSymbol(ZaneParser::ValueSymbolContext * /*ctx*/) override { }
   virtual void exitValueSymbol(ZaneParser::ValueSymbolContext * /*ctx*/) override { }
 
+  virtual void enterString(ZaneParser::StringContext * /*ctx*/) override { }
+  virtual void exitString(ZaneParser::StringContext * /*ctx*/) override { }
+
+  virtual void enterNumber(ZaneParser::NumberContext * /*ctx*/) override { }
+  virtual void exitNumber(ZaneParser::NumberContext * /*ctx*/) override { }
+
   virtual void enterValue(ZaneParser::ValueContext * /*ctx*/) override { }
   virtual void exitValue(ZaneParser::ValueContext * /*ctx*/) override { }
 

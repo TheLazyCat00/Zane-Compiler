@@ -2,6 +2,7 @@
 
 #include "globals/constants.hpp"
 #include "utils/utils.hpp"
+#include "utils/console.hpp"
 
 #include <iostream>
 #include <string>
@@ -116,7 +117,7 @@ struct Manifest {
 	Manifest(const char* path) {
 		std::ifstream file(path);
 		if (!file.is_open()) {
-			std::cerr << "Could not open file!\n";
+			LOG("Could not open file!");
 		}
 
 		json j;

@@ -46,6 +46,12 @@ public:
   virtual void enterValueSymbol(ZaneParser::ValueSymbolContext *ctx) = 0;
   virtual void exitValueSymbol(ZaneParser::ValueSymbolContext *ctx) = 0;
 
+  virtual void enterString(ZaneParser::StringContext *ctx) = 0;
+  virtual void exitString(ZaneParser::StringContext *ctx) = 0;
+
+  virtual void enterNumber(ZaneParser::NumberContext *ctx) = 0;
+  virtual void exitNumber(ZaneParser::NumberContext *ctx) = 0;
+
   virtual void enterValue(ZaneParser::ValueContext *ctx) = 0;
   virtual void exitValue(ZaneParser::ValueContext *ctx) = 0;
 

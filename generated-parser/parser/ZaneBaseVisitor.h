@@ -57,6 +57,14 @@ public:
     return visitChildren(ctx);
   }
 
+  virtual std::any visitString(ZaneParser::StringContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitNumber(ZaneParser::NumberContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
   virtual std::any visitValue(ZaneParser::ValueContext *ctx) override {
     return visitChildren(ctx);
   }

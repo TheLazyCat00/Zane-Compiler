@@ -8,6 +8,7 @@
 #include "ir/nodes.hpp"
 #include "parser/ZaneLexer.h"
 #include "utils/aliases.hpp"
+#include "utils/console.hpp"
 
 #include <cereal/archives/binary.hpp>
 #include <cereal/types/vector.hpp>
@@ -53,6 +54,7 @@ private:
 	Modules modules;
 	manifest::Manifest manifest;
 	llvm::LLVMContext context;
+	std::map<std::string, std::shared_ptr<ir::PackageInfo>> packagesInfo;
 
 	// Helper methods
 	fs::path getEntryDirectory() {
@@ -140,16 +142,18 @@ private:
 		for (const auto& path : files) {
 			auto parseResult = parseFile(path);
 			if (!parseResult) {
-				std::cerr << "Parse error: " << parseResult.error();
+				LOG("Parse error: " << parseResult.error());
 				continue;
 			}
 			contexts.push_back(std::move(*parseResult));
 		}
 
-		// NOTE: Left here
 		for (const auto& ctx : contexts) {
 			symbolCollector->collectSymbols(ctx->getTree());
 		}
+
+		auto packageInfo = symbolCollector->getSymbols();
+		packagesInfo[packageInfo->packageName] = packageInfo;
 
 		for (const auto& ctx : contexts) {
 			visitor.buildTree(ctx->getTree());
@@ -158,11 +162,11 @@ private:
 		auto irProgram = visitor.getGlobalScope();
 		(*packages)[irProgram->packageName] = irProgram;
 
-		writeSymbolsCache(irProgram, packageDir, files);
+		writeSymbolsCache(packageInfo, packageDir, files);
 	}
 
 	void writeSymbolsCache(
-			std::shared_ptr<ir::GlobalScope> globalScope,
+			std::shared_ptr<ir::PackageInfo> packageInfo,
 			const std::string& packageDir,
 			const std::vector<fs::path>& files) {
 		fs::path symbolsPath = constants::getSymbolsPath(packageDir);
@@ -172,9 +176,8 @@ private:
 		cereal::BinaryOutputArchive archive(os);
 
 		archive(
-			globalScope->packageName,
-			globalScope->importedPackages,
-			globalScope->functionDefs
+			packageInfo->packageName,
+			packageInfo->importedPackages
 		);
 	}
 
@@ -224,7 +227,7 @@ public:
 		fs::path srcDir = getEntryDirectory();
 
 		if (!fs::exists(srcDir) || !fs::is_directory(srcDir)) {
-			std::cerr << "Directory not found: " << srcDir << "\n";
+			LOG("Directory not found: " << srcDir);
 			return;
 		}
 
@@ -259,7 +262,7 @@ public:
 			const auto& packageDir = packageDirs[pkgName];
 
 			if (isCacheValid(packageDir)) {
-				std::cout << "Using cached symbols for " << pkgName << "\n";
+				PRINT("Using cached symbols for " << pkgName);
 			}
 			else {
 				compilePackage(pkgName, files, packageDir);
@@ -291,7 +294,7 @@ public:
 
 		for (auto it = std::next(modules.begin()); it != modules.end(); ++it) {
 			if (linker.linkInModule(std::move(it->second))) {
-				std::cerr << "Error linking module\n";
+				LOG("Error linking module");
 				return nullptr;
 			}
 		}
@@ -315,8 +318,8 @@ public:
 		std::string error;
 		auto llvmTarget = llvm::TargetRegistry::lookupTarget(target.triple, error);
 		if (!llvmTarget) {
-			std::cerr << "Warning: Target " << target.name << " not available on this system\n";
-			std::cerr << "         " << error << "\n";
+			LOG("Warning: Target " << target.name << " not available on this system");
+			LOG("         " << error);
 			return;
 		}
 
@@ -359,7 +362,7 @@ public:
 			dest.flush();
 		}
 
-		std::cout << "Generated object files for " << target.name << "\n";
+		PRINT("Generated object files for " << target.name);
 
 		if (clearModules) {
 			modules.clear();
@@ -377,7 +380,7 @@ public:
 		}
 
 		if (objectFiles.empty()) {
-			std::cerr << "No object files found to link for " << target.name << "\n";
+			LOG("No object files found to link for " << target.name);
 			return false;
 		}
 
@@ -388,15 +391,15 @@ public:
 		}
 		linkCmd << " -o " << outputExecutable;
 
-		std::cout << "Linking " << target.name << ": " << linkCmd.str() << "\n";
+		PRINT("Linking " << target.name << ": " << linkCmd.str());
 		int result = std::system(linkCmd.str().c_str());
 
 		if (result != 0) {
-			std::cerr << "Linking failed for " << target.name << "\n";
+			LOG("Linking failed for " << target.name);
 			return false;
 		}
 
-		std::cout << "Created executable: " << outputExecutable << "\n";
+		PRINT("Created executable: " << outputExecutable);
 		return true;
 	}
 
@@ -407,11 +410,11 @@ public:
 			// For now, only build for host platform
 			// TODO: Add bundled cross-compilation toolchains
 			if (std::string(target.triple) != std::string(hostTarget.triple)) {
-				std::cout << "Skipping " << target.name << " (cross-compilation toolchain not available)\n";
+				PRINT("Skipping " << target.name << " (cross-compilation toolchain not available)");
 				continue;
 			}
 			
-			std::cout << "\n=== Building for " << target.name << " ===\n";
+			PRINT("\n=== Building for " << target.name << " ===");
 
 			modules.clear();
 			generateCode();
@@ -427,27 +430,27 @@ public:
 			fs::path outputPath = buildDir / executableName;
 
 			if (!linkObjectFiles(target, outputPath.string())) {
-				std::cerr << "Build failed for " << target.name << "\n";
+				LOG("Build failed for " << target.name);
 			}
 		}
 	}
 
 	void executeNative(const std::string& executable) {
 		if (!fs::exists(executable)) {
-			std::cerr << "Executable not found: " << executable << "\n";
+			LOG("Executable not found: " << executable);
 			return;
 		}
 
-		std::cout << "--- Execution ---\n";
+		PRINT("--- Execution ---");
 		std::system(("./" + executable).c_str());
 	}
 
 	// Debug/output methods
 	void writeModules() {
 		for (const auto& [name, mod] : modules) {
-			std::cout << "=== Module: " << name << " ===\n";
+			PRINT("=== Module: " << name << " ===");
 			writeLLVMIR(*mod, "/dev/stdout");
-			std::cout << "\n";
+			PRINT("");
 		}
 	}
 

@@ -77,10 +77,10 @@ struct Repl {
 		ReplResult result;
 		std::string input;
 
-		print(startMsg);
+		PRINT(startMsg);
 
 		for (size_t i = 0; i < questions.size(); ) {
-			print(questions[i]->getPrompt());
+			PRINT(questions[i]->getPrompt());
 			std::getline(std::cin, input);
 			std::transform(input.begin(), input.end(), input.begin(), ::tolower);
 
@@ -88,7 +88,7 @@ struct Repl {
 			if (status == Success) {
 				++i;
 			} else {
-				print("Input not accepted");
+				PRINT("Input not accepted");
 			}
 		}
 

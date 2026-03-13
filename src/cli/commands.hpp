@@ -7,6 +7,7 @@
 #include "cli/help.hpp"
 #include "compiler/compiler.hpp"
 #include "utils/utils.hpp"
+#include "utils/console.hpp"
 
 #include <cstdio>
 #include <memory>
@@ -34,7 +35,7 @@ inline void execute(Mode mode, const manifest::Manifest& manifest) {
 	if (mode == Debug) {
 		auto packages = compiler.getPackages();
 		for (const auto& [name, globalScope] : *packages) {
-			std::cout << globalScope->toString();
+			PRINT(globalScope->toString());
 		}
 		return;
 	}
@@ -44,7 +45,7 @@ inline void execute(Mode mode, const manifest::Manifest& manifest) {
 	if (mode == IR) {
 		auto linkedModule = compiler.linkLlvmModules();
 		if (!linkedModule) {
-			std::cerr << "Failed to link modules\n";
+			LOG("Failed to link modules");
 			return;
 		}
 		// Write directly to stdout instead of using file descriptor
@@ -111,7 +112,7 @@ inline void init(int argc, char* argv[]) {
 		std::filesystem::create_directories(dir);
 	}
 	else if (!directoryIsEmpty(dir)) {
-		print("Directory " + dir + " isn't empty.");
+		PRINT("Directory " + dir + " isn't empty.");
 		return;
 	}
 
@@ -139,18 +140,18 @@ inline void help(int argc, char* argv[]) {
 		std::string cmd = argv[0];
 		auto it = help::commandHelp.find(cmd);
 		if (it != help::commandHelp.end()) {
-			std::cout << cmd << ": " << it->second << "\n";
+			PRINT(cmd << ": " << it->second);
 		} else {
-			std::cout << "Unknown command: " << cmd << "\n\n";
-			std::cout << "Available commands:\n";
+			PRINT("Unknown command: " << cmd << "\n");
+			PRINT("Available commands:");
 			for (const auto& [name, desc] : help::commandHelp) {
-				std::cout << "  " << name << " - " << desc << "\n";
+				PRINT("  " << name << " - " << desc);
 			}
 		}
 	} else {
-		std::cout << "Available commands:\n";
+		PRINT("Available commands:");
 		for (const auto& [name, desc] : help::commandHelp) {
-			std::cout << "  " << name << " - " << desc << "\n";
+			PRINT("  " << name << " - " << desc);
 		}
 	}
 }
@@ -178,13 +179,13 @@ inline void dispatch(const std::string& cmd, int argc, char* argv[]){
 
 	auto projectIt = projectCommands.find(cmd);
 	if (projectIt == projectCommands.end()) {
-		std::cout << "Unknown command: " << cmd << "\n";
+		PRINT("Unknown command: " << cmd);
 		return;
 	}
 
 	namespace fs = std::filesystem;
 	if (!fs::exists(constants::MANIFEST_PATH)) {
-		alert("Project not initialized.");
+		LOG("Project not initialized.");
 		return;
 	}
 

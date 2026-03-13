@@ -74,6 +74,9 @@ valueSymbol
 // Values (NEW STRUCTURE)
 // -----------------------------------------------------
 
+string: STRING;
+number: NUMBER;
+
 value
 	: primary (OPERATOR primary)*
 	;
@@ -83,8 +86,8 @@ primary
 	;
 
 atom
-	: STRING
-	| NUMBER
+	: string
+	| number
 	| valueSymbol
 	| tuple
 	;

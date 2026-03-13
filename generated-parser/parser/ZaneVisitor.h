@@ -40,6 +40,10 @@ public:
 
     virtual std::any visitValueSymbol(ZaneParser::ValueSymbolContext *context) = 0;
 
+    virtual std::any visitString(ZaneParser::StringContext *context) = 0;
+
+    virtual std::any visitNumber(ZaneParser::NumberContext *context) = 0;
+
     virtual std::any visitValue(ZaneParser::ValueContext *context) = 0;
 
     virtual std::any visitPrimary(ZaneParser::PrimaryContext *context) = 0;
