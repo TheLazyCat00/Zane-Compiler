@@ -1,12 +1,15 @@
 #pragma once
 
-#include "ir/nodes.hpp"
+#include "utils/zane_ptr.hpp"
 #include <llvm-21/llvm/IR/Module.h>
 #include <map>
 #include <string>
 #include <filesystem>
 
-using Packages = std::map<std::string, std::shared_ptr<ir::GlobalScope>>;
+// Forward declarations
+struct Package;
+
+using Packages = std::map<std::string, Ptr<Package>>;
 using Modules = std::map<std::string, std::unique_ptr<llvm::Module>>;
 
 namespace fs = std::filesystem;

@@ -87,10 +87,10 @@ private:
 	}
 
 	void compilePackage(const std::string& pkgName, const std::vector<fs::path>& files, const std::string& packageDir) {
-		Package package(packages);
-		package.compile(pkgName, files, packageDir);
+		(*packages)[pkgName] = Package(packages);
+		(*packages)[pkgName]->compile(pkgName, files, packageDir);
 		
-		packagesInfo[package.getPackageInfo()->packageName] = package.getPackageInfo();
+		packagesInfo[pkgName] = (*packages)[pkgName]->getPackageInfo();
 	}
 
 	void generateMainWrapper() {
@@ -187,10 +187,10 @@ public:
 	}
 
 	void generateCode() {
-		for (auto& [pkgName, globalScope] : *packages) {
+		for (auto& [pkgName, package] : *packages) {
 			LLVMCodeGen codegen(context);
 			codegen.setupBuiltins();
-			codegen.generate(globalScope, packages);
+			codegen.generate(package->getIRProgram(), packages);
 
 			modules[pkgName] = codegen.extractModule();
 		}

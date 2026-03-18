@@ -12,10 +12,14 @@
 #include <cereal/archives/binary.hpp>
 #include <expected>
 #include <fstream>
+#include <map>
 #include <memory>
 #include <sstream>
 #include <string>
 #include <vector>
+#include <filesystem>
+
+namespace fs = std::filesystem;
 
 struct ParserContext {
 	std::string source;
@@ -48,10 +52,12 @@ struct Package {
 	std::shared_ptr<ir::PackageInfo> packageInfo;
 	std::shared_ptr<ir::GlobalScope> irProgram;
 
+	Package() = default;
+
 	Package(Ptr<Packages> packages) 
 		: packages(packages) {
 		this->symbolCollector = SymbolCollector();
-		this->visitor = Visitor(packages, symbolCollector.weak());
+		this->visitor = Visitor(packages, symbolCollector);
 	}
 
 	std::expected<std::unique_ptr<ParserContext>, std::string> parseFile(const fs::path& path) {
@@ -98,7 +104,6 @@ struct Package {
 		}
 
 		irProgram = visitor->getGlobalScope();
-		(*packages)[irProgram->packageName] = irProgram;
 
 		writeSymbolsCache(packageInfo, packageDir, files);
 	}
