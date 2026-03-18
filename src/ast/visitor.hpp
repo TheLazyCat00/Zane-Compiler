@@ -8,6 +8,7 @@
 #include "utils/aliases.hpp"
 #include "utils/types.hpp"
 #include "utils/console.hpp"
+#include "utils/zane_ptr.hpp"
 
 #include <antlr4-runtime.h>
 #include <memory>
@@ -23,9 +24,9 @@ using namespace parser;
 class Visitor : public CustomZaneVisitor {
 	std::shared_ptr<ir::GlobalScope> globalScope;
 	std::unordered_set<std::string> builtinSymbols;
-	std::shared_ptr<Packages> packages;
+	Ptr<Packages> packages;
 	Stack<std::map<std::string, std::shared_ptr<ir::ValueSymbol>>> scopeSymbols;
-	std::shared_ptr<SymbolCollector> symbolCollector;
+	Ptr<SymbolCollector> symbolCollector;
 	std::string packageName;
 
 	std::shared_ptr<ir::Type> makeVoidType() {
@@ -218,7 +219,7 @@ class Visitor : public CustomZaneVisitor {
 	}
 
 public:
-	Visitor(std::shared_ptr<Packages> packages, std::shared_ptr<SymbolCollector> symbolCollector)
+	Visitor(Ptr<Packages> packages, Ptr<SymbolCollector> symbolCollector)
 			: globalScope(std::make_shared<ir::GlobalScope>())
 			, packages(packages)
 			, symbolCollector(symbolCollector) {

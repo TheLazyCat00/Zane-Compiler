@@ -3,6 +3,7 @@
 #include "ir/nodes.hpp"
 #include "codegen/visitor.hpp"
 #include "utils/aliases.hpp"
+#include "utils/zane_ptr.hpp"
 
 #include <llvm/TargetParser/Host.h>
 #include <llvm/IR/Module.h>
@@ -27,7 +28,7 @@ public:
 
 	void generate(
 			std::shared_ptr<ir::GlobalScope> globalScope,
-			const std::shared_ptr<Packages> allPackages) {
+			Ptr<Packages> allPackages) {
 		LLVMVisitor visitor(context, builder, *module);
 		visitor.declareSignatures(globalScope.get());
 		

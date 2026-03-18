@@ -1,21 +1,19 @@
 #pragma once
 
-#include "ast/symbol_collector.hpp"
-#include "ast/visitor.hpp"
 #include "cli/manifest.hpp"
 #include "codegen/llvm.hpp"
 #include "globals/constants.hpp"
 #include "ir/nodes.hpp"
-#include "parser/ZaneLexer.h"
+#include "package/package.hpp"
 #include "utils/aliases.hpp"
 #include "utils/console.hpp"
+#include "utils/zane_ptr.hpp"
 
 #include <cereal/archives/binary.hpp>
 #include <cereal/types/vector.hpp>
 #include <cereal/types/string.hpp>
 #include <cereal/types/memory.hpp>
 #include <cereal/types/unordered_map.hpp>
-#include <expected>
 #include <llvm-21/llvm/IR/IRBuilder.h>
 #include <llvm/IR/Module.h>
 #include <llvm/Linker/Linker.h>
@@ -23,38 +21,14 @@
 #include <string>
 #include <nlohmann/json.hpp>
 
-struct ParserContext {
-	std::string source;
-	antlr4::ANTLRInputStream input;
-	parser::ZaneLexer lexer;
-	antlr4::CommonTokenStream tokens;
-	parser::ZaneParser parser;
-	parser::ZaneParser::GlobalScopeContext* tree;
-
-	ParserContext(const std::string& src)
-		: source(src),
-		  input(source),
-		  lexer(&input),
-		  tokens(&lexer),
-		  parser(&tokens),
-		  tree(nullptr) {
-		tokens.fill();
-		tree = parser.globalScope();
-	}
-
-	parser::ZaneParser::GlobalScopeContext* getTree() const {
-		return tree;
-	}
-};
-
 class Compiler {
 private:
 	// Member variables
-	std::shared_ptr<Packages> packages;
+	Ptr<Packages> packages;
 	Modules modules;
 	manifest::Manifest manifest;
 	llvm::LLVMContext context;
-	std::map<std::string, std::shared_ptr<ir::PackageInfo>> packagesInfo;
+	std::map<std::string, Ptr<ir::PackageInfo>> packagesInfo;
 
 	// Helper methods
 	fs::path getEntryDirectory() {
@@ -112,73 +86,11 @@ private:
 		return cacheTime > sourceTime;
 	}
 
-	std::expected<std::unique_ptr<ParserContext>, std::string> parseFile(const fs::path& path) {
-		std::ifstream stream(path);
-		if (!stream) {
-			std::ostringstream oss;
-			oss << "Failed to open file: " << path << "\n";
-			return std::unexpected(oss.str());
-		}
-
-		std::stringstream ss;
-		ss << stream.rdbuf();
-
-		auto ctx = std::make_unique<ParserContext>(ss.str());
-		
-		if (!ctx->getTree()) {
-			return std::unexpected("Failed to parse file: " + path.string());
-		}
-
-		return ctx;
-	}
-
 	void compilePackage(const std::string& pkgName, const std::vector<fs::path>& files, const std::string& packageDir) {
-		auto symbolCollector = std::make_shared<SymbolCollector>();
-		Visitor visitor(packages, symbolCollector);
-
-		std::vector<std::unique_ptr<ParserContext>> contexts;
-		contexts.reserve(files.size());
-
-		for (const auto& path : files) {
-			auto parseResult = parseFile(path);
-			if (!parseResult) {
-				LOG("Parse error: " << parseResult.error());
-				continue;
-			}
-			contexts.push_back(std::move(*parseResult));
-		}
-
-		for (const auto& ctx : contexts) {
-			symbolCollector->collectSymbols(ctx->getTree());
-		}
-
-		auto packageInfo = symbolCollector->getSymbols();
-		packagesInfo[packageInfo->packageName] = packageInfo;
-
-		for (const auto& ctx : contexts) {
-			visitor.buildTree(ctx->getTree());
-		}
-
-		auto irProgram = visitor.getGlobalScope();
-		(*packages)[irProgram->packageName] = irProgram;
-
-		writeSymbolsCache(packageInfo, packageDir, files);
-	}
-
-	void writeSymbolsCache(
-			std::shared_ptr<ir::PackageInfo> packageInfo,
-			const std::string& packageDir,
-			const std::vector<fs::path>& files) {
-		fs::path symbolsPath = constants::getSymbolsPath(packageDir);
-		fs::create_directories(symbolsPath.parent_path());
-
-		std::ofstream os(symbolsPath, std::ios::binary);
-		cereal::BinaryOutputArchive archive(os);
-
-		archive(
-			packageInfo->packageName,
-			packageInfo->importedPackages
-		);
+		Package package(packages);
+		package.compile(pkgName, files, packageDir);
+		
+		packagesInfo[package.getPackageInfo()->packageName] = package.getPackageInfo();
 	}
 
 	void generateMainWrapper() {
@@ -270,7 +182,7 @@ public:
 		}
 	}
 
-	std::shared_ptr<Packages> getPackages() {
+	Ptr<Packages> getPackages() {
 		return packages;
 	}
 
