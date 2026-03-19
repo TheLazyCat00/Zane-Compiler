@@ -14,8 +14,14 @@
 #include <cereal/types/memory.hpp>
 #include <cereal/types/unordered_map.hpp>
 #include <llvm-21/llvm/IR/IRBuilder.h>
+#include <llvm-21/llvm/Support/TargetSelect.h>
 #include <llvm/IR/Module.h>
 #include <llvm/Linker/Linker.h>
+#include <llvm/MC/TargetRegistry.h>
+#include <llvm/Target/TargetMachine.h>
+#include <llvm/Target/TargetOptions.h>
+#include <llvm/IR/LegacyPassManager.h>
+#include <llvm/Support/FileSystem.h>
 #include <memory>
 #include <string>
 #include <nlohmann/json.hpp>
@@ -251,7 +257,7 @@ public:
 			module->setDataLayout(targetMachine->createDataLayout());
 
 			std::error_code EC;
-			llvm::raw_fd_ostream dest(objectFile.string(), EC, llvm::sys::fs::OF_None);
+			llvm::raw_fd_ostream dest(objectFile.string(), EC, llvm::sys::fs::OpenFlags::OF_None);
 			if (EC) {
 				llvm::errs() << "Could not open file: " << EC.message() << "\n";
 				continue;
@@ -398,7 +404,7 @@ public:
 		linkedModule.setDataLayout(targetMachine->createDataLayout());
 
 		std::error_code EC;
-		llvm::raw_fd_ostream dest(filename, EC, llvm::sys::fs::OF_None);
+		llvm::raw_fd_ostream dest(filename, EC, llvm::sys::fs::OpenFlags::OF_None);
 		if (EC) {
 			llvm::errs() << "Could not open file: " << EC.message() << "\n";
 			return;

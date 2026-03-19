@@ -34,8 +34,8 @@ inline void execute(Mode mode, const manifest::Manifest& manifest) {
 
 	if (mode == Debug) {
 		auto packages = compiler.getPackages();
-		for (const auto& [name, globalScope] : *packages) {
-			PRINT(globalScope->toString());
+		for (const auto& [name, package] : *packages) {
+			PRINT(package->irProgram->toString());
 		}
 		return;
 	}
