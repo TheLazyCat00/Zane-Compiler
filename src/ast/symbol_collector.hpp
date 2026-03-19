@@ -15,7 +15,7 @@
 using namespace parser;
 
 class SymbolCollector : public CustomZaneVisitor {
-	std::shared_ptr<ir::PackageInfo> packageInfo;
+	std::shared_ptr<ir::PackageInfo> packageInfo = std::make_shared<ir::PackageInfo>();
 	std::string packageName;
 
 	void registerSymbol(std::shared_ptr<ir::ValueSymbol> symbol) {

@@ -2,7 +2,6 @@
 
 #include "cli/manifest.hpp"
 #include "globals/constants.hpp"
-#include "ir/nodes.hpp"
 #include "package/package.hpp"
 #include "utils/aliases.hpp"
 #include "utils/console.hpp"
@@ -33,7 +32,6 @@ private:
 	Modules modules;
 	manifest::Manifest manifest;
 	Ptr<llvm::LLVMContext> context;
-	std::map<std::string, Ptr<ir::PackageInfo>> packagesInfo;
 
 	// Helper methods
 	fs::path getEntryDirectory() {
@@ -94,8 +92,6 @@ private:
 	void compilePackage(const std::string& pkgName, const std::vector<fs::path>& files, const std::string& packageDir) {
 		(*packages)[pkgName] = Package(packages);
 		(*packages)[pkgName]->compile(pkgName, files, packageDir);
-		
-		packagesInfo[pkgName] = (*packages)[pkgName]->getPackageInfo();
 	}
 
 	void generateMainWrapper() {
@@ -128,7 +124,7 @@ private:
 public:
 	// Constructor
 	Compiler(manifest::Manifest manifest) 
-		: manifest(manifest), packages(std::make_shared<Packages>()) {}
+		: manifest(manifest), packages(Packages()), context(makePtr<llvm::LLVMContext>()) {}
 
 	// Destructor - explicitly clean up to break circular references
 	~Compiler() {
@@ -193,7 +189,7 @@ public:
 
 	void generateCode() {
 		for (auto& [pkgName, package] : *packages) {
-			modules[pkgName] = package->getLlvmModule(context);
+			modules[pkgName] = package->getLlvmModule(context, package);
 		}
 
 		generateMainWrapper();

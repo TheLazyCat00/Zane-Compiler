@@ -190,14 +190,16 @@ public:
 
 private:
 	void declareSignature(std::shared_ptr<ir::ValueSymbol> funcSymbol) {
-		llvm::Type* retType = typeMapper.toLLVMType(funcSymbol->getMangledName());
-
+		llvm::Type* retType = nullptr;
 		std::vector<llvm::Type*> params;
+
 		funcSymbol->type->value.match([&](std::shared_ptr<ir::FuncType> funcType) {
+			retType = typeMapper.toLLVMType(funcType->returnType->getMangledName());
 			for (auto& p : funcType->paramTypes) {
 				params.push_back(typeMapper.toLLVMType(p->getMangledName()));
 			}
 		});
+		if (!retType) return;
 
 		llvm::FunctionType* ft = llvm::FunctionType::get(retType, params, false);
 		llvm::Function::Create(ft, llvm::Function::ExternalLinkage, funcSymbol->getMangledName(), module);

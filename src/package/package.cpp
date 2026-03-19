@@ -71,10 +71,10 @@ void Package::writeSymbolsCache(
 	);
 }
 
-std::unique_ptr<llvm::Module> Package::getLlvmModule(Ptr<llvm::LLVMContext> context) {
+std::unique_ptr<llvm::Module> Package::getLlvmModule(Ptr<llvm::LLVMContext> context, Ptr<Package> package) {
 	LLVMCodeGen codegen(*context);
 	codegen.setupBuiltins();
-	codegen.generate(this, packages);
+	codegen.generate(package, packages);
 
 	return std::move(codegen.extractModule());
 }
