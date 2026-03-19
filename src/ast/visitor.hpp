@@ -100,10 +100,13 @@ class Visitor : public CustomZaneVisitor {
 	std::any visitVarDef(ZaneParser::VarDefContext *ctx) override {
 		auto symbol = std::make_shared<ir::ValueSymbol>();
 		symbol->name = ctx->name->getText();
-		symbol->packageName = packageName;
 		symbol->type = get<ir::Type>(ctx->type());
 
-		// Only add to local scope symbols if we're not in global scope
+		// Only set package name for global scope declarations
+		if (scopeSymbols.empty()) {
+			symbol->packageName = packageName;
+		}
+
 		if (!scopeSymbols.empty()) {
 			scopeSymbols.top()[symbol->name] = symbol;
 		}
@@ -111,7 +114,7 @@ class Visitor : public CustomZaneVisitor {
 		auto varDef = std::make_shared<ir::VarDef>();
 		varDef->value = get<ir::IRNode>(ctx->value());
 		varDef->symbol = symbol;
-		
+
 		return std::static_pointer_cast<ir::IRNode>(varDef);
 	}
 

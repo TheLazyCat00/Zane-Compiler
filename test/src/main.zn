@@ -1,12 +1,10 @@
 package test
 
-Void process(String input) {
+String process(String input) {
 	String temp = "processed"
-	puts(input)
+	return temp
 }
 
 Void main() {
-	puts("1")
-	process("hi")
-	puts("2")
+	puts(process("hi"))
 }
