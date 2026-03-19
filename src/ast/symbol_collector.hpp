@@ -18,26 +18,47 @@ class SymbolCollector : public CustomZaneVisitor {
 	std::shared_ptr<ir::PackageInfo> packageInfo;
 	std::string packageName;
 
+	void registerSymbol(std::shared_ptr<ir::ValueSymbol> symbol) {
+		packageInfo->symbols[symbol->name] = symbol;
+	}
+
 	std::any visitVarDef(ZaneParser::VarDefContext *ctx) override {
 		auto symbol = std::make_shared<ir::ValueSymbol>();
-		auto name = ctx->name->getText();
-		symbol->name = name;
+		symbol->name = ctx->name->getText();
 		symbol->packageName = packageName;
 		symbol->type = get<ir::Type>(ctx->type());
 
-		packageInfo->symbols[name] = symbol;
+		registerSymbol(symbol);
 
 		return 0;
 	}
 
 	std::any visitFuncDef(ZaneParser::FuncDefContext *ctx) override {
 		auto symbol = std::make_shared<ir::ValueSymbol>();
-		auto name = ctx->name->getText();
-		symbol->name = name;
+		symbol->name = ctx->name->getText();
 		symbol->packageName = packageName;
-		symbol->type = get<ir::Type>(ctx->type());
+		symbol->type = std::make_shared<ir::Type>();
 
-		packageInfo->symbols[name] = symbol;
+		auto funcType = std::make_shared<ir::FuncType>();
+		funcType->returnType = get<ir::Type>(ctx->type());
+
+		std::string funcMod = "open";
+		if (ctx->funcRhs()->funcMod()) {
+			funcMod = ctx->funcRhs()->funcMod()->getText();
+		}
+		funcType->mod = ir::FuncMod(funcMod);
+
+		if (ctx->funcRhs()->params()) {
+			for (auto paramCtx : ctx->funcRhs()->params()->param()) {
+				auto name = paramCtx->name->getText();
+				auto paramType = get<ir::Type>(paramCtx->type());
+				funcType->paramTypes.push_back(paramType);
+			}
+		}
+
+		symbol->type = std::make_shared<ir::Type>(funcType);
+
+		registerSymbol(symbol);
 
 		return 0;
 	}

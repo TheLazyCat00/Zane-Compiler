@@ -36,6 +36,7 @@ struct ValueSymbol : public IRNode {
 
 struct TypeSymbol : public IRNode {
 	std::optional<std::string> packageName;
+	std::vector<std::shared_ptr<Type>> generics;
 	std::string name;
 
 	std::any accept(IRVisitor* visitor) override;
@@ -44,7 +45,7 @@ struct TypeSymbol : public IRNode {
 
 	template<typename Archive>
 	void serialize(Archive& ar) {
-		ar(packageName, name);
+		ar(packageName, name, generics);
 	}
 };
 
@@ -131,7 +132,6 @@ struct FuncType : public IRNode {
 
 struct Type : public IRNode {
 	WrappingVariant<std::shared_ptr, TypeSymbol, FuncType> value;
-	std::vector<std::shared_ptr<Type>> generics;
 
 	Type() = default;
 	Type(std::shared_ptr<TypeSymbol> typeSymbol) {
@@ -148,7 +148,7 @@ struct Type : public IRNode {
 
 	template<typename Archive>
 	void serialize(Archive& ar) {
-		ar(value, generics);
+		ar(value);
 	}
 };
 

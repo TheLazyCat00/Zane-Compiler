@@ -2,6 +2,7 @@
 
 #include "ast/symbol_collector.hpp"
 #include "ast/visitor.hpp"
+#include "codegen/llvm.hpp"
 #include "utils/zane_ptr.hpp"
 #include "utils/aliases.hpp"
 #include "utils/console.hpp"
@@ -122,6 +123,14 @@ struct Package {
 			packageInfo->packageName,
 			packageInfo->importedPackages
 		);
+	}
+
+	std::unique_ptr<llvm::Module> getLlvmModule(Ptr<llvm::LLVMContext> context) {
+		LLVMCodeGen codegen(*context);
+		codegen.setupBuiltins();
+		codegen.generate(this, packages);
+
+		return std::move(codegen.extractModule());
 	}
 
 	std::shared_ptr<ir::PackageInfo> getPackageInfo() const {

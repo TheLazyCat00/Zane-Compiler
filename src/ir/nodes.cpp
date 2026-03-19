@@ -12,10 +12,17 @@ std::string ValueSymbol::getNodeName() const {
 }
 
 std::string ValueSymbol::getMangledName() const {
+	std::string suffix = "";
+	type->value.match([&](std::shared_ptr<FuncType> funcType) {
+		suffix = funcType->getMangledName();
+	});
+
+	std::string prefix = "";
 	if (packageName.has_value()) {
-		return packageName.value() + "$" + name;
+		prefix = packageName.value() + "$";
 	}
-	return name;
+
+	return prefix + name + suffix;
 }
 
 // TypeSymbol
@@ -28,10 +35,23 @@ std::string TypeSymbol::getNodeName() const {
 }
 
 std::string TypeSymbol::getMangledName() const {
+	std::string result = "";
 	if (packageName.has_value()) {
-		return packageName.value() + "$" + name;
+		result = packageName.value() + "$" + name;
 	}
-	return name;
+	else {
+		result = name;
+	}
+
+	if (generics.size() > 0) {
+		result += "<";
+		for (auto type : generics) {
+			result += type->getMangledName();
+			result += ",";
+		}
+		result += ">";
+	}
+	return result;
 }
 
 // GlobalScope
@@ -83,15 +103,6 @@ std::string Type::getMangledName() const {
 	std::string name = value.visit([](auto& v) -> std::string {
 		return v->getMangledName();
 	});
-
-	if (generics.size() > 0) {
-		name += "<";
-		for (auto type : generics) {
-			name += type->getMangledName();
-			name += ",";
-		}
-		name += ">";
-	}
 
 	return name;
 }

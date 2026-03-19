@@ -3,6 +3,7 @@
 #include "codegen/type_mapper.hpp"
 #include "ir/node.hpp"
 #include "ir/nodes.hpp"
+#include "package/package.hpp"
 #include "utils/console.hpp"
 
 #include <llvm/IR/Module.h>
@@ -42,9 +43,12 @@ public:
 		return {};
 	}
 
-	void declareSignatures(ir::GlobalScope* node) {
-		for (auto& [name, funcDef] : node->functionDefs) {
-			declareSignature(funcDef.get());
+	void declareSignatures(Ptr<Package> package) {
+		auto symbols = package->symbolCollector->getSymbols()->symbols;
+		for (auto& [name, symbol] : symbols) {
+			symbol->type->value.match([](std::shared_ptr<ir::FuncType> funcType) {
+				declareSignature(funcType);
+			});
 		}
 	}
 
@@ -184,7 +188,7 @@ public:
 	}
 
 private:
-	void declareSignature(ir::FuncDef* node) {
+	void declareSignature(std::shared_ptr<ir::FuncType> funcType) {
 		llvm::Type* retType = typeMapper.toLLVMType(node->type->returnType->getMangledName());
 
 		std::vector<llvm::Type*> params;

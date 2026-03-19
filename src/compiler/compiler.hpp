@@ -1,7 +1,6 @@
 #pragma once
 
 #include "cli/manifest.hpp"
-#include "codegen/llvm.hpp"
 #include "globals/constants.hpp"
 #include "ir/nodes.hpp"
 #include "package/package.hpp"
@@ -27,7 +26,7 @@ private:
 	Ptr<Packages> packages;
 	Modules modules;
 	manifest::Manifest manifest;
-	llvm::LLVMContext context;
+	Ptr<llvm::LLVMContext> context;
 	std::map<std::string, Ptr<ir::PackageInfo>> packagesInfo;
 
 	// Helper methods
@@ -94,23 +93,23 @@ private:
 	}
 
 	void generateMainWrapper() {
-		auto wrapperModule = std::make_unique<llvm::Module>("__main_wrapper", context);
-		llvm::IRBuilder<> builder(context);
+		auto wrapperModule = std::make_unique<llvm::Module>("__main_wrapper", *context);
+		llvm::IRBuilder<> builder(*context);
 
 		std::string mangledMain = constants::getMangledMain(manifest.name);
 		llvm::FunctionType* mangledMainType = llvm::FunctionType::get(
 			builder.getVoidTy(), {}, false);
 		wrapperModule->getOrInsertFunction(mangledMain, mangledMainType);
 
-		llvm::Type* i8Ptr = llvm::PointerType::get(context, 0);
+		llvm::Type* i8Ptr = llvm::PointerType::get(*context, 0);
 		llvm::FunctionType* mainType = llvm::FunctionType::get(
 			builder.getInt32Ty(), 
-			{builder.getInt32Ty(), llvm::PointerType::get(context, 0)}, 
+			{builder.getInt32Ty(), llvm::PointerType::get(*context, 0)}, 
 			false);
 		llvm::Function* mainFunc = llvm::Function::Create(
 			mainType, llvm::Function::ExternalLinkage, "main", wrapperModule.get());
 
-		llvm::BasicBlock* entry = llvm::BasicBlock::Create(context, "entry", mainFunc);
+		llvm::BasicBlock* entry = llvm::BasicBlock::Create(*context, "entry", mainFunc);
 		builder.SetInsertPoint(entry);
 
 		llvm::Function* mangledMainFunc = wrapperModule->getFunction(mangledMain);
@@ -188,11 +187,7 @@ public:
 
 	void generateCode() {
 		for (auto& [pkgName, package] : *packages) {
-			LLVMCodeGen codegen(context);
-			codegen.setupBuiltins();
-			codegen.generate(package->getIRProgram(), packages);
-
-			modules[pkgName] = codegen.extractModule();
+			modules[pkgName] = package->getLlvmModule(context);
 		}
 
 		generateMainWrapper();

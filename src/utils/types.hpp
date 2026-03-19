@@ -3,10 +3,16 @@
 #include <variant>
 #include <vector>
 
+// Helper for overloading lambdas
+template<typename... Ts>
+struct overloaded : Ts... {
+	using Ts::operator()...;
+};
+
 // Helper function to load a variant at a specific index
 template<std::size_t I = 0, typename... Types, typename Archive>
 void loadVariantAt(std::size_t idx, std::variant<Types...>& var, Archive& ar) {
-	if constexpr (I < sizeof...(Types)) {
+	if constexpr (I<sizeof...(Types)) {
 		if (I == idx) {
 			std::variant_alternative_t<I, std::variant<Types...>> val;
 			ar(val);
@@ -36,6 +42,18 @@ struct Variant {
 		return std::visit(std::forward<Callback>(callback), value);
 	}
 
+	// Match with callbacks - automatically adds a no-op catch-all if needed
+	template<typename... Callbacks>
+	decltype(auto) match(Callbacks&&... callbacks) {
+		return std::visit(overloaded{std::forward<Callbacks>(callbacks)..., [](auto&&){}}, value);
+	}
+
+	template<typename... Callbacks>
+	decltype(auto) match(Callbacks&&... callbacks) const {
+		return std::visit(overloaded{std::forward<Callbacks>(callbacks)..., [](auto&&){}}, value);
+	}
+
+private:
 	template<typename Archive>
     void save(Archive& ar) const {
         ar(value.index());
@@ -69,6 +87,18 @@ struct WrappingVariant {
 		return std::visit(std::forward<Callback>(callback), value);
 	}
 
+	// Match with callbacks - automatically adds a no-op catch-all if needed
+	template<typename... Callbacks>
+	decltype(auto) match(Callbacks&&... callbacks) {
+		return std::visit(overloaded{std::forward<Callbacks>(callbacks)..., [](auto&&){}}, value);
+	}
+
+	template<typename... Callbacks>
+	decltype(auto) match(Callbacks&&... callbacks) const {
+		return std::visit(overloaded{std::forward<Callbacks>(callbacks)..., [](auto&&){}}, value);
+	}
+
+private:
 	template<typename Archive>
     void save(Archive& ar) const {
         ar(value.index());

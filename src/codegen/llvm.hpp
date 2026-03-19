@@ -27,18 +27,18 @@ public:
 		: context(ctx), module(std::make_unique<llvm::Module>("zane", ctx)), builder(ctx)  {}
 
 	void generate(
-			std::shared_ptr<ir::GlobalScope> globalScope,
+			Ptr<Package> package,
 			Ptr<Packages> allPackages) {
 		LLVMVisitor visitor(context, builder, *module);
-		visitor.declareSignatures(globalScope.get());
+		visitor.declareSignatures(package);
 		
-		for (const auto& [pkgName, pkg] : *allPackages) {
-			if (pkgName != globalScope->packageName) {
-				visitor.declareSignatures(pkg.get());
-			}
-		}
+		// for (const auto& [pkgName, pkg] : *allPackages) {
+		// 	if (pkgName != globalScope->packageName) {
+		// 		visitor.declareSignatures(pkg.get());
+		// 	}
+		// }
 		
-		visitor.generateBodies(globalScope.get());
+		visitor.generateBodies(package);
 	}
 
 	void setupBuiltins() {
