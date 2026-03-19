@@ -53,7 +53,6 @@ struct Variant {
 		return std::visit(overloaded{std::forward<Callbacks>(callbacks)..., [](auto&&){}}, value);
 	}
 
-private:
 	template<typename Archive>
     void save(Archive& ar) const {
         ar(value.index());
@@ -98,7 +97,6 @@ struct WrappingVariant {
 		return std::visit(overloaded{std::forward<Callbacks>(callbacks)..., [](auto&&){}}, value);
 	}
 
-private:
 	template<typename Archive>
     void save(Archive& ar) const {
         ar(value.index());
