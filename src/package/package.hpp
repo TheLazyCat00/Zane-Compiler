@@ -56,12 +56,20 @@ struct Package {
 	Package(Ptr<Packages> packages);
 
 	std::expected<std::unique_ptr<ParserContext>, std::string> parseFile(const fs::path& path);
+	void parse(const std::vector<fs::path>& files);
+	void collectSymbols();
+	void buildTree(const std::string& packageDir);
 	void compile(const std::string& pkgName, const std::vector<fs::path>& files, const std::string& packageDir);
 	void writeSymbolsCache(
 		std::shared_ptr<ir::PackageInfo> packageInfo,
 		const std::string& packageDir,
-		const std::vector<fs::path>& files);
+		const std::vector<fs::path>& files
+	);
 	std::unique_ptr<llvm::Module> getLlvmModule(Ptr<llvm::LLVMContext> context, Ptr<Package> package);
 	std::shared_ptr<ir::PackageInfo> getPackageInfo() const;
 	std::shared_ptr<ir::GlobalScope> getIRProgram() const;
+
+private:
+	std::vector<std::unique_ptr<ParserContext>> contexts;
+	std::vector<fs::path> files;
 };

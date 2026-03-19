@@ -14,17 +14,38 @@ std::expected<std::unique_ptr<ParserContext>, std::string> Package::parseFile(co
 		oss << "Failed to open file: " << path << "\n";
 		return std::unexpected(oss.str());
 	}
-
 	std::stringstream ss;
 	ss << stream.rdbuf();
-
 	auto ctx = std::make_unique<ParserContext>(ss.str());
-	
 	if (!ctx->getTree()) {
 		return std::unexpected("Failed to parse file: " + path.string());
 	}
-
 	return ctx;
+}
+
+void Package::parse(const std::vector<fs::path>& files) {
+	this->files = files;
+	contexts.reserve(files.size());
+	for (const auto& path : files) {
+		auto result = parseFile(path);
+		if (!result) { LOG("Parse error: " << result.error()); continue; }
+		contexts.push_back(std::move(*result));
+	}
+}
+
+void Package::collectSymbols() {
+	for (const auto& ctx : contexts) {
+		symbolCollector->collectSymbols(ctx->getTree());
+	}
+	packageInfo = symbolCollector->getPackageInfo();
+}
+
+void Package::buildTree(const std::string& packageDir) {
+	for (const auto& ctx : contexts) {
+		visitor->buildTree(ctx->getTree());
+	}
+	irProgram = visitor->getGlobalScope();
+	writeSymbolsCache(packageInfo, packageDir, files);
 }
 
 void Package::compile(const std::string& pkgName, const std::vector<fs::path>& files, const std::string& packageDir) {

@@ -53,9 +53,9 @@ public:
 	}
 
 	void generateBodies(Ptr<Package> package) {
-		auto symbols = package->symbolCollector->getPackageInfo()->symbols;
-		for (auto& [name, funcDef] : symbols) {
-			visit(funcDef.get());
+		auto globalScope = package->getIRProgram();
+		for (auto& node : globalScope->body) {
+			visit(node.get());
 		}
 	}
 

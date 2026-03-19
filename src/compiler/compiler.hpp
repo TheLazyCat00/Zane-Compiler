@@ -91,7 +91,7 @@ private:
 
 	void compilePackage(const std::string& pkgName, const std::vector<fs::path>& files, const std::string& packageDir) {
 		(*packages)[pkgName] = Package(packages);
-		(*packages)[pkgName]->compile(pkgName, files, packageDir);
+		(*packages)[pkgName]->parse(files);
 	}
 
 	void generateMainWrapper() {
@@ -172,14 +172,18 @@ public:
 		}
 
 		for (const auto& [pkgName, files] : packageFiles) {
-			const auto& packageDir = packageDirs[pkgName];
+			if (!isCacheValid(packageDirs[pkgName]))
+				compilePackage(pkgName, files, packageDirs[pkgName]);
+		}
 
-			if (isCacheValid(packageDir)) {
-				PRINT("Using cached symbols for " << pkgName);
-			}
-			else {
-				compilePackage(pkgName, files, packageDir);
-			}
+		// Phase 2: collect symbols across all packages
+		for (auto& [pkgName, package] : *packages) {
+			package->collectSymbols();
+		}
+
+		// Phase 3: build ASTs (all symbols now known)
+		for (auto& [pkgName, package] : *packages) {
+			package->buildTree(packageDirs[pkgName]);
 		}
 	}
 
