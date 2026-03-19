@@ -8,20 +8,20 @@ std::any ValueSymbol::accept(IRVisitor* visitor) {
 }
 
 std::string ValueSymbol::getNodeName() const {
-	return "Symbol(" + name + ")";
+	return "ValueSymbol(" + name + ")";
 }
 
 std::string ValueSymbol::getMangledName() const {
 	std::string suffix = "";
-	type->value.match([&](std::shared_ptr<FuncType> funcType) {
-		suffix = funcType->getMangledName();
-	});
-
+	if (type) {
+		type->value.match([&](std::shared_ptr<FuncType> funcType) {
+			suffix = funcType->getParamString();
+		});
+	}
 	std::string prefix = "";
 	if (packageName.has_value()) {
 		prefix = packageName.value() + "$";
 	}
-
 	return prefix + name + suffix;
 }
 
@@ -31,7 +31,7 @@ std::any TypeSymbol::accept(IRVisitor* visitor) {
 }
 
 std::string TypeSymbol::getNodeName() const {
-	return "Symbol(" + name + ")";
+	return "TypeSymbol(" + name + ")";
 }
 
 std::string TypeSymbol::getMangledName() const {
@@ -143,7 +143,7 @@ std::any FuncDef::accept(IRVisitor* visitor) {
 }
 
 std::string FuncDef::getMangledName() const {
-	return symbol->getMangledName() + type->getParamString();
+	return symbol->getMangledName();
 }
 
 std::string FuncDef::getNodeName() const {

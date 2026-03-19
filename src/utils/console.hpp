@@ -1,4 +1,5 @@
 #pragma once
+#include "macros.hpp"
 #include <iostream>
 #include <sstream>
 #include <cstring>

@@ -59,6 +59,29 @@ public:
 		}
 	}
 
+	std::any visitValueSymbol(ir::ValueSymbol* node) override {
+		std::string name = node->getMangledName();
+		LOG("visitValueSymbol: name='" << node->name 
+			<< "' mangled='" << name 
+			<< "' type=" << (node->type ? "yes" : "null")
+			<< " pkg=" << (node->packageName.has_value() ? node->packageName.value() : "none"));
+
+		if (llvm::Function* func = module.getFunction(name)) {
+			return (llvm::Value*)func;
+		}
+		auto it = namedValues.find(name);
+		if (it != namedValues.end()) {
+			return (llvm::Value*)builder.CreateLoad(
+				it->second->getAllocatedType(), it->second, name);
+		}
+		// Try without package prefix (for builtins like puts)
+		if (llvm::Function* func = module.getFunction(node->name)) {
+			return (llvm::Value*)func;
+		}
+		LOG("Unknown symbol: " << name);
+		return (llvm::Value*)nullptr;
+	}
+
 	std::any visitFuncDef(ir::FuncDef* node) override {
 		std::string mangledName = node->getMangledName();
 		llvm::Function* func = module.getFunction(mangledName);
@@ -117,6 +140,7 @@ public:
 	}
 
 	std::any visitFuncCall(ir::FuncCall* node) override {
+		LOG("visitFuncCall: " << node->arguments.size() << " args");
 		// Evaluate arguments
 		std::vector<llvm::Value*> args;
 		for (const auto& arg : node->arguments) {
@@ -132,7 +156,7 @@ public:
 		llvm::Value* calleeValue = get<llvm::Value*>(node->callee.get());
 		LOG("");
 		if (!calleeValue) {
-			LOG("");
+			LOG("null callee for: " << node->getNodeName());
 			return {};
 		}
 

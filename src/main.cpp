@@ -1,7 +1,4 @@
-#ifndef NDEBUG
-	#define DEBUG
-#endif
-
+#include "macros.hpp"
 #include "cli/cli.hpp"
 #include "utils/console.hpp"
 
