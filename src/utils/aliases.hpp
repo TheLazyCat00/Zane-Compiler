@@ -6,7 +6,6 @@
 #include <string>
 #include <filesystem>
 
-// Forward declarations
 struct Package;
 
 using Packages = std::map<std::string, Ptr<Package>>;

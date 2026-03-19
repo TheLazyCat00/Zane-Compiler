@@ -91,7 +91,9 @@ public:
 		}
 	
 		for (auto generic : ctx->type()) {
-			type->generics.push_back(get<ir::Type>(generic));
+			type->value.match([&](ir::TypeSymbol& typeSymbol) {
+				typeSymbol.generics.push_back(get<ir::Type>(generic));
+			});
 		}
 
 		return std::static_pointer_cast<ir::IRNode>(type);

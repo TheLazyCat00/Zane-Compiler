@@ -59,7 +59,7 @@ funcType
 	;
 
 type
-	: (typeSymbol | funcType) ('<' type (',' type)* '>')?
+	: typeSymbol ('<' type (',' type)* '>')? | funcType 
 	;
 
 typeSymbol
