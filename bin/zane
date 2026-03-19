@@ -1,0 +1,3 @@
+# bin/zane.sh
+#!/usr/bin/env bash
+exec "$(dirname "$(dirname "$0")")/build/Zane" "$@"

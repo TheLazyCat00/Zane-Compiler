@@ -1,0 +1,10 @@
+package test
+
+String process(String input) {
+	String temp = "processed"
+	return temp
+}
+
+Void main() {
+	puts(process("hi"))
+}
