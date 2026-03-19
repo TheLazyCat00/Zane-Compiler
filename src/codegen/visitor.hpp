@@ -31,29 +31,30 @@ public:
 	LLVMVisitor(llvm::LLVMContext& ctx, llvm::IRBuilder<>& b, llvm::Module& m) 
 		: context(ctx), builder(b), module(m), typeMapper(ctx) {}
 
-	std::any visitGlobalScope(ir::GlobalScope* node) override {
-		// First pass: Signatures
-		for (auto& [name, funcDef] : node->functionDefs) {
-			declareSignature(funcDef.get());
-		}
-		// Second pass: Bodies
-		for (auto& [name, funcDef] : node->functionDefs) {
-			visit(funcDef.get());
-		}
-		return {};
-	}
+	// std::any visitGlobalScope(ir::GlobalScope* node) override {
+	// 	// First pass: Signatures
+	// 	for (auto& [name, funcDef] : node->functionDefs) {
+	// 		declareSignature(funcDef.get());
+	// 	}
+	// 	// Second pass: Bodies
+	// 	for (auto& [name, funcDef] : node->functionDefs) {
+	// 		visit(funcDef.get());
+	// 	}
+	// 	return {};
+	// }
 
 	void declareSignatures(Ptr<Package> package) {
-		auto symbols = package->symbolCollector->getSymbols()->symbols;
+		auto symbols = package->symbolCollector->getPackageInfo()->symbols;
 		for (auto& [name, symbol] : symbols) {
-			symbol->type->value.match([](std::shared_ptr<ir::FuncType> funcType) {
-				declareSignature(funcType);
+			symbol->type->value.match([&](std::shared_ptr<ir::FuncType> funcType) {
+				declareSignature(symbol);
 			});
 		}
 	}
 
-	void generateBodies(ir::GlobalScope* node) {
-		for (auto& [name, funcDef] : node->functionDefs) {
+	void generateBodies(Ptr<Package> package) {
+		auto symbols = package->symbolCollector->getPackageInfo()->symbols;
+		for (auto& [name, funcDef] : symbols) {
 			visit(funcDef.get());
 		}
 	}
@@ -188,15 +189,17 @@ public:
 	}
 
 private:
-	void declareSignature(std::shared_ptr<ir::FuncType> funcType) {
-		llvm::Type* retType = typeMapper.toLLVMType(node->type->returnType->getMangledName());
+	void declareSignature(std::shared_ptr<ir::ValueSymbol> funcSymbol) {
+		llvm::Type* retType = typeMapper.toLLVMType(funcSymbol->getMangledName());
 
 		std::vector<llvm::Type*> params;
-		for (auto& p : node->type->paramTypes) {
-			params.push_back(typeMapper.toLLVMType(p->getMangledName()));
-		}
+		funcSymbol->type->value.match([&](std::shared_ptr<ir::FuncType> funcType) {
+			for (auto& p : funcType->paramTypes) {
+				params.push_back(typeMapper.toLLVMType(p->getMangledName()));
+			}
+		});
 
 		llvm::FunctionType* ft = llvm::FunctionType::get(retType, params, false);
-		llvm::Function::Create(ft, llvm::Function::ExternalLinkage, node->getMangledName(), module);
+		llvm::Function::Create(ft, llvm::Function::ExternalLinkage, funcSymbol->getMangledName(), module);
 	}
 };

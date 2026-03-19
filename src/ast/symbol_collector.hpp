@@ -83,7 +83,7 @@ public:
 		}
 	}
 
-	std::shared_ptr<ir::PackageInfo> getSymbols() const {
+	std::shared_ptr<ir::PackageInfo> getPackageInfo() const {
 		return packageInfo;
 	}
 };

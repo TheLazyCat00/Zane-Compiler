@@ -98,7 +98,7 @@ struct Package {
 			symbolCollector->collectSymbols(ctx->getTree());
 		}
 
-		packageInfo = symbolCollector->getSymbols();
+		packageInfo = symbolCollector->getPackageInfo();
 
 		for (const auto& ctx : contexts) {
 			visitor->buildTree(ctx->getTree());
