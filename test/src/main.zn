@@ -5,8 +5,8 @@ Void do(() -> Void func) {
 }
 
 Void main() {
-	String test = "test"
 	do:() {
+		String test = "test"
 		puts(test)
 	}
 }
