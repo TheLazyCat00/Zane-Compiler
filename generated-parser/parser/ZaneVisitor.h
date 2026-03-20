@@ -58,6 +58,10 @@ public:
 
     virtual std::any visitCollection(ZaneParser::CollectionContext *context) = 0;
 
+    virtual std::any visitLambda(ZaneParser::LambdaContext *context) = 0;
+
+    virtual std::any visitLambdaParams(ZaneParser::LambdaParamsContext *context) = 0;
+
     virtual std::any visitFuncRhs(ZaneParser::FuncRhsContext *context) = 0;
 
     virtual std::any visitFuncDef(ZaneParser::FuncDefContext *context) = 0;

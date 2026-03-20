@@ -75,6 +75,12 @@ public:
   virtual void enterCollection(ZaneParser::CollectionContext * /*ctx*/) override { }
   virtual void exitCollection(ZaneParser::CollectionContext * /*ctx*/) override { }
 
+  virtual void enterLambda(ZaneParser::LambdaContext * /*ctx*/) override { }
+  virtual void exitLambda(ZaneParser::LambdaContext * /*ctx*/) override { }
+
+  virtual void enterLambdaParams(ZaneParser::LambdaParamsContext * /*ctx*/) override { }
+  virtual void exitLambdaParams(ZaneParser::LambdaParamsContext * /*ctx*/) override { }
+
   virtual void enterFuncRhs(ZaneParser::FuncRhsContext * /*ctx*/) override { }
   virtual void exitFuncRhs(ZaneParser::FuncRhsContext * /*ctx*/) override { }
 

@@ -146,6 +146,20 @@ std::string ReturnStatement::getNodeName() const {
 	return "ReturnStatement(" + value->getNodeName() + ")";
 }
 
+// Lambda
+std::any Lambda::accept(IRVisitor* visitor) {
+    return visitor->visitLambda(this);
+}
+
+std::string Lambda::getNodeName() const {
+    return "Lambda(" + name + ")";
+}
+
+std::string Lambda::printChildren(const std::string& prefix) const {
+    if (scope) return scope->printTree(prefix, true);
+    return "";
+}
+
 // FuncDef
 std::any FuncDef::accept(IRVisitor* visitor) {
 	return visitor->visitFuncDef(this);

@@ -2,6 +2,7 @@
 
 #include "ir/node.hpp"
 #include "utils/types.hpp"
+#include "parser/ZaneParser.h"
 
 #include <map>
 #include <memory>
@@ -16,6 +17,8 @@
 #include <cereal/types/map.hpp>
 #include <cereal/types/unordered_map.hpp>
 #include <cereal/types/string.hpp>
+
+using namespace parser;
 
 namespace ir {
 
@@ -195,6 +198,23 @@ struct VarDef : public IRNode {
 	}
 };
 
+struct Lambda : public IRNode {
+	std::string name;
+	std::vector<std::string> parameters;
+	std::shared_ptr<Scope> scope;
+	std::shared_ptr<FuncType> type; // null until resolved
+	ZaneParser::LambdaContext* ctx = nullptr;
+
+	std::any accept(IRVisitor* visitor) override;
+	std::string getNodeName() const override;
+	std::string printChildren(const std::string& prefix) const override;
+
+	template<typename Archive>
+	void serialize(Archive& ar) {
+		ar(name, parameters, scope);
+	}
+};
+
 struct FuncDef : public IRNode {
 	std::shared_ptr<ValueSymbol> symbol;
 	std::vector<std::string> parameters;
@@ -255,6 +275,7 @@ CEREAL_REGISTER_TYPE(ir::StringLiteral)
 CEREAL_REGISTER_TYPE(ir::ReturnStatement)
 CEREAL_REGISTER_TYPE(ir::Type)
 CEREAL_REGISTER_TYPE(ir::FuncType)
+CEREAL_REGISTER_TYPE(ir::Lambda)
 
 // Register inheritance relationships
 CEREAL_REGISTER_POLYMORPHIC_RELATION(ir::IRNode, ir::ValueSymbol)
@@ -268,3 +289,4 @@ CEREAL_REGISTER_POLYMORPHIC_RELATION(ir::IRNode, ir::StringLiteral)
 CEREAL_REGISTER_POLYMORPHIC_RELATION(ir::IRNode, ir::ReturnStatement)
 CEREAL_REGISTER_POLYMORPHIC_RELATION(ir::IRNode, ir::Type)
 CEREAL_REGISTER_POLYMORPHIC_RELATION(ir::IRNode, ir::FuncType)
+CEREAL_REGISTER_POLYMORPHIC_RELATION(ir::IRNode, ir::Lambda)

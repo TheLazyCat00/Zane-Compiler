@@ -90,6 +90,7 @@ atom
 	| number
 	| valueSymbol
 	| tuple
+	| lambda
 	;
 
 postfix
@@ -105,6 +106,14 @@ collection
 // -----------------------------------------------------
 // Functions
 // -----------------------------------------------------
+
+lambda
+    : '(' lambdaParams? ')' funcMod? funcBody
+    ;
+
+lambdaParams
+	: IDENTIFIER (',' IDENTIFIER)*
+	;
 
 funcRhs
 	: '(' params? ')' funcMod? funcBody

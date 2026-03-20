@@ -19,6 +19,7 @@ struct ReturnStatement;
 struct Type;
 struct ValueSymbol;
 struct TypeSymbol;
+struct Lambda;
 
 class IRVisitor {
 public:
@@ -36,6 +37,7 @@ public:
 	virtual std::any visitReturnStatement(ReturnStatement* node) { return {}; }
 	virtual std::any visitValueSymbol(ValueSymbol* node) { return {}; }
 	virtual std::any visitTypeSymbol(TypeSymbol* node) { return {}; }
+	virtual std::any visitLambda(Lambda* node) {return {}; }
 };
 
 struct IRNode {
