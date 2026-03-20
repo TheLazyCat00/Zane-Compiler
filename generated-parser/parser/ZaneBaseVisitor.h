@@ -93,6 +93,14 @@ public:
     return visitChildren(ctx);
   }
 
+  virtual std::any visitLambda(ZaneParser::LambdaContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitLambdaParams(ZaneParser::LambdaParamsContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
   virtual std::any visitFuncRhs(ZaneParser::FuncRhsContext *ctx) override {
     return visitChildren(ctx);
   }

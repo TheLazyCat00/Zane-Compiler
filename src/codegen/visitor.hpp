@@ -139,6 +139,17 @@ public:
 		return oss.str();
 	}
 
+	std::any visitLambda(ir::Lambda* node) override {
+		for (auto& func : module.functions()) {
+			std::string fname = func.getName().str();
+			if (fname.find(node->name) != std::string::npos) {
+				return (llvm::Value*)&func;
+			}
+		}
+		LOG("Unknown lambda: " << node->name);
+		return (llvm::Value*)nullptr;
+	}
+
 	std::any visitFuncCall(ir::FuncCall* node) override {
 		LOG("visitFuncCall: " << node->arguments.size() << " args");
 		std::vector<llvm::Value*> args;

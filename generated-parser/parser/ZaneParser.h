@@ -24,10 +24,10 @@ public:
     RulePkgImport = 4, RuleFuncTypeParams = 5, RuleFuncType = 6, RuleType = 7, 
     RuleTypeSymbol = 8, RuleValueSymbol = 9, RuleString = 10, RuleNumber = 11, 
     RuleValue = 12, RulePrimary = 13, RuleAtom = 14, RulePostfix = 15, RuleCollection = 16, 
-    RuleFuncRhs = 17, RuleFuncDef = 18, RuleParam = 19, RuleParams = 20, 
-    RuleFuncMod = 21, RuleStrict = 22, RulePure = 23, RuleFuncBody = 24, 
-    RuleArrowFunction = 25, RuleScope = 26, RuleTuple = 27, RuleUnit = 28, 
-    RuleVarDef = 29, RuleRetStat = 30
+    RuleLambda = 17, RuleLambdaParams = 18, RuleFuncRhs = 19, RuleFuncDef = 20, 
+    RuleParam = 21, RuleParams = 22, RuleFuncMod = 23, RuleStrict = 24, 
+    RulePure = 25, RuleFuncBody = 26, RuleArrowFunction = 27, RuleScope = 28, 
+    RuleTuple = 29, RuleUnit = 30, RuleVarDef = 31, RuleRetStat = 32
   };
 
   explicit ZaneParser(antlr4::TokenStream *input);
@@ -64,6 +64,8 @@ public:
   class AtomContext;
   class PostfixContext;
   class CollectionContext;
+  class LambdaContext;
+  class LambdaParamsContext;
   class FuncRhsContext;
   class FuncDefContext;
   class ParamContext;
@@ -326,6 +328,7 @@ public:
     NumberContext *number();
     ValueSymbolContext *valueSymbol();
     TupleContext *tuple();
+    LambdaContext *lambda();
 
     virtual void enterRule(antlr4::tree::ParseTreeListener *listener) override;
     virtual void exitRule(antlr4::tree::ParseTreeListener *listener) override;
@@ -399,6 +402,39 @@ public:
   };
 
   CollectionContext* collection();
+
+  class  LambdaContext : public antlr4::ParserRuleContext {
+  public:
+    LambdaContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    virtual size_t getRuleIndex() const override;
+    FuncBodyContext *funcBody();
+    LambdaParamsContext *lambdaParams();
+    FuncModContext *funcMod();
+
+    virtual void enterRule(antlr4::tree::ParseTreeListener *listener) override;
+    virtual void exitRule(antlr4::tree::ParseTreeListener *listener) override;
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+   
+  };
+
+  LambdaContext* lambda();
+
+  class  LambdaParamsContext : public antlr4::ParserRuleContext {
+  public:
+    LambdaParamsContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    virtual size_t getRuleIndex() const override;
+    std::vector<antlr4::tree::TerminalNode *> IDENTIFIER();
+    antlr4::tree::TerminalNode* IDENTIFIER(size_t i);
+
+    virtual void enterRule(antlr4::tree::ParseTreeListener *listener) override;
+    virtual void exitRule(antlr4::tree::ParseTreeListener *listener) override;
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+   
+  };
+
+  LambdaParamsContext* lambdaParams();
 
   class  FuncRhsContext : public antlr4::ParserRuleContext {
   public:

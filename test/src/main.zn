@@ -1,17 +1,12 @@
 package test
 
-String process(String text, (String) -> String func) {
-	return func(text)
-}
-
-String process(String text) {
-	return text
-}
-
-Void print(String text) {
-	puts(text)
+Void do(() -> Void func) {
+	func()
 }
 
 Void main() {
-	print(process("hha"):process)
+	do:() {
+		String test = "test"
+		puts(test)
+	}
 }

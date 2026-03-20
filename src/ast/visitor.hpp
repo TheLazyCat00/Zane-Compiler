@@ -118,25 +118,103 @@ class Visitor : public CustomZaneVisitor {
 		return {};
 	}
 
-	void resolveFuncArg(std::shared_ptr<ir::ValueSymbol> sym, std::shared_ptr<ir::Type> expectedType) {
-		expectedType->value.match([&](std::shared_ptr<ir::FuncType> expectedFt) {
-			auto packageInfo = symbolCollector->getPackageInfo();
-			for (auto& [key, symbol] : packageInfo->symbols) {
-				if (symbol->name != sym->name) continue;
-				symbol->type->value.match([&](std::shared_ptr<ir::FuncType> candidateFt) {
-					if (*candidateFt == *expectedFt) *sym = *symbol;
-				});
+	std::any visitLambda(ZaneParser::LambdaContext *ctx) override {
+		static int lambdaCounter = 0;
+		std::string lambdaName = "__lambda_" + std::to_string(lambdaCounter++);
+
+		auto lambda = std::make_shared<ir::Lambda>();
+		lambda->name = lambdaName;
+
+		if (ctx->lambdaParams()) {
+			for (auto param : ctx->lambdaParams()->IDENTIFIER()) {
+				lambda->parameters.push_back(param->getText());
 			}
-		});
+		}
+
+		// Store context for deferred visiting
+		lambda->ctx = ctx;
+
+		return std::static_pointer_cast<ir::IRNode>(lambda);
+	}
+
+	std::shared_ptr<ir::FuncDef> makeFuncDefFromLambda(std::shared_ptr<ir::Lambda> lambda) {
+		auto funcDef = std::make_shared<ir::FuncDef>();
+		funcDef->symbol = std::make_shared<ir::ValueSymbol>();
+		funcDef->symbol->name = lambda->name;
+		funcDef->symbol->packageName = packageName;
+		funcDef->symbol->type = std::make_shared<ir::Type>(lambda->type);
+		funcDef->type = lambda->type;
+		funcDef->parameters = lambda->parameters;
+		funcDef->scope = lambda->scope;
+		return funcDef;
+	}
+
+	void resolveFuncArg(std::shared_ptr<ir::IRNode> arg, std::shared_ptr<ir::Type> expectedType) {
+		// Lambda — apply expected type directly
+		if (auto lambda = std::dynamic_pointer_cast<ir::Lambda>(arg)) {
+			expectedType->value.match([&](std::shared_ptr<ir::FuncType> expectedFt) {
+				lambda->type = expectedFt;
+
+				// Push param types into scope
+				scopeSymbols.push({});
+				for (int i = 0; i < (int)lambda->parameters.size(); i++) {
+					if (i < (int)expectedFt->paramTypes.size()) {
+						auto paramSym = std::make_shared<ir::ValueSymbol>();
+						paramSym->name = lambda->parameters[i];
+						paramSym->type = expectedFt->paramTypes[i];
+						scopeSymbols.top()[paramSym->name] = paramSym;
+					}
+				}
+
+				// NOW visit the body — outer scope symbols still on stack
+				if (lambda->ctx->funcBody()->scope()) {
+					lambda->scope = get<ir::Scope>(lambda->ctx->funcBody()->scope());
+				} else if (lambda->ctx->funcBody()->arrowFunction()) {
+					auto retStat = std::make_shared<ir::ReturnStatement>();
+					retStat->value = get<ir::IRNode>(lambda->ctx->funcBody()->arrowFunction()->value());
+					auto scope = std::make_shared<ir::Scope>();
+					scope->statements.push_back(retStat);
+					lambda->scope = scope;
+				}
+
+				scopeSymbols.pop();
+
+				globalScope->body.push_back(makeFuncDefFromLambda(lambda));
+
+				auto symbol = std::make_shared<ir::ValueSymbol>();
+				symbol->name = lambda->name;
+				symbol->packageName = packageName;
+				symbol->type = std::make_shared<ir::Type>(expectedFt);
+				symbolCollector->getPackageInfo()->symbols[symbol->getMangledName()] = symbol;
+				// Resolve lambda symbol in place so the FuncCall callee is correct
+				*lambda = *lambda; // trigger update — actually update the arg in funcCall
+			});
+			return;
+		}
+
+		// Regular overloaded function — unchanged
+		if (auto sym = std::dynamic_pointer_cast<ir::ValueSymbol>(arg)) {
+			expectedType->value.match([&](std::shared_ptr<ir::FuncType> expectedFt) {
+				auto packageInfo = symbolCollector->getPackageInfo();
+				for (auto& [key, symbol] : packageInfo->symbols) {
+					if (symbol->name != sym->name) continue;
+					symbol->type->value.match([&](std::shared_ptr<ir::FuncType> candidateFt) {
+						if (*candidateFt == *expectedFt) *sym = *symbol;
+					});
+				}
+			});
+		}
 	}
 
 	void resolveUntypedArgs(std::shared_ptr<ir::FuncCall> funcCall, std::shared_ptr<ir::ValueSymbol> resolved) {
 		resolved->type->value.match([&](std::shared_ptr<ir::FuncType> ft) {
 			for (int i = 0; i < (int)funcCall->arguments.size(); i++) {
 				if (i >= (int)ft->paramTypes.size()) break;
-				auto sym = std::dynamic_pointer_cast<ir::ValueSymbol>(funcCall->arguments[i]);
-				if (sym && !sym->type) {
-					resolveFuncArg(sym, ft->paramTypes[i]);
+				auto arg = funcCall->arguments[i];
+				auto sym = std::dynamic_pointer_cast<ir::ValueSymbol>(arg);
+				auto lambda = std::dynamic_pointer_cast<ir::Lambda>(arg);
+				if ((sym && !sym->type) || lambda) {
+					resolveFuncArg(arg, ft->paramTypes[i]);
 				}
 			}
 		});
@@ -207,25 +285,33 @@ class Visitor : public CustomZaneVisitor {
 	std::shared_ptr<ir::Type> getNodeType(
 		std::shared_ptr<ir::IRNode> node,
 		std::shared_ptr<ir::Type> expectedType = nullptr) {
+
+		if (auto lambda = std::dynamic_pointer_cast<ir::Lambda>(node)) {
+			// Always &Function — caller defines the exact type
+			auto ft = std::make_shared<ir::FuncType>();
+			return std::make_shared<ir::Type>(ft);
+		}
+
 		if (auto sym = std::dynamic_pointer_cast<ir::ValueSymbol>(node)) {
 			if (sym->type) return sym->type;
-			// Don't resolve in place — just return what type it would be
 			if (expectedType) {
 				auto packageInfo = symbolCollector->getPackageInfo();
 				for (auto& [key, symbol] : packageInfo->symbols) {
 					if (symbol->name == sym->name &&
 						symbol->type->getMangledName() == expectedType->getMangledName()) {
-						return symbol->type; // return, don't assign
+						return symbol->type;
 					}
 				}
 			}
 			return nullptr;
 		}
+
 		if (auto strLit = std::dynamic_pointer_cast<ir::StringLiteral>(node)) {
 			auto ts = std::make_shared<ir::TypeSymbol>();
 			ts->name = "String";
 			return std::make_shared<ir::Type>(ts);
 		}
+
 		if (auto funcCall = std::dynamic_pointer_cast<ir::FuncCall>(node)) {
 			if (auto callee = std::dynamic_pointer_cast<ir::ValueSymbol>(funcCall->callee)) {
 				if (callee->type) {
@@ -237,6 +323,7 @@ class Visitor : public CustomZaneVisitor {
 				}
 			}
 		}
+
 		return nullptr;
 	}
 

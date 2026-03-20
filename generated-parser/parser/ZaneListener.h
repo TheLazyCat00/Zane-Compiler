@@ -73,6 +73,12 @@ public:
   virtual void enterCollection(ZaneParser::CollectionContext *ctx) = 0;
   virtual void exitCollection(ZaneParser::CollectionContext *ctx) = 0;
 
+  virtual void enterLambda(ZaneParser::LambdaContext *ctx) = 0;
+  virtual void exitLambda(ZaneParser::LambdaContext *ctx) = 0;
+
+  virtual void enterLambdaParams(ZaneParser::LambdaParamsContext *ctx) = 0;
+  virtual void exitLambdaParams(ZaneParser::LambdaParamsContext *ctx) = 0;
+
   virtual void enterFuncRhs(ZaneParser::FuncRhsContext *ctx) = 0;
   virtual void exitFuncRhs(ZaneParser::FuncRhsContext *ctx) = 0;
 
