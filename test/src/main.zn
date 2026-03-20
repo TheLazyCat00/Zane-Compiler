@@ -1,10 +1,16 @@
 package test
 
+String process() {
+	return "new"
+}
+
 String process(String input) {
-	String temp = "processed"
-	return temp
+	return input
 }
 
 Void main() {
-	puts(process("hi"))
+	String res = test$process("called process(String)")
+	puts(res)
+	puts(process())
+	puts(test$process(process()))
 }

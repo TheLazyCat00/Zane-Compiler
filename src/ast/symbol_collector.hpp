@@ -19,7 +19,7 @@ class SymbolCollector : public CustomZaneVisitor {
 	std::string packageName;
 
 	void registerSymbol(std::shared_ptr<ir::ValueSymbol> symbol) {
-		packageInfo->symbols[symbol->name] = symbol;
+		packageInfo->symbols[symbol->getMangledName()] = symbol;
 	}
 
 	std::any visitVarDef(ZaneParser::VarDefContext *ctx) override {
