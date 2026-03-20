@@ -137,19 +137,22 @@ class Visitor : public CustomZaneVisitor {
 		for (auto postfixCtx : ctx->postfix()) {
 			if (auto funcCallCtx = dynamic_cast<ZaneParser::FuncCallContext*>(postfixCtx)) {
 				auto funcCall = std::make_shared<ir::FuncCall>();
-
 				auto collectionCtx = funcCallCtx->collection();
 				if (collectionCtx) {
 					for (auto valueCtx : collectionCtx->value()) {
 						funcCall->arguments.push_back(get<ir::IRNode>(valueCtx));
 					}
 				}
-				funcCall->callee = current;
+
+				// Resolve overload based on argument types
+				auto resolved = resolveOverload(current, funcCall->arguments);
+				funcCall->callee = resolved ? resolved : current;
 				current = funcCall;
-				LOG("hi");
-			} else if (auto propAccessCtx = dynamic_cast<ZaneParser::PropertyAccessContext*>(postfixCtx)) {
+			}
+			else if (auto propAccessCtx = dynamic_cast<ZaneParser::PropertyAccessContext*>(postfixCtx)) {
 				LOG("Warning: Property access not yet implemented");
-			} else if (auto callWithValueCtx = dynamic_cast<ZaneParser::CallWithValueContext*>(postfixCtx)) {
+			}
+			else if (auto callWithValueCtx = dynamic_cast<ZaneParser::CallWithValueContext*>(postfixCtx)) {
 				LOG("Warning: Call with value syntax not yet implemented");
 			}
 		}
@@ -167,6 +170,66 @@ class Visitor : public CustomZaneVisitor {
 			stringLit->value = text;
 		}
 		return std::static_pointer_cast<ir::IRNode>(stringLit);
+	}
+
+	// Helper to get the return type of an IR node
+	std::shared_ptr<ir::Type> getNodeType(std::shared_ptr<ir::IRNode> node) {
+		if (auto sym = std::dynamic_pointer_cast<ir::ValueSymbol>(node)) {
+			return sym->type;
+		}
+		if (auto strLit = std::dynamic_pointer_cast<ir::StringLiteral>(node)) {
+			auto ts = std::make_shared<ir::TypeSymbol>();
+			ts->name = "String";
+			return std::make_shared<ir::Type>(ts);
+		}
+		if (auto funcCall = std::dynamic_pointer_cast<ir::FuncCall>(node)) {
+			if (auto callee = std::dynamic_pointer_cast<ir::ValueSymbol>(funcCall->callee)) {
+				if (callee->type) {
+					std::shared_ptr<ir::Type> retType;
+					callee->type->value.match([&](std::shared_ptr<ir::FuncType> ft) {
+						retType = ft->returnType;
+					});
+					return retType;
+				}
+			}
+		}
+		return nullptr;
+	}
+
+	// Resolve callee symbol using argument types
+	std::shared_ptr<ir::ValueSymbol> resolveOverload(
+		std::shared_ptr<ir::IRNode> calleeNode,
+		const std::vector<std::shared_ptr<ir::IRNode>>& args) {
+		auto sym = std::dynamic_pointer_cast<ir::ValueSymbol>(calleeNode);
+		if (!sym) return nullptr;
+
+		// Build param string from argument types
+		std::string paramString = "(";
+		for (int i = 0; i < (int)args.size(); i++) {
+			auto argType = getNodeType(args[i]);
+			if (!argType) return nullptr; // can't resolve without type info
+			if (i > 0) paramString += ", ";
+			paramString += argType->getMangledName();
+		}
+		paramString += ")";
+
+		// Build candidate mangled name
+		std::string pkg = sym->packageName.has_value() ? sym->packageName.value() : packageName;
+		std::string mangledName = pkg + "$" + sym->name + paramString;
+
+		auto packageInfo = symbolCollector->getPackageInfo();
+		auto it = packageInfo->symbols.find(mangledName);
+		if (it != packageInfo->symbols.end()) {
+			return it->second;
+		}
+
+		// Try without package prefix (builtins)
+		it = packageInfo->symbols.find(sym->name + paramString);
+		if (it != packageInfo->symbols.end()) {
+			return it->second;
+		}
+
+		return nullptr;
 	}
 
 	std::any visitValueSymbol(ZaneParser::ValueSymbolContext *ctx) override {
