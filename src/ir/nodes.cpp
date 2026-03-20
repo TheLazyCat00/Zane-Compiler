@@ -91,7 +91,16 @@ std::string FuncType::getNodeName() const {
 }
 
 std::string FuncType::getMangledName() const {
-	return getParamString() + " " + mod.getString() + " -> " + returnType->getNodeName();
+	return "&Function";
+}
+
+bool FuncType::operator==(const FuncType& other) const {
+    if (paramTypes.size() != other.paramTypes.size()) return false;
+    if (returnType->getMangledName() != other.returnType->getMangledName()) return false;
+    for (int i = 0; i < (int)paramTypes.size(); i++) {
+        if (paramTypes[i]->getMangledName() != other.paramTypes[i]->getMangledName()) return false;
+    }
+    return true;
 }
 
 // Type

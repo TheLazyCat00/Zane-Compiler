@@ -54,7 +54,7 @@ public:
 
     virtual std::any visitFuncCall(ZaneParser::FuncCallContext *context) = 0;
 
-    virtual std::any visitCallWithValue(ZaneParser::CallWithValueContext *context) = 0;
+    virtual std::any visitPipeCall(ZaneParser::PipeCallContext *context) = 0;
 
     virtual std::any visitCollection(ZaneParser::CollectionContext *context) = 0;
 

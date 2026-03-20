@@ -349,6 +349,17 @@ public:
    
   };
 
+  class  PipeCallContext : public PostfixContext {
+  public:
+    PipeCallContext(PostfixContext *ctx);
+
+    ValueContext *value();
+    virtual void enterRule(antlr4::tree::ParseTreeListener *listener) override;
+    virtual void exitRule(antlr4::tree::ParseTreeListener *listener) override;
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+  };
+
   class  PropertyAccessContext : public PostfixContext {
   public:
     PropertyAccessContext(PostfixContext *ctx);
@@ -365,17 +376,6 @@ public:
     FuncCallContext(PostfixContext *ctx);
 
     CollectionContext *collection();
-    virtual void enterRule(antlr4::tree::ParseTreeListener *listener) override;
-    virtual void exitRule(antlr4::tree::ParseTreeListener *listener) override;
-
-    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
-  };
-
-  class  CallWithValueContext : public PostfixContext {
-  public:
-    CallWithValueContext(PostfixContext *ctx);
-
-    ValueContext *value();
     virtual void enterRule(antlr4::tree::ParseTreeListener *listener) override;
     virtual void exitRule(antlr4::tree::ParseTreeListener *listener) override;
 

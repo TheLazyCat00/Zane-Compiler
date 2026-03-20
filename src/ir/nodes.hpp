@@ -123,6 +123,7 @@ struct FuncType : public IRNode {
 	std::string getParamString() const;
 	std::string getNodeName() const override;
 	std::string getMangledName() const;
+	bool operator==(const FuncType& other) const;
 
 	template<typename Archive>
 	void serialize(Archive& ar) {

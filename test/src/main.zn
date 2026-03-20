@@ -1,16 +1,17 @@
 package test
 
-String process() {
-	return "new"
+String process(String text, (String) -> String func) {
+	return func(text)
 }
 
-String process(String input) {
-	return input
+String process(String text) {
+	return text
+}
+
+Void print(String text) {
+	puts(text)
 }
 
 Void main() {
-	String res = test$process("called process(String)")
-	puts(res)
-	puts(process())
-	puts(test$process(process()))
+	print(process("hha"):process)
 }

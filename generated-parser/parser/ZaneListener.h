@@ -67,8 +67,8 @@ public:
   virtual void enterFuncCall(ZaneParser::FuncCallContext *ctx) = 0;
   virtual void exitFuncCall(ZaneParser::FuncCallContext *ctx) = 0;
 
-  virtual void enterCallWithValue(ZaneParser::CallWithValueContext *ctx) = 0;
-  virtual void exitCallWithValue(ZaneParser::CallWithValueContext *ctx) = 0;
+  virtual void enterPipeCall(ZaneParser::PipeCallContext *ctx) = 0;
+  virtual void exitPipeCall(ZaneParser::PipeCallContext *ctx) = 0;
 
   virtual void enterCollection(ZaneParser::CollectionContext *ctx) = 0;
   virtual void exitCollection(ZaneParser::CollectionContext *ctx) = 0;

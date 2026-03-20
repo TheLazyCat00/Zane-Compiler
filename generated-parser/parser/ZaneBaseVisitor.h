@@ -85,7 +85,7 @@ public:
     return visitChildren(ctx);
   }
 
-  virtual std::any visitCallWithValue(ZaneParser::CallWithValueContext *ctx) override {
+  virtual std::any visitPipeCall(ZaneParser::PipeCallContext *ctx) override {
     return visitChildren(ctx);
   }
 

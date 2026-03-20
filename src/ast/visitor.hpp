@@ -29,15 +29,6 @@ class Visitor : public CustomZaneVisitor {
 	Ptr<SymbolCollector> symbolCollector;
 	std::string packageName;
 
-	std::shared_ptr<ir::Type> makeVoidType() {
-		auto voidType = std::make_shared<ir::Type>();
-		std::shared_ptr<ir::TypeSymbol> typeSymbol;
-		typeSymbol->name = "Void";
-		typeSymbol->packageName = packageName;
-		voidType->value = { typeSymbol } ;
-		return voidType;
-	}
-
 	std::any visitGlobalScope(ZaneParser::GlobalScopeContext *ctx) override {
 		for (auto decl : ctx->declaration()) {
 			if(decl->varDef()) {
@@ -127,9 +118,33 @@ class Visitor : public CustomZaneVisitor {
 		return {};
 	}
 
+	void resolveFuncArg(std::shared_ptr<ir::ValueSymbol> sym, std::shared_ptr<ir::Type> expectedType) {
+		expectedType->value.match([&](std::shared_ptr<ir::FuncType> expectedFt) {
+			auto packageInfo = symbolCollector->getPackageInfo();
+			for (auto& [key, symbol] : packageInfo->symbols) {
+				if (symbol->name != sym->name) continue;
+				symbol->type->value.match([&](std::shared_ptr<ir::FuncType> candidateFt) {
+					if (*candidateFt == *expectedFt) *sym = *symbol;
+				});
+			}
+		});
+	}
+
+	void resolveUntypedArgs(std::shared_ptr<ir::FuncCall> funcCall, std::shared_ptr<ir::ValueSymbol> resolved) {
+		resolved->type->value.match([&](std::shared_ptr<ir::FuncType> ft) {
+			for (int i = 0; i < (int)funcCall->arguments.size(); i++) {
+				if (i >= (int)ft->paramTypes.size()) break;
+				auto sym = std::dynamic_pointer_cast<ir::ValueSymbol>(funcCall->arguments[i]);
+				if (sym && !sym->type) {
+					resolveFuncArg(sym, ft->paramTypes[i]);
+				}
+			}
+		});
+	}
+
 	std::any visitPrimary(ZaneParser::PrimaryContext *ctx) override {
 		std::shared_ptr<ir::IRNode> current = get<ir::IRNode>(ctx->atom());
-		if (!current){
+		if (!current) {
 			LOG("returned early");
 			return {};
 		}
@@ -137,26 +152,42 @@ class Visitor : public CustomZaneVisitor {
 		for (auto postfixCtx : ctx->postfix()) {
 			if (auto funcCallCtx = dynamic_cast<ZaneParser::FuncCallContext*>(postfixCtx)) {
 				auto funcCall = std::make_shared<ir::FuncCall>();
-				auto collectionCtx = funcCallCtx->collection();
-				if (collectionCtx) {
+				if (auto collectionCtx = funcCallCtx->collection()) {
 					for (auto valueCtx : collectionCtx->value()) {
 						funcCall->arguments.push_back(get<ir::IRNode>(valueCtx));
 					}
 				}
-
-				// Resolve overload based on argument types
 				auto resolved = resolveOverload(current, funcCall->arguments);
 				funcCall->callee = resolved ? resolved : current;
+				if (resolved) resolveUntypedArgs(funcCall, resolved);
 				current = funcCall;
 			}
-			else if (auto propAccessCtx = dynamic_cast<ZaneParser::PropertyAccessContext*>(postfixCtx)) {
+			else if (dynamic_cast<ZaneParser::PropertyAccessContext*>(postfixCtx)) {
 				LOG("Warning: Property access not yet implemented");
 			}
-			else if (auto callWithValueCtx = dynamic_cast<ZaneParser::CallWithValueContext*>(postfixCtx)) {
-				LOG("Warning: Call with value syntax not yet implemented");
+			else if (auto pipeCallCtx = dynamic_cast<ZaneParser::PipeCallContext*>(postfixCtx)) {
+				auto arg = get<ir::IRNode>(pipeCallCtx->value());
+
+				// If current is already a FuncCall, append arg and re-resolve
+				if (auto existingCall = std::dynamic_pointer_cast<ir::FuncCall>(current)) {
+					existingCall->arguments.push_back(arg);
+					auto resolved = resolveOverload(existingCall->callee, existingCall->arguments);
+					if (resolved) {
+						existingCall->callee = resolved;
+						resolveUntypedArgs(existingCall, resolved);
+					}
+					// current stays as existingCall, modified in place
+				} else {
+					// current is a plain symbol — make a new FuncCall
+					auto funcCall = std::make_shared<ir::FuncCall>();
+					funcCall->arguments.push_back(arg);
+					auto resolved = resolveOverload(current, funcCall->arguments);
+					funcCall->callee = resolved ? resolved : current;
+					if (resolved) resolveUntypedArgs(funcCall, resolved);
+					current = funcCall;
+				}
 			}
 		}
-
 		return std::static_pointer_cast<ir::IRNode>(current);
 	}
 
@@ -173,9 +204,22 @@ class Visitor : public CustomZaneVisitor {
 	}
 
 	// Helper to get the return type of an IR node
-	std::shared_ptr<ir::Type> getNodeType(std::shared_ptr<ir::IRNode> node) {
+	std::shared_ptr<ir::Type> getNodeType(
+		std::shared_ptr<ir::IRNode> node,
+		std::shared_ptr<ir::Type> expectedType = nullptr) {
 		if (auto sym = std::dynamic_pointer_cast<ir::ValueSymbol>(node)) {
-			return sym->type;
+			if (sym->type) return sym->type;
+			// Don't resolve in place — just return what type it would be
+			if (expectedType) {
+				auto packageInfo = symbolCollector->getPackageInfo();
+				for (auto& [key, symbol] : packageInfo->symbols) {
+					if (symbol->name == sym->name &&
+						symbol->type->getMangledName() == expectedType->getMangledName()) {
+						return symbol->type; // return, don't assign
+					}
+				}
+			}
+			return nullptr;
 		}
 		if (auto strLit = std::dynamic_pointer_cast<ir::StringLiteral>(node)) {
 			auto ts = std::make_shared<ir::TypeSymbol>();
@@ -203,32 +247,32 @@ class Visitor : public CustomZaneVisitor {
 		auto sym = std::dynamic_pointer_cast<ir::ValueSymbol>(calleeNode);
 		if (!sym) return nullptr;
 
-		// Build param string from argument types
-		std::string paramString = "(";
-		for (int i = 0; i < (int)args.size(); i++) {
-			auto argType = getNodeType(args[i]);
-			if (!argType) return nullptr; // can't resolve without type info
-			if (i > 0) paramString += ", ";
-			paramString += argType->getMangledName();
-		}
-		paramString += ")";
-
-		// Build candidate mangled name
-		std::string pkg = sym->packageName.has_value() ? sym->packageName.value() : packageName;
-		std::string mangledName = pkg + "$" + sym->name + paramString;
-
 		auto packageInfo = symbolCollector->getPackageInfo();
-		auto it = packageInfo->symbols.find(mangledName);
-		if (it != packageInfo->symbols.end()) {
-			return it->second;
+
+		// Find all overloads of this function
+		std::vector<std::shared_ptr<ir::ValueSymbol>> candidates;
+		for (auto& [key, symbol] : packageInfo->symbols) {
+			if (symbol->name == sym->name) candidates.push_back(symbol);
 		}
 
-		// Try without package prefix (builtins)
-		it = packageInfo->symbols.find(sym->name + paramString);
-		if (it != packageInfo->symbols.end()) {
-			return it->second;
-		}
+		// Try each candidate and match param count + types
+		for (auto& candidate : candidates) {
+			std::shared_ptr<ir::FuncType> funcType;
+			candidate->type->value.match([&](std::shared_ptr<ir::FuncType> ft) {
+				funcType = ft;
+			});
+			if (!funcType || funcType->paramTypes.size() != args.size()) continue;
 
+			bool match = true;
+			for (int i = 0; i < (int)args.size(); i++) {
+				auto argType = getNodeType(args[i], funcType->paramTypes[i]);
+				if (!argType) { match = false; break; }
+				if (argType->getMangledName() != funcType->paramTypes[i]->getMangledName()) {
+					match = false; break;
+				}
+			}
+			if (match) return candidate;
+		}
 		return nullptr;
 	}
 
@@ -243,14 +287,27 @@ class Visitor : public CustomZaneVisitor {
 			}
 		}
 
-		// 2. Check package symbols (functions, globals)
+		// 2. Check package symbols
 		auto packageInfo = symbolCollector->getPackageInfo();
-		auto it = packageInfo->symbols.find(name);
-		if (it != packageInfo->symbols.end()) {
-			return std::static_pointer_cast<ir::IRNode>(it->second);
+		std::vector<std::shared_ptr<ir::ValueSymbol>> candidates;
+		for (auto& [key, symbol] : packageInfo->symbols) {
+			if (symbol->name == name) candidates.push_back(symbol);
 		}
 
-		// 3. Fallback: bare symbol (builtins like puts)
+		// Exactly one match — resolve immediately
+		if (candidates.size() == 1) {
+			return std::static_pointer_cast<ir::IRNode>(candidates[0]);
+		}
+
+		// Multiple overloads — stay unresolved, context will resolve later
+		if (candidates.size() > 1) {
+			auto symbol = std::make_shared<ir::ValueSymbol>();
+			symbol->name = name;
+			// no type, no package — intentionally unresolved
+			return std::static_pointer_cast<ir::IRNode>(symbol);
+		}
+
+		// 3. Fallback: builtin
 		auto symbol = std::make_shared<ir::ValueSymbol>();
 		symbol->name = name;
 		if (ctx->package) {
