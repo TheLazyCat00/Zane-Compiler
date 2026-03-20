@@ -248,6 +248,9 @@ private:
 		if (!retType) return;
 
 		llvm::FunctionType* ft = llvm::FunctionType::get(retType, params, false);
-		llvm::Function::Create(ft, llvm::Function::ExternalLinkage, funcSymbol->getMangledName(), module);
+		auto linkage = funcSymbol->name == "main"
+			? llvm::Function::ExternalLinkage
+			: llvm::Function::InternalLinkage;
+		llvm::Function::Create(ft, linkage, funcSymbol->getMangledName(), module);
 	}
 };
