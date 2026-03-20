@@ -21,6 +21,7 @@
 #include <llvm/Target/TargetOptions.h>
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/Support/FileSystem.h>
+#include <llvm/Passes/PassBuilder.h>
 #include <memory>
 #include <string>
 #include <nlohmann/json.hpp>
@@ -216,6 +217,23 @@ public:
 		return std::move(linkedModule);
 	}
 
+	void optimizeModule(llvm::Module& module) {
+		llvm::PassBuilder pb;
+		llvm::LoopAnalysisManager lam;
+		llvm::FunctionAnalysisManager fam;
+		llvm::CGSCCAnalysisManager cgam;
+		llvm::ModuleAnalysisManager mam;
+
+		pb.registerModuleAnalyses(mam);
+		pb.registerCGSCCAnalyses(cgam);
+		pb.registerFunctionAnalyses(fam);
+		pb.registerLoopAnalyses(lam);
+		pb.crossRegisterProxies(lam, fam, cgam, mam);
+
+		auto mpm = pb.buildPerModuleDefaultPipeline(llvm::OptimizationLevel::O3);
+		mpm.run(module, mam);
+	}
+
 	void compileToObjectFiles(const constants::targets::Target& target, bool clearModules = false) {
 		fs::path cacheDir = constants::CACHE_DIR;
 		cacheDir = cacheDir / target.name;
@@ -271,6 +289,7 @@ public:
 				continue;
 			}
 
+			optimizeModule(*module);
 			pass.run(*module);
 			dest.flush();
 		}

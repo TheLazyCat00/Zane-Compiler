@@ -1,5 +1,11 @@
 cmake_minimum_required(VERSION 3.28)
 project(Zane VERSION 1.0.0)
+
+# --- Build type defaults ---
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Release)
+endif()
+
 find_package(antlr4-runtime CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
 find_package(cereal CONFIG REQUIRED)
@@ -12,6 +18,7 @@ llvm_map_components_to_libnames(llvm_libs
 	support
 	native
 )
+
 # --- Module interface library ---
 file(GLOB MODULE_SOURCES src/*.ixx)
 if(MODULE_SOURCES)
@@ -34,6 +41,7 @@ if(MODULE_SOURCES)
 	)
 	target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE modules_obj)
 endif()
+
 # --- Parser library ---
 file(GLOB ANTLR_SOURCES generated-parser/parser/*.cpp)
 add_library(zane_parser STATIC ${ANTLR_SOURCES})
@@ -41,7 +49,12 @@ target_include_directories(zane_parser PUBLIC
 	${CMAKE_CURRENT_SOURCE_DIR}/generated-parser
 	${CMAKE_CURRENT_SOURCE_DIR}/src
 )
+target_compile_options(zane_parser PRIVATE
+    $<$<CONFIG:Release>:-O3 -flto -fvisibility=hidden>
+    $<$<CONFIG:Debug>:-O1 -g>
+)
 target_link_libraries(zane_parser PUBLIC antlr4_static)
+
 # --- Embedded types header ---
 add_custom_command(
 	OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/embedded_types.hpp
@@ -58,6 +71,7 @@ add_custom_command(
 add_custom_target(generate_embedded_types
 	DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/embedded_types.hpp
 )
+
 # --- Executable ---
 file(GLOB_RECURSE SOURCES src/*.cpp)
 add_executable(${CMAKE_PROJECT_NAME}
@@ -72,9 +86,33 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
 target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
 	${LLVM_DEFINITIONS}
 )
+target_compile_options(${CMAKE_PROJECT_NAME} PRIVATE
+    $<$<CONFIG:Release>:-O3 -march=native -flto -fvisibility=hidden>
+    $<$<CONFIG:Debug>:-O1 -g -fsanitize=address,undefined -fstack-protector-strong>
+)
+target_link_options(${CMAKE_PROJECT_NAME} PRIVATE
+    $<$<CONFIG:Release>:-flto -Wl,--strip-all -Wl,--gc-sections>
+    $<$<CONFIG:Debug>:-fsanitize=address,undefined>
+)
 target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE
 	nlohmann_json::nlohmann_json
 	cereal::cereal
 	zane_parser
 	${llvm_libs}
 )
+
+# --- UPX packing ---
+find_program(UPX_EXECUTABLE upx)
+if(UPX_EXECUTABLE)
+    add_custom_command(TARGET ${CMAKE_PROJECT_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND}
+            -DUPX=${UPX_EXECUTABLE}
+            -DBINARY=$<TARGET_FILE:${CMAKE_PROJECT_NAME}>
+            -DCONFIG=$<CONFIG>
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/upx_pack.cmake
+        COMMENT "Packing binary with UPX"
+        VERBATIM
+    )
+else()
+    message(STATUS "UPX not found — skipping binary packing")
+endif()
