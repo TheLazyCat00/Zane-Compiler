@@ -29,15 +29,6 @@ class Visitor : public CustomZaneVisitor {
 	Ptr<SymbolCollector> symbolCollector;
 	std::string packageName;
 
-	std::shared_ptr<ir::Type> makeVoidType() {
-		auto voidType = std::make_shared<ir::Type>();
-		std::shared_ptr<ir::TypeSymbol> typeSymbol;
-		typeSymbol->name = "Void";
-		typeSymbol->packageName = packageName;
-		voidType->value = { typeSymbol } ;
-		return voidType;
-	}
-
 	std::any visitGlobalScope(ZaneParser::GlobalScopeContext *ctx) override {
 		for (auto decl : ctx->declaration()) {
 			if(decl->varDef()) {
@@ -127,40 +118,25 @@ class Visitor : public CustomZaneVisitor {
 		return {};
 	}
 
-	bool funcTypeMatches(std::shared_ptr<ir::FuncType> candidate, std::shared_ptr<ir::FuncType> expected) {
-		if (candidate->paramTypes.size() != expected->paramTypes.size()) return false;
-		if (candidate->returnType->getMangledName() != expected->returnType->getMangledName()) return false;
-		for (int i = 0; i < (int)candidate->paramTypes.size(); i++) {
-			if (candidate->paramTypes[i]->getMangledName() != expected->paramTypes[i]->getMangledName()) return false;
-		}
-		return true;
-	}
-
 	void resolveFuncArg(std::shared_ptr<ir::ValueSymbol> sym, std::shared_ptr<ir::Type> expectedType) {
 		expectedType->value.match([&](std::shared_ptr<ir::FuncType> expectedFt) {
 			auto packageInfo = symbolCollector->getPackageInfo();
 			for (auto& [key, symbol] : packageInfo->symbols) {
 				if (symbol->name != sym->name) continue;
 				symbol->type->value.match([&](std::shared_ptr<ir::FuncType> candidateFt) {
-					if (funcTypeMatches(candidateFt, expectedFt)) {
-						*sym = *symbol;
-					}
+					if (*candidateFt == *expectedFt) *sym = *symbol;
 				});
 			}
 		});
 	}
 
 	void resolveUntypedArgs(std::shared_ptr<ir::FuncCall> funcCall, std::shared_ptr<ir::ValueSymbol> resolved) {
-		LOG("resolveUntypedArgs: callee=" << resolved->getMangledName());
 		resolved->type->value.match([&](std::shared_ptr<ir::FuncType> ft) {
 			for (int i = 0; i < (int)funcCall->arguments.size(); i++) {
 				if (i >= (int)ft->paramTypes.size()) break;
 				auto sym = std::dynamic_pointer_cast<ir::ValueSymbol>(funcCall->arguments[i]);
-				LOG("  arg " << i << ": sym=" << (sym ? sym->name : "null") 
-		<< " type=" << (sym && sym->type ? "yes" : "null"));
 				if (sym && !sym->type) {
 					resolveFuncArg(sym, ft->paramTypes[i]);
-					LOG("  -> resolved to: " << sym->getMangledName());
 				}
 			}
 		});

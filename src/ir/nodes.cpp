@@ -94,6 +94,15 @@ std::string FuncType::getMangledName() const {
 	return "&Function";
 }
 
+bool FuncType::operator==(const FuncType& other) const {
+    if (paramTypes.size() != other.paramTypes.size()) return false;
+    if (returnType->getMangledName() != other.returnType->getMangledName()) return false;
+    for (int i = 0; i < (int)paramTypes.size(); i++) {
+        if (paramTypes[i]->getMangledName() != other.paramTypes[i]->getMangledName()) return false;
+    }
+    return true;
+}
+
 // Type
 std::any Type::accept(IRVisitor* visitor) {
 	return visitor->visitType(this);
