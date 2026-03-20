@@ -65,43 +65,30 @@ namespace targets {
 		const char* name;
 		const char* triple;
 		const char* extension;
+		const char* linker; // cross linker to use
 	};
 
 	constexpr Target LINUX_X64 = {
 		"linux-x64",
 		"x86_64-unknown-linux-gnu",
-		""
+		"",
+		"clang"
 	};
-
 	constexpr Target LINUX_ARM64 = {
 		"linux-arm64",
 		"aarch64-unknown-linux-gnu",
-		""
+		"",
+		"clang"
 	};
-
-	constexpr Target MACOS_ARM64 = {
-		"macos-arm64",
-		"aarch64-apple-darwin",
-		""
-	};
-
-	constexpr Target MACOS_X64 = {
-		"macos-x64",
-		"x86_64-apple-darwin",
-		""
-	};
-
 	constexpr Target WINDOWS_X64 = {
 		"windows-x64",
-		"x86_64-pc-windows-msvc",
-		".exe"
+		"x86_64-w64-mingw32",
+		".exe",
+		"x86_64-w64-mingw32-clang"
 	};
-
 	constexpr Target ALL_TARGETS[] = {
 		LINUX_X64,
 		LINUX_ARM64,
-		MACOS_ARM64,
-		MACOS_X64,
 		WINDOWS_X64
 	};
 

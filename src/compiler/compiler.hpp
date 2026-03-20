@@ -1,6 +1,7 @@
 #pragma once
 
 #include "cli/manifest.hpp"
+#include "compiler/toolchain.hpp"
 #include "globals/constants.hpp"
 #include "package/package.hpp"
 #include "utils/aliases.hpp"
@@ -242,9 +243,19 @@ public:
 			fs::create_directories(cacheDir);
 		}
 
-		llvm::InitializeNativeTarget();
-		llvm::InitializeNativeTargetAsmPrinter();
-		llvm::InitializeNativeTargetAsmParser();
+		// X86 (Linux x64, Windows x64)
+		LLVMInitializeX86Target();
+		LLVMInitializeX86TargetMC();
+		LLVMInitializeX86AsmPrinter();
+		LLVMInitializeX86AsmParser();
+		LLVMInitializeX86TargetInfo();
+
+		// AArch64 (Linux ARM64)
+		LLVMInitializeAArch64Target();
+		LLVMInitializeAArch64TargetMC();
+		LLVMInitializeAArch64AsmPrinter();
+		LLVMInitializeAArch64AsmParser();
+		LLVMInitializeAArch64TargetInfo();
 
 		std::string error;
 		auto llvmTarget = llvm::TargetRegistry::lookupTarget(target.triple, error);
@@ -318,6 +329,7 @@ public:
 
 		std::stringstream linkCmd;
 		linkCmd << "clang";
+		linkCmd << " --target=" << target.triple;
 		for (const auto& objFile : objectFiles) {
 			linkCmd << " " << objFile;
 		}
@@ -335,14 +347,32 @@ public:
 		return true;
 	}
 
+	bool toolchainAvailable(const constants::targets::Target& target) {
+		#ifdef __linux__
+		if (std::string(target.triple).find("mingw") != std::string::npos) {
+			return std::system("which x86_64-w64-mingw32-gcc > /dev/null 2>&1") == 0;
+		}
+		if (std::string(target.triple).find("aarch64") != std::string::npos) {
+			return std::system("which aarch64-linux-gnu-gcc > /dev/null 2>&1") == 0;
+		}
+		#endif
+		return true; // native always available
+	}
+
 	void buildForAllTargets() {
 		auto hostTarget = constants::targets::getHostTarget();
 		
 		for (const auto& target : constants::targets::ALL_TARGETS) {
-			// For now, only build for host platform
-			// TODO: Add bundled cross-compilation toolchains
-			if (std::string(target.triple) != std::string(hostTarget.triple)) {
-				PRINT("Skipping " << target.name << " (cross-compilation toolchain not available)");
+			if (!toolchainAvailable(target)) {
+				PRINT("Toolchain for " << target.name << " not found.");
+
+				std::string cmd = getInstallCommand(target);
+				if (!cmd.empty()) {
+					PRINT("Install with: " << cmd);
+				}
+				else {
+					PRINT("Please install the cross compilation toolchain for " << target.name << " manually.");
+				}
 				continue;
 			}
 			

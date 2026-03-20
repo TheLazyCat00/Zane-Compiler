@@ -16,7 +16,20 @@ llvm_map_components_to_libnames(llvm_libs
 	orcjit
 	executionengine
 	support
-	native
+	# All target backends
+	X86CodeGen
+	X86AsmParser
+	X86Desc
+	X86Disassembler
+	X86Info
+	AArch64CodeGen
+	AArch64AsmParser
+	AArch64Desc
+	AArch64Disassembler
+	AArch64Info
+	AArch64Utils
+	# Windows support
+	WindowsDriver
 )
 
 # --- Module interface library ---
