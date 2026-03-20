@@ -40,8 +40,7 @@ public:
 					params.push_back(toLLVMType(p.get()));
 				}
 				llvm::FunctionType* funcType = llvm::FunctionType::get(retType, params, false);
-				result = std::make_shared<llvm::Type*>(
-					llvm::PointerType::get(funcType, 0));
+				result = std::make_shared<llvm::Type*>(llvm::PointerType::get(context, 0));
 			}
 		);
 		return result ? *result : nullptr;

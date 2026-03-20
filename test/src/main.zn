@@ -1,6 +1,6 @@
 package test
 
-String process((String) -> String func, String text) {
+String process(String text, (String) -> String func) {
 	return func(text)
 }
 
@@ -13,5 +13,5 @@ Void print(String text) {
 }
 
 Void main() {
-	print(process(process, "haha"))
+	print(process("hha"):process)
 }

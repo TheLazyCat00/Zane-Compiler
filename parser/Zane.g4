@@ -95,7 +95,7 @@ atom
 postfix
 	: '.' IDENTIFIER      # propertyAccess
 	| '(' collection ')'  # funcCall
-	| ':' value           # callWithValue
+	| ':' value           # pipeCall
 	;
 
 collection

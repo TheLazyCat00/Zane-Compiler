@@ -69,8 +69,8 @@ public:
   virtual void enterFuncCall(ZaneParser::FuncCallContext * /*ctx*/) override { }
   virtual void exitFuncCall(ZaneParser::FuncCallContext * /*ctx*/) override { }
 
-  virtual void enterCallWithValue(ZaneParser::CallWithValueContext * /*ctx*/) override { }
-  virtual void exitCallWithValue(ZaneParser::CallWithValueContext * /*ctx*/) override { }
+  virtual void enterPipeCall(ZaneParser::PipeCallContext * /*ctx*/) override { }
+  virtual void exitPipeCall(ZaneParser::PipeCallContext * /*ctx*/) override { }
 
   virtual void enterCollection(ZaneParser::CollectionContext * /*ctx*/) override { }
   virtual void exitCollection(ZaneParser::CollectionContext * /*ctx*/) override { }

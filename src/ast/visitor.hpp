@@ -165,8 +165,27 @@ class Visitor : public CustomZaneVisitor {
 			else if (dynamic_cast<ZaneParser::PropertyAccessContext*>(postfixCtx)) {
 				LOG("Warning: Property access not yet implemented");
 			}
-			else if (dynamic_cast<ZaneParser::CallWithValueContext*>(postfixCtx)) {
-				LOG("Warning: Call with value syntax not yet implemented");
+			else if (auto pipeCallCtx = dynamic_cast<ZaneParser::PipeCallContext*>(postfixCtx)) {
+				auto arg = get<ir::IRNode>(pipeCallCtx->value());
+
+				// If current is already a FuncCall, append arg and re-resolve
+				if (auto existingCall = std::dynamic_pointer_cast<ir::FuncCall>(current)) {
+					existingCall->arguments.push_back(arg);
+					auto resolved = resolveOverload(existingCall->callee, existingCall->arguments);
+					if (resolved) {
+						existingCall->callee = resolved;
+						resolveUntypedArgs(existingCall, resolved);
+					}
+					// current stays as existingCall, modified in place
+				} else {
+					// current is a plain symbol — make a new FuncCall
+					auto funcCall = std::make_shared<ir::FuncCall>();
+					funcCall->arguments.push_back(arg);
+					auto resolved = resolveOverload(current, funcCall->arguments);
+					funcCall->callee = resolved ? resolved : current;
+					if (resolved) resolveUntypedArgs(funcCall, resolved);
+					current = funcCall;
+				}
 			}
 		}
 		return std::static_pointer_cast<ir::IRNode>(current);

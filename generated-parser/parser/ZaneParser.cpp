@@ -1477,6 +1477,31 @@ void ZaneParser::PostfixContext::copyFrom(PostfixContext *ctx) {
   ParserRuleContext::copyFrom(ctx);
 }
 
+//----------------- PipeCallContext ------------------------------------------------------------------
+
+ZaneParser::ValueContext* ZaneParser::PipeCallContext::value() {
+  return getRuleContext<ZaneParser::ValueContext>(0);
+}
+
+ZaneParser::PipeCallContext::PipeCallContext(PostfixContext *ctx) { copyFrom(ctx); }
+
+void ZaneParser::PipeCallContext::enterRule(tree::ParseTreeListener *listener) {
+  auto parserListener = dynamic_cast<ZaneListener *>(listener);
+  if (parserListener != nullptr)
+    parserListener->enterPipeCall(this);
+}
+void ZaneParser::PipeCallContext::exitRule(tree::ParseTreeListener *listener) {
+  auto parserListener = dynamic_cast<ZaneListener *>(listener);
+  if (parserListener != nullptr)
+    parserListener->exitPipeCall(this);
+}
+
+std::any ZaneParser::PipeCallContext::accept(tree::ParseTreeVisitor *visitor) {
+  if (auto parserVisitor = dynamic_cast<ZaneVisitor*>(visitor))
+    return parserVisitor->visitPipeCall(this);
+  else
+    return visitor->visitChildren(this);
+}
 //----------------- PropertyAccessContext ------------------------------------------------------------------
 
 tree::TerminalNode* ZaneParser::PropertyAccessContext::IDENTIFIER() {
@@ -1527,31 +1552,6 @@ std::any ZaneParser::FuncCallContext::accept(tree::ParseTreeVisitor *visitor) {
   else
     return visitor->visitChildren(this);
 }
-//----------------- CallWithValueContext ------------------------------------------------------------------
-
-ZaneParser::ValueContext* ZaneParser::CallWithValueContext::value() {
-  return getRuleContext<ZaneParser::ValueContext>(0);
-}
-
-ZaneParser::CallWithValueContext::CallWithValueContext(PostfixContext *ctx) { copyFrom(ctx); }
-
-void ZaneParser::CallWithValueContext::enterRule(tree::ParseTreeListener *listener) {
-  auto parserListener = dynamic_cast<ZaneListener *>(listener);
-  if (parserListener != nullptr)
-    parserListener->enterCallWithValue(this);
-}
-void ZaneParser::CallWithValueContext::exitRule(tree::ParseTreeListener *listener) {
-  auto parserListener = dynamic_cast<ZaneListener *>(listener);
-  if (parserListener != nullptr)
-    parserListener->exitCallWithValue(this);
-}
-
-std::any ZaneParser::CallWithValueContext::accept(tree::ParseTreeVisitor *visitor) {
-  if (auto parserVisitor = dynamic_cast<ZaneVisitor*>(visitor))
-    return parserVisitor->visitCallWithValue(this);
-  else
-    return visitor->visitChildren(this);
-}
 ZaneParser::PostfixContext* ZaneParser::postfix() {
   PostfixContext *_localctx = _tracker.createInstance<PostfixContext>(_ctx, getState());
   enterRule(_localctx, 30, ZaneParser::RulePostfix);
@@ -1590,7 +1590,7 @@ ZaneParser::PostfixContext* ZaneParser::postfix() {
       }
 
       case ZaneParser::T__10: {
-        _localctx = _tracker.createInstance<ZaneParser::CallWithValueContext>(_localctx);
+        _localctx = _tracker.createInstance<ZaneParser::PipeCallContext>(_localctx);
         enterOuterAlt(_localctx, 3);
         setState(172);
         match(ZaneParser::T__10);
