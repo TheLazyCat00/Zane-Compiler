@@ -19,7 +19,11 @@ class SymbolCollector : public CustomZaneVisitor {
 	std::string packageName;
 
 	void registerSymbol(std::shared_ptr<ir::ValueSymbol> symbol) {
-		packageInfo->symbols[symbol->getMangledName()] = symbol;
+		auto mangled = symbol->getMangledName();
+		if (packageInfo->symbols.count(mangled)) {
+			throw std::runtime_error("Duplicate symbol: " + mangled);
+		}
+		packageInfo->symbols[mangled] = symbol;
 	}
 
 	std::any visitVarDef(ZaneParser::VarDefContext *ctx) override {

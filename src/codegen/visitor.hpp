@@ -60,34 +60,30 @@ public:
 	}
 
 	std::any visitValueSymbol(ir::ValueSymbol* node) override {
-		std::string name = node->getMangledName();
-		LOG("visitValueSymbol: name='" << node->name 
-			<< "' mangled='" << name 
-			<< "' type=" << (node->type ? "yes" : "null")
-			<< " pkg=" << (node->packageName.has_value() ? node->packageName.value() : "none"));
-
-		if (llvm::Function* func = module.getFunction(name)) {
-			return (llvm::Value*)func;
-		}
-		auto it = namedValues.find(name);
+		// Check bare name first (params/locals are never package-qualified)
+		auto it = namedValues.find(node->name);
 		if (it != namedValues.end()) {
 			return (llvm::Value*)builder.CreateLoad(
-				it->second->getAllocatedType(), it->second, name);
+				it->second->getAllocatedType(), it->second, node->name);
 		}
-		// Try without package prefix (for builtins like puts)
+
+		// Then full mangled name (package-qualified globals)
+		std::string mangled = node->getMangledName();
+		if (llvm::Function* func = module.getFunction(mangled)) {
+			return (llvm::Value*)func;
+		}
 		if (llvm::Function* func = module.getFunction(node->name)) {
 			return (llvm::Value*)func;
 		}
-		LOG("Unknown symbol: " << name);
+
+		LOG("Unknown symbol: " << mangled);
 		return (llvm::Value*)nullptr;
 	}
 
 	std::any visitFuncDef(ir::FuncDef* node) override {
 		std::string mangledName = node->getMangledName();
 		llvm::Function* func = module.getFunction(mangledName);
-		if (!func) {
-			return {};
-		}
+		if (!func) return {};
 
 		llvm::BasicBlock* entry = llvm::BasicBlock::Create(context, "entry", func);
 		builder.SetInsertPoint(entry);
@@ -96,11 +92,13 @@ public:
 		unsigned idx = 0;
 		for (auto& arg : func->args()) {
 			std::string argName = node->parameters[idx];
-			arg.setName(argName);
+			// Build mangled name for param using its type from FuncDef
+			std::string mangledArg = argName; // params have no package prefix
+			arg.setName(mangledArg);
 
-			llvm::AllocaInst* alloca = builder.CreateAlloca(arg.getType(), nullptr, argName);
+			llvm::AllocaInst* alloca = builder.CreateAlloca(arg.getType(), nullptr, mangledArg);
 			builder.CreateStore(&arg, alloca);
-			namedValues[argName] = alloca;
+			namedValues[mangledArg] = alloca;
 
 			idx++;
 		}
@@ -109,8 +107,10 @@ public:
 			visit(node->scope.get());
 		}
 
-		if (func->getReturnType()->isVoidTy()) {
-			builder.CreateRetVoid();
+		if (!builder.GetInsertBlock()->getTerminator()) {
+			if (func->getReturnType()->isVoidTy()) {
+				builder.CreateRetVoid();
+			}
 		}
 		return func;
 	}
@@ -141,38 +141,48 @@ public:
 
 	std::any visitFuncCall(ir::FuncCall* node) override {
 		LOG("visitFuncCall: " << node->arguments.size() << " args");
-		// Evaluate arguments
 		std::vector<llvm::Value*> args;
 		for (const auto& arg : node->arguments) {
 			auto val = get<llvm::Value*>(arg.get());
 			if (!val) {
-				LOG("");
+				LOG("null arg");
 				return {};
 			}
 			args.push_back(val);
 		}
 
-		// Evaluate callee as a value
 		llvm::Value* calleeValue = get<llvm::Value*>(node->callee.get());
-		LOG("");
 		if (!calleeValue) {
 			LOG("null callee for: " << node->getNodeName());
 			return {};
 		}
 
-		// Direct call — callee resolved to a Function*
+		// Direct call
 		if (auto* func = llvm::dyn_cast<llvm::Function>(calleeValue)) {
 			return (llvm::Value*)builder.CreateCall(func, args);
 		}
 
-		// Indirect call — function pointer loaded from a variable, etc.
-		std::vector<llvm::Type*> argTypes;
-		for (auto* arg : args) {
-			argTypes.push_back(arg->getType());
+		// Indirect call — get FuncType from callee's IR type
+		llvm::FunctionType* funcType = nullptr;
+		if (auto calleeSym = std::dynamic_pointer_cast<ir::ValueSymbol>(node->callee)) {
+			if (calleeSym->type) {
+				calleeSym->type->value.match([&](std::shared_ptr<ir::FuncType> ft) {
+					llvm::Type* retType = typeMapper.toLLVMType(ft->returnType.get());
+					std::vector<llvm::Type*> paramTypes;
+					for (auto& p : ft->paramTypes) {
+						paramTypes.push_back(typeMapper.toLLVMType(p.get()));
+					}
+					funcType = llvm::FunctionType::get(retType, paramTypes, false);
+				});
+			}
 		}
-		llvm::FunctionType* funcType = llvm::FunctionType::get(
-			llvm::Type::getVoidTy(context), argTypes, false
-		);
+		if (!funcType) {
+			// Fallback: infer from args, assume void return
+			std::vector<llvm::Type*> argTypes;
+			for (auto* arg : args) argTypes.push_back(arg->getType());
+			funcType = llvm::FunctionType::get(llvm::Type::getVoidTy(context), argTypes, false);
+		}
+
 		return (llvm::Value*)builder.CreateCall(funcType, calleeValue, args);
 	}
 
@@ -197,11 +207,12 @@ public:
 	std::any visitType(ir::Type* node) override { return {}; }
 
 	std::any visitVarDef(ir::VarDef* node) override {
-		llvm::Type* type = typeMapper.toLLVMType(node->symbol->type->getMangledName());
+		llvm::Type* type = typeMapper.toLLVMType(node->symbol->type.get());
 		if (!type) return {};
 
-		llvm::AllocaInst* alloca = builder.CreateAlloca(type, nullptr, node->symbol->getMangledName());
-		namedValues[node->symbol->getMangledName()] = alloca;
+		std::string mangled = node->symbol->getMangledName();
+		llvm::AllocaInst* alloca = builder.CreateAlloca(type, nullptr, mangled);
+		namedValues[mangled] = alloca;
 
 		if (node->value) {
 			auto val = get<llvm::Value*>(node->value.get());
@@ -218,9 +229,9 @@ private:
 		std::vector<llvm::Type*> params;
 
 		funcSymbol->type->value.match([&](std::shared_ptr<ir::FuncType> funcType) {
-			retType = typeMapper.toLLVMType(funcType->returnType->getMangledName());
+			retType = typeMapper.toLLVMType(funcType->returnType.get());
 			for (auto& p : funcType->paramTypes) {
-				params.push_back(typeMapper.toLLVMType(p->getMangledName()));
+				params.push_back(typeMapper.toLLVMType(p.get()));
 			}
 		});
 		if (!retType) return;

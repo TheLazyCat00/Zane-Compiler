@@ -1,3 +1,4 @@
+#include "ir/nodes.hpp"
 #include <unordered_map>
 #include <string>
 #include <llvm/IR/Type.h>
@@ -24,6 +25,26 @@ public:
 			return it->second;
 		}
 		return nullptr;
+	}
+
+	llvm::Type* toLLVMType(ir::Type* irType) {
+		std::shared_ptr<llvm::Type*> result;
+		irType->value.match(
+			[&](std::shared_ptr<ir::TypeSymbol> ts) {
+				result = std::make_shared<llvm::Type*>(toLLVMType(ts->getMangledName()));
+			},
+			[&](std::shared_ptr<ir::FuncType> ft) {
+				llvm::Type* retType = toLLVMType(ft->returnType.get());
+				std::vector<llvm::Type*> params;
+				for (auto& p : ft->paramTypes) {
+					params.push_back(toLLVMType(p.get()));
+				}
+				llvm::FunctionType* funcType = llvm::FunctionType::get(retType, params, false);
+				result = std::make_shared<llvm::Type*>(
+					llvm::PointerType::get(funcType, 0));
+			}
+		);
+		return result ? *result : nullptr;
 	}
 
 private:
