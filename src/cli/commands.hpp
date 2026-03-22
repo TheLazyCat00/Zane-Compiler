@@ -6,6 +6,7 @@
 #include "globals/constants.hpp"
 #include "cli/help.hpp"
 #include "compiler/compiler.hpp"
+#include "compiler/zig_toolchain.hpp"
 #include "utils/console.hpp"
 
 #include <cstdio>
@@ -50,9 +51,15 @@ inline void execute(Mode mode, const manifest::Manifest& manifest) {
 		linkedModule->print(llvm::outs(), nullptr);
 	}
 	else {
-		// Compile and run natively (no zig needed for host target)
+		if (!zig::ensure()) {
+			LOG("Could not acquire Zig toolchain. Aborting.");
+			return;
+		}
+
 		auto hostTarget = constants::targets::getHostTarget();
-		compiler.compileToObjectFilesNative(hostTarget, BuildMode::Release, true);
+		BuildMode buildMode = (mode == JIT) ? BuildMode::Dev : BuildMode::Release;
+
+		compiler.compileToObjectFiles(hostTarget, buildMode, true);
 
 		namespace fs = std::filesystem;
 		fs::path buildDir = fs::path(constants::BUILD_DIR) / hostTarget.name;
@@ -61,10 +68,11 @@ inline void execute(Mode mode, const manifest::Manifest& manifest) {
 		std::string executableName = manifest.name + std::string(hostTarget.extension);
 		fs::path outputPath = buildDir / executableName;
 
-		if (!compiler.linkObjectFilesNative(hostTarget, BuildMode::Release, outputPath.string()))
+		if (!compiler.linkObjectFiles(hostTarget, buildMode, outputPath.string()))
 			return;
 
-		compiler.executeNative(outputPath.string());
+		if (mode == JIT)
+			compiler.executeNative(outputPath.string());
 	}
 }
 

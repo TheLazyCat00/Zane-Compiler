@@ -14,15 +14,9 @@
 #include <cereal/types/memory.hpp>
 #include <cereal/types/unordered_map.hpp>
 #include <llvm-21/llvm/IR/IRBuilder.h>
-#include <llvm-21/llvm/Support/TargetSelect.h>
 #include <llvm/IR/Module.h>
 #include <llvm/Linker/Linker.h>
-#include <llvm/MC/TargetRegistry.h>
-#include <llvm/Target/TargetMachine.h>
-#include <llvm/Target/TargetOptions.h>
-#include <llvm/IR/LegacyPassManager.h>
 #include <llvm/Support/FileSystem.h>
-#include <llvm/Passes/PassBuilder.h>
 #include <memory>
 #include <string>
 #include <nlohmann/json.hpp>
@@ -100,7 +94,7 @@ private:
 		modules["__main_wrapper"] = std::move(wrapperModule);
 	}
 
-	// Write module as .ll and compile to .o using zig cc
+	// Emit module as .ll and compile to .o via zig cc
 	bool compileModuleWithZig(
 			llvm::Module& module,
 			const fs::path& objectFile,
@@ -118,9 +112,8 @@ private:
 		module.print(irOut, nullptr);
 		irOut.flush();
 
-		std::string zigTarget = zig::toZigTarget(target.triple);
 		std::string cmd = zig::path() + " cc"
-			+ " --target=" + zigTarget
+			+ " --target=" + zig::toZigTarget(target.triple)
 			+ (mode == BuildMode::Release ? " -O3" : "")
 			+ " -c \"" + irFile.string() + "\""
 			+ " -o \"" + objectFile.string() + "\"";
@@ -201,8 +194,6 @@ public:
 		return linkedModule;
 	}
 
-	// --- Cross-compilation via zig cc (used by buildForAllTargets) ---
-
 	void compileToObjectFiles(
 			const constants::targets::Target& target,
 			BuildMode mode,
@@ -241,10 +232,10 @@ public:
 			return false;
 		}
 
-		std::string zigTarget = zig::toZigTarget(target.triple);
 		std::stringstream cmd;
-		cmd << zig::path() << " cc --target=" << zigTarget;
-		if (mode == BuildMode::Release) cmd << " -O3";
+		cmd << zig::path() << " cc"
+			<< " --target=" << zig::toZigTarget(target.triple)
+			<< (mode == BuildMode::Release ? " -O3" : "");
 		for (const auto& obj : objectFiles) cmd << " " << obj;
 		cmd << " -o \"" << outputExecutable << "\"";
 
@@ -258,6 +249,7 @@ public:
 		return true;
 	}
 
+	// Build for all targets using zig — works on any host OS
 	void buildForAllTargets() {
 		if (!zig::ensure()) {
 			LOG("Could not acquire Zig toolchain. Aborting.");
@@ -282,79 +274,14 @@ public:
 		}
 	}
 
-	// --- Native compilation via LLVM API (used by run/debug/ir commands) ---
-
-	void compileToObjectFilesNative(
-			const constants::targets::Target& target,
-			BuildMode mode,
-			bool clearModules = false) {
-
-		fs::path cacheDir = fs::path(constants::CACHE_DIR) / target.name;
-		if (!fs::exists(cacheDir)) fs::create_directories(cacheDir);
-
-		llvm::InitializeNativeTarget();
-		llvm::InitializeNativeTargetAsmPrinter();
-		llvm::InitializeNativeTargetAsmParser();
-
-		std::string error;
-		auto llvmTarget = llvm::TargetRegistry::lookupTarget(target.triple, error);
-		if (!llvmTarget) { LOG("Target not available: " << error); return; }
-
-		llvm::TargetOptions opt;
-		llvm::Triple triple(target.triple);
-		std::unique_ptr<llvm::TargetMachine> tm(
-			llvmTarget->createTargetMachine(triple, "generic", "", opt, llvm::Reloc::PIC_));
-
-		for (auto& [pkgName, module] : modules) {
-			fs::path objectFile = cacheDir / (pkgName + ".o");
-			module->setTargetTriple(llvm::Triple(target.triple));
-			module->setDataLayout(tm->createDataLayout());
-
-			std::error_code EC;
-			llvm::raw_fd_ostream dest(objectFile.string(), EC, llvm::sys::fs::OpenFlags::OF_None);
-			if (EC) { llvm::errs() << "Could not open file: " << EC.message() << "\n"; continue; }
-
-			llvm::legacy::PassManager pass;
-			if (tm->addPassesToEmitFile(pass, dest, nullptr, llvm::CodeGenFileType::ObjectFile)) {
-				llvm::errs() << "TargetMachine can't emit object file\n"; continue;
-			}
-			pass.run(*module);
-			dest.flush();
-		}
-
-		PRINT("Generated object files for " << target.name);
-		if (clearModules) modules.clear();
-	}
-
-	bool linkObjectFilesNative(
-			const constants::targets::Target& target,
-			BuildMode mode,
-			const std::string& outputExecutable) {
-
-		fs::path cacheDir = fs::path(constants::CACHE_DIR) / target.name;
-		std::vector<std::string> objectFiles;
-		for (const auto& entry : fs::recursive_directory_iterator(cacheDir)) {
-			if (entry.path().extension() == ".o")
-				objectFiles.push_back(entry.path().string());
-		}
-		if (objectFiles.empty()) { LOG("No object files found"); return false; }
-
-		std::stringstream cmd;
-		cmd << "clang --target=" << target.triple;
-		if (mode == BuildMode::Release) cmd << " -O3 -flto -Wl,--strip-all";
-		for (const auto& obj : objectFiles) cmd << " " << obj;
-		cmd << " -o " << outputExecutable;
-
-		PRINT("Linking: " << cmd.str());
-		if (std::system(cmd.str().c_str()) != 0) { LOG("Linking failed"); return false; }
-		PRINT("Created executable: " << outputExecutable);
-		return true;
-	}
-
 	void executeNative(const std::string& executable) {
 		if (!fs::exists(executable)) { LOG("Executable not found: " << executable); return; }
 		PRINT("--- Execution ---");
+#ifdef _WIN32
+		std::system(("\"" + executable + "\"").c_str());
+#else
 		std::system(("./" + executable).c_str());
+#endif
 	}
 
 	void writeModules() {
