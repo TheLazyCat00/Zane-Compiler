@@ -23,8 +23,21 @@ private:
 	llvm::IRBuilder<> builder;
 
 public:
-	LLVMCodeGen(llvm::LLVMContext& ctx)
-		: context(ctx), module(std::make_unique<llvm::Module>("zane", ctx)), builder(ctx)  {}
+	LLVMCodeGen(llvm::LLVMContext& ctx, const std::string& triple)
+	: context(ctx), module(std::make_unique<llvm::Module>("zane", ctx)), builder(ctx) {
+		module->setTargetTriple(llvm::Triple(triple));
+		LOG("LLVMCodeGen triple: " << triple);
+
+		// Set data layout at construction so optimizer uses correct ABI
+		std::string error;
+		auto* target = llvm::TargetRegistry::lookupTarget(triple, error);
+		if (target) {
+			llvm::TargetOptions opt;
+			std::unique_ptr<llvm::TargetMachine> tm(
+				target->createTargetMachine(triple, "generic", "", opt, llvm::Reloc::PIC_));
+			module->setDataLayout(tm->createDataLayout());
+		}
+	}
 
 	void generate(
 			Ptr<Package> package,
@@ -45,7 +58,9 @@ public:
 		llvm::Type* i8Ptr = llvm::PointerType::get(context, 0);
 		llvm::FunctionType* putsType = llvm::FunctionType::get(
 			builder.getInt32Ty(), {i8Ptr}, false);
-		module->getOrInsertFunction("puts", putsType);
+		auto* putsFunc = llvm::cast<llvm::Function>(
+			module->getOrInsertFunction("puts", putsType).getCallee());
+		putsFunc->setCallingConv(llvm::CallingConv::C);
 	}
 
 	std::unique_ptr<llvm::Module> extractModule() {

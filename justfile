@@ -1,8 +1,14 @@
 build:
-	cmake --build build
+	cmake --build build --clean-first
 
 init:
 	cmake --preset clang-ninja --fresh
+
+[working-directory: "test"]
+test:
+	rm -rf test/.cache
+	../build/Zane build
+	pwsh.exe -Command ./build/windows-x64/test.exe 2>&1
 
 [working-directory: "test"]
 run:

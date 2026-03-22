@@ -47,6 +47,7 @@ namespace library {
 
 constexpr char CACHE_DIR[] = ".cache";
 constexpr char BUILD_DIR[] = "build";
+constexpr char DEV_BUILD_DIR[] = ".dev";
 constexpr char SYMBOLS_DIR[] = ".cache/symbols";
 constexpr char SYMBOLS_NAME[] = "symbols.bin";
 

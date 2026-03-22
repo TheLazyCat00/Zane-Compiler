@@ -170,7 +170,9 @@ public:
 
 		// Direct call
 		if (auto* func = llvm::dyn_cast<llvm::Function>(calleeValue)) {
-			return (llvm::Value*)builder.CreateCall(func, args);
+			auto* call = builder.CreateCall(func, args);
+			call->setCallingConv(func->getCallingConv());
+			return (llvm::Value*)call;
 		}
 
 		// Indirect call — get FuncType from callee's IR type
