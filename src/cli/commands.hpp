@@ -6,14 +6,13 @@
 #include "globals/constants.hpp"
 #include "cli/help.hpp"
 #include "compiler/compiler.hpp"
-#include "utils/utils.hpp"
+#include "compiler/zig_toolchain.hpp"
 #include "utils/console.hpp"
 
 #include <cstdio>
 #include <memory>
 #include <string>
 #include <map>
-#include <iostream>
 #include <filesystem>
 #include <vector>
 #include <antlr4-runtime.h>
@@ -52,27 +51,28 @@ inline void execute(Mode mode, const manifest::Manifest& manifest) {
 		linkedModule->print(llvm::outs(), nullptr);
 	}
 	else {
-		// Compile each package to object file in .cache for host target
-		auto hostTarget = constants::targets::getHostTarget();
-		compiler.compileToObjectFiles(hostTarget, true); // Clear modules after
-	
-		// Create build directory
-		namespace fs = std::filesystem;
-		fs::path buildDir = fs::path(constants::BUILD_DIR) / hostTarget.name;
-		if (!fs::exists(buildDir)) {
-			fs::create_directories(buildDir);
-		}
-		
-		// Link object files to create executable
-		std::string executableName = manifest.name + std::string(hostTarget.extension);
-		fs::path outputPath = buildDir / executableName;
-		
-		if (!compiler.linkObjectFiles(hostTarget, outputPath.string())) {
+		if (!zig::ensure()) {
+			LOG("Could not acquire Zig toolchain. Aborting.");
 			return;
 		}
-		
-		// Execute the binary
-		compiler.executeNative(outputPath.string());
+
+		auto hostTarget = constants::targets::getHostTarget();
+		BuildMode buildMode = (mode == JIT) ? BuildMode::Dev : BuildMode::Release;
+
+		compiler.compileToObjectFiles(hostTarget, buildMode, true);
+
+		namespace fs = std::filesystem;
+		fs::path buildDir = fs::path(constants::BUILD_DIR) / hostTarget.name;
+		if (!fs::exists(buildDir)) fs::create_directories(buildDir);
+
+		std::string executableName = manifest.name + std::string(hostTarget.extension);
+		fs::path outputPath = buildDir / executableName;
+
+		if (!compiler.linkObjectFiles(hostTarget, buildMode, outputPath.string()))
+			return;
+
+		if (mode == JIT)
+			compiler.executeNative(outputPath.string());
 	}
 }
 

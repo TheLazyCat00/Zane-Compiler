@@ -4,17 +4,12 @@
 #include "ast/visitor.hpp"
 #include "utils/zane_ptr.hpp"
 #include "utils/aliases.hpp"
-#include "utils/console.hpp"
-#include "globals/constants.hpp"
 #include "ir/nodes.hpp"
 #include "parser/ZaneLexer.h"
 
 #include <cereal/archives/binary.hpp>
 #include <expected>
-#include <fstream>
-#include <map>
 #include <memory>
-#include <sstream>
 #include <string>
 #include <vector>
 #include <filesystem>
@@ -65,7 +60,7 @@ struct Package {
 		const std::string& packageDir,
 		const std::vector<fs::path>& files
 	);
-	std::unique_ptr<llvm::Module> getLlvmModule(Ptr<llvm::LLVMContext> context, Ptr<Package> package);
+	std::unique_ptr<llvm::Module> getLlvmModule(Ptr<llvm::LLVMContext> context, Ptr<Package> package, const std::string& triple);
 	std::shared_ptr<ir::PackageInfo> getPackageInfo() const;
 	std::shared_ptr<ir::GlobalScope> getIRProgram() const;
 

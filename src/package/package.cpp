@@ -1,4 +1,5 @@
 #include "package/package.hpp"
+#include "globals/constants.hpp"
 #include "codegen/llvm.hpp"
 
 Package::Package(Ptr<Packages> packages) 
@@ -92,11 +93,10 @@ void Package::writeSymbolsCache(
 	);
 }
 
-std::unique_ptr<llvm::Module> Package::getLlvmModule(Ptr<llvm::LLVMContext> context, Ptr<Package> package) {
-	LLVMCodeGen codegen(*context);
+std::unique_ptr<llvm::Module> Package::getLlvmModule(Ptr<llvm::LLVMContext> context, Ptr<Package> package, const std::string& triple) {
+	LLVMCodeGen codegen(*context, triple);
 	codegen.setupBuiltins();
 	codegen.generate(package, packages);
-
 	return std::move(codegen.extractModule());
 }
 

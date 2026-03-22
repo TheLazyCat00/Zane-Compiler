@@ -44,7 +44,6 @@ namespace library {
 	}
 }
 
-
 constexpr char CACHE_DIR[] = ".cache";
 constexpr char BUILD_DIR[] = "build";
 constexpr char SYMBOLS_DIR[] = ".cache/symbols";
@@ -72,51 +71,30 @@ namespace targets {
 		"x86_64-unknown-linux-gnu",
 		""
 	};
-
 	constexpr Target LINUX_ARM64 = {
 		"linux-arm64",
 		"aarch64-unknown-linux-gnu",
 		""
 	};
-
-	constexpr Target MACOS_ARM64 = {
-		"macos-arm64",
-		"aarch64-apple-darwin",
-		""
-	};
-
-	constexpr Target MACOS_X64 = {
-		"macos-x64",
-		"x86_64-apple-darwin",
-		""
-	};
-
 	constexpr Target WINDOWS_X64 = {
 		"windows-x64",
-		"x86_64-pc-windows-msvc",
+		"x86_64-w64-mingw32",
 		".exe"
 	};
-
 	constexpr Target ALL_TARGETS[] = {
 		LINUX_X64,
 		LINUX_ARM64,
-		MACOS_ARM64,
-		MACOS_X64,
 		WINDOWS_X64
 	};
 
 	inline Target getHostTarget() {
 		auto triple = llvm::sys::getDefaultTargetTriple();
-		
-		// Match to our known targets
 		for (const auto& target : ALL_TARGETS) {
 			if (triple.find(target.triple) != std::string::npos ||
 			    std::string(target.triple).find(triple) != std::string::npos) {
 				return target;
 			}
 		}
-		
-		// Default to Linux x64 if unknown
 		return LINUX_X64;
 	}
 }
