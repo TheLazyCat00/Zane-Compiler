@@ -1,6 +1,7 @@
 # roadmap
 
 - implement memory model:
+	- implement external packages
 	- implement c interop
 	- write c memory management functions
 	- implement structs and classes
