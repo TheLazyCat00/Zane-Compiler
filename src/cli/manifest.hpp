@@ -3,12 +3,11 @@
 #include "globals/constants.hpp"
 #include "utils/utils.hpp"
 #include "utils/console.hpp"
+#include "utils/types.hpp"
 
-#include <iostream>
 #include <string>
 #include <map>
 #include <vector>
-#include <sstream>
 #include <fstream>
 #include <nlohmann/json.hpp>
 
@@ -17,41 +16,9 @@ using json = nlohmann::json;
 
 namespace manifest {
 
-struct SemVer {
-	int major;
-	int minor;
-	int patch;
-
-	SemVer() {
-		major = 0;
-		minor = 0;
-		patch = 0;
-	}
-
-	SemVer(const std::string& s) {
-		std::stringstream ss(s);
-		std::string part;
-		std::getline(ss, part, '.'); major = std::stoi(part);
-		std::getline(ss, part, '.'); minor = std::stoi(part);
-		std::getline(ss, part, '.'); patch = std::stoi(part);
-	}
-
-	std::string toString() const {
-		std::stringstream ss;
-		ss << major << "." << minor << "." << patch;
-		return ss.str();
-	}
-};
-
 struct Dependency {
 	std::string name;
 	SemVer version;
-};
-
-struct Target {
-	json getJson() {
-		return json{};
-	};
 };
 
 struct Type {
@@ -90,21 +57,9 @@ private:
 	Value value;
 };
 
-inline void to_json(json& j, const SemVer& v) {
-	j = v.toString();
-}
 
 inline void to_json(ordered_json& j, const Dependency& d) {
 	j = json{{"name", d.name}, {"version", d.version}};
-}
-
-inline void to_json(ordered_json& j, const std::map<std::string, Target>& targets) {
-	if (targets.size() == 0) {
-		j = json::object();
-	}
-	for (auto [key, value] : targets) {
-		j = json{key, value.getJson()};
-	}
 }
 
 struct Manifest {
@@ -112,7 +67,6 @@ struct Manifest {
 	SemVer version;
 	Type type;
 	std::vector<Dependency> dependencies;
-	std::map<std::string, Target> targets;
 
 	Manifest(const char* path) {
 		std::ifstream file(path);
@@ -130,14 +84,8 @@ struct Manifest {
 		for (const auto& dep : j["dependencies"]) {
 			Dependency dependency;
 			dependency.name = dep["name"];
-			dependency.version = manifest::SemVer(dep["version"]);
+			dependency.version = SemVer(dep["version"]);
 			dependencies.push_back(dependency);
-		}
-
-		auto targets = j["targets"];
-		for (auto& [key, value] : targets.items()) {
-			Target target;
-			this->targets[key] = target;
 		}
 	}
 
@@ -158,7 +106,6 @@ struct Manifest {
 		j["version"] = version.toString();
 		j["type"] = type.toString();
 		j["dependencies"] = dependencies;
-		j["targets"] = targets;
 
 		writeFile(dir + constants::MANIFEST_PATH, j.dump(1, '\t'));
 	}

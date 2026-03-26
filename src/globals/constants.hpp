@@ -1,10 +1,21 @@
 #pragma once
 
+#include "utils/types.hpp"
 #include <string>
 #include <filesystem>
 #include <llvm-21/llvm/TargetParser/Host.h>
 
 namespace fs = std::filesystem;
+
+inline fs::path getHomeDir() {
+#ifdef _WIN32
+	const char* home = std::getenv("USERPROFILE");
+#else
+	const char* home = std::getenv("HOME");
+#endif
+	if (!home) throw std::runtime_error("Could not determine home directory");
+	return fs::path(home);
+}
 
 namespace constants {
 constexpr char MANIFEST_PATH[] = "zane.json";
@@ -49,6 +60,12 @@ constexpr char BUILD_DIR[] = "build";
 constexpr char DEV_DIR[] = ".dev";
 constexpr char SYMBOLS_DIR[] = ".cache/symbols";
 constexpr char SYMBOLS_NAME[] = "symbols.bin";
+constexpr char ZANE_HOME[] = ".zane";
+constexpr char REGISTRY[] = "registry";
+
+inline fs::path getPackagePath(const SemVer& semVer) {
+	return getHomeDir() / ZANE_HOME / REGISTRY / semVer.toString();
+}
 
 inline fs::path getSymbolsPath(const fs::path& packageDir) {
 	const fs::path symbolsDir(SYMBOLS_DIR);
