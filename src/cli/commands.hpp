@@ -21,71 +21,30 @@
 
 namespace commands {
 
-enum Mode {
-	Debug,
-	JIT,
-	IR,
-};
-
-inline void execute(Mode mode, const manifest::Manifest& manifest) {
+inline void run(int argc, char* argv[], const manifest::Manifest& manifest) {
 	Compiler compiler(manifest);
 	compiler.compile();
+	compiler.generateCode();
 
-	if (mode == Debug) {
-		auto packages = compiler.getPackages();
-		for (const auto& [name, package] : *packages) {
-			PRINT(package->irProgram->toString());
-		}
+	if (!zig::ensure()) {
+		LOG("Could not acquire Zig toolchain. Aborting.");
 		return;
 	}
 
-	compiler.generateCode();
+	auto hostTarget = constants::targets::getHostTarget();
 
-	if (mode == IR) {
-		auto linkedModule = compiler.linkLlvmModules();
-		if (!linkedModule) {
-			LOG("Failed to link modules");
-			return;
-		}
-		// Write directly to stdout instead of using file descriptor
-		linkedModule->print(llvm::outs(), nullptr);
-	}
-	else {
-		if (!zig::ensure()) {
-			LOG("Could not acquire Zig toolchain. Aborting.");
-			return;
-		}
+	compiler.compileToObjectFiles(hostTarget, BuildMode::Dev, true);
 
-		auto hostTarget = constants::targets::getHostTarget();
-		BuildMode buildMode = (mode == JIT) ? BuildMode::Dev : BuildMode::Release;
+	namespace fs = std::filesystem;
+	fs::path buildDir = fs::path(constants::DEV_DIR) / hostTarget.name;
+	if (!fs::exists(buildDir)) fs::create_directories(buildDir);
 
-		compiler.compileToObjectFiles(hostTarget, buildMode, true);
+	fs::path outputPath = buildDir / (manifest.name + std::string(hostTarget.extension));
 
-		namespace fs = std::filesystem;
-		fs::path buildDir = fs::path(constants::BUILD_DIR) / hostTarget.name;
-		if (!fs::exists(buildDir)) fs::create_directories(buildDir);
+	if (!compiler.linkObjectFiles(hostTarget, BuildMode::Dev, outputPath.string()))
+		return;
 
-		std::string executableName = manifest.name + std::string(hostTarget.extension);
-		fs::path outputPath = buildDir / executableName;
-
-		if (!compiler.linkObjectFiles(hostTarget, buildMode, outputPath.string()))
-			return;
-
-		if (mode == JIT)
-			compiler.executeNative(outputPath.string());
-	}
-}
-
-inline void run(int argc, char* argv[], const manifest::Manifest& manifest) {
-	execute(JIT, manifest);
-}
-
-inline void debug(int argc, char* argv[], const manifest::Manifest& manifest) {
-	execute(Debug, manifest);
-}
-
-inline void ir(int argc, char* argv[], const manifest::Manifest& manifest) {
-	execute(IR, manifest);
+	compiler.executeNative(outputPath.string());
 }
 
 inline void build(int argc, char* argv[], const manifest::Manifest& manifest) {
@@ -93,6 +52,30 @@ inline void build(int argc, char* argv[], const manifest::Manifest& manifest) {
 	compiler.compile();
 	compiler.generateCode();
 	compiler.buildForAllTargets();
+}
+
+inline void debug(int argc, char* argv[], const manifest::Manifest& manifest) {
+	Compiler compiler(manifest);
+	compiler.compile();
+
+	auto packages = compiler.getPackages();
+	for (const auto& [name, package] : *packages) {
+		PRINT(package->irProgram->toString());
+	}
+}
+
+inline void ir(int argc, char* argv[], const manifest::Manifest& manifest) {
+	Compiler compiler(manifest);
+	compiler.compile();
+	compiler.generateCode();
+
+	auto linkedModule = compiler.linkLlvmModules();
+	if (!linkedModule) {
+		LOG("Failed to link modules");
+		return;
+	}
+
+	linkedModule->print(llvm::outs(), nullptr);
 }
 
 inline bool directoryIsEmpty(const std::filesystem::path& dir) {
@@ -158,19 +141,19 @@ inline void help(int argc, char* argv[]) {
 
 // Commands that require an initialized project
 const std::map<std::string, void(*)(int, char*[], const manifest::Manifest&)> projectCommands = {
-	{ "run", run},
-	{ "build", build},
-	{ "debug", debug},
-	{ "ir", ir},
+	{ "run",   run   },
+	{ "build", build },
+	{ "debug", debug },
+	{ "ir",    ir    },
 };
 
 // Commands that don't require an initialized project
 const std::map<std::string, void(*)(int, char*[])> standaloneCommands = {
-	{ "init", init},
-	{ "help", help},
+	{ "init", init },
+	{ "help", help },
 };
 
-inline void dispatch(const std::string& cmd, int argc, char* argv[]){
+inline void dispatch(const std::string& cmd, int argc, char* argv[]) {
 	auto standaloneIt = standaloneCommands.find(cmd);
 	if (standaloneIt != standaloneCommands.end()) {
 		standaloneIt->second(argc, argv);
