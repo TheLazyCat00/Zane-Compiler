@@ -33,9 +33,19 @@ struct Variant {
 	std::variant<Types...> value;
 
 	Variant() = default;
-
 	Variant(std::variant<Types...> value)
 	: value(std::move(value)) {}
+
+	template<typename T,
+	typename = std::enable_if_t<(std::is_same_v<std::decay_t<T>, Types> || ...)>>
+	Variant(T&& val) : value(std::forward<T>(val)) {}
+
+	template<typename T,
+	typename = std::enable_if_t<(std::is_same_v<std::decay_t<T>, Types> || ...)>>
+	Variant& operator=(T&& val) {
+		value = std::forward<T>(val);
+		return *this;
+	}
 
 	template<typename Callback>
 	decltype(auto) visit(Callback&& callback) {
@@ -59,17 +69,17 @@ struct Variant {
 	}
 
 	template<typename Archive>
-    void save(Archive& ar) const {
-        ar(value.index());
-        std::visit([&ar](const auto& v) { ar(v); }, value);
-    }
+	void save(Archive& ar) const {
+		ar(value.index());
+		std::visit([&ar](const auto& v) { ar(v); }, value);
+	}
 
-    template<typename Archive>
-    void load(Archive& ar) {
-        std::size_t idx;
-        ar(idx);
-        loadVariantAt<0>(idx, value, ar);
-    }
+	template<typename Archive>
+	void load(Archive& ar) {
+		std::size_t idx;
+		ar(idx);
+		loadVariantAt<0>(idx, value, ar);
+	}
 };
 
 template<template<typename> class Wrapper, typename... Types>
@@ -77,9 +87,20 @@ struct WrappingVariant {
 	std::variant<Wrapper<Types>...> value;
 
 	WrappingVariant() = default;
-
-	WrappingVariant(std::variant<Wrapper<Types>...> value)
+	WrappingVariant(std::variant<Types...> value)
 	: value(std::move(value)) {}
+
+	template<typename T,
+	typename = std::enable_if_t<(std::is_same_v<std::decay_t<T>, Types> || ...)>>
+	WrappingVariant(T&& val) : value(std::forward<T>(val)) {}
+
+	template<typename T,
+	typename = std::enable_if_t<(std::is_same_v<std::decay_t<T>, Types> || ...)>>
+	WrappingVariant& operator=(T&& val) {
+		value = std::forward<T>(val);
+		return *this;
+	}
+
 
 	template<typename Callback>
 	decltype(auto) visit(Callback&& callback) {
@@ -103,17 +124,17 @@ struct WrappingVariant {
 	}
 
 	template<typename Archive>
-    void save(Archive& ar) const {
-        ar(value.index());
-        std::visit([&ar](const auto& v) { ar(v); }, value);
-    }
+	void save(Archive& ar) const {
+		ar(value.index());
+		std::visit([&ar](const auto& v) { ar(v); }, value);
+	}
 
-    template<typename Archive>
-    void load(Archive& ar) {
-        std::size_t idx;
-        ar(idx);
-        loadVariantAt<0>(idx, value, ar);
-    }
+	template<typename Archive>
+	void load(Archive& ar) {
+		std::size_t idx;
+		ar(idx);
+		loadVariantAt<0>(idx, value, ar);
+	}
 };
 
 template<typename T>
