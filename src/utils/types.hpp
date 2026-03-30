@@ -14,6 +14,9 @@ struct overloaded : Ts... {
 	using Ts::operator()...;
 };
 
+template<typename... Ts>
+overloaded(Ts...) -> overloaded<Ts...>;
+
 // Helper function to load a variant at a specific index
 template<std::size_t I = 0, typename... Types, typename Archive>
 void loadVariantAt(std::size_t idx, std::variant<Types...>& var, Archive& ar) {
