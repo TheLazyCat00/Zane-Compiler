@@ -4,9 +4,7 @@
 #include <vector>
 #include <iostream>
 #include <sstream>
-#include <nlohmann/json.hpp>
-
-using json = nlohmann::json;
+#include <type_traits>
 
 // Helper for overloading lambdas
 template<typename... Ts>
@@ -62,12 +60,24 @@ struct Variant {
 
 	template<typename... Callbacks>
 	decltype(auto) match(Callbacks&&... callbacks) {
-		return std::visit(overloaded{std::forward<Callbacks>(callbacks)...}, value);
+		return std::visit(
+			overloaded{
+				std::forward<Callbacks>(callbacks)...,
+				[](auto&&) {}
+			},
+			value
+		);
 	}
 
 	template<typename... Callbacks>
 	decltype(auto) match(Callbacks&&... callbacks) const {
-		return std::visit(overloaded{std::forward<Callbacks>(callbacks)...}, value);
+		return std::visit(
+			overloaded{
+				std::forward<Callbacks>(callbacks)...,
+				[](auto&&) {}
+			},
+			value
+		);
 	}
 
 	template<typename Archive>
@@ -89,15 +99,15 @@ struct WrappingVariant {
 	std::variant<Wrapper<Types>...> value;
 
 	WrappingVariant() = default;
-	WrappingVariant(std::variant<Types...> value)
+	WrappingVariant(std::variant<Wrapper<Types>...> value)
 	: value(std::move(value)) {}
 
 	template<typename T,
-	typename = std::enable_if_t<(std::is_same_v<std::decay_t<T>, Types> || ...)>>
+	typename = std::enable_if_t<(std::is_same_v<std::decay_t<T>, Wrapper<Types>> || ...)>>
 	WrappingVariant(T&& val) : value(std::forward<T>(val)) {}
 
 	template<typename T,
-	typename = std::enable_if_t<(std::is_same_v<std::decay_t<T>, Types> || ...)>>
+	typename = std::enable_if_t<(std::is_same_v<std::decay_t<T>, Wrapper<Types>> || ...)>>
 	WrappingVariant& operator=(T&& val) {
 		value = std::forward<T>(val);
 		return *this;
@@ -116,12 +126,24 @@ struct WrappingVariant {
 
 	template<typename... Callbacks>
 	decltype(auto) match(Callbacks&&... callbacks) {
-		return std::visit(overloaded{std::forward<Callbacks>(callbacks)...}, value);
+		return std::visit(
+			overloaded{
+				std::forward<Callbacks>(callbacks)...,
+				[](auto&&) {}
+			},
+			value
+		);
 	}
 
 	template<typename... Callbacks>
 	decltype(auto) match(Callbacks&&... callbacks) const {
-		return std::visit(overloaded{std::forward<Callbacks>(callbacks)...}, value);
+		return std::visit(
+			overloaded{
+				std::forward<Callbacks>(callbacks)...,
+				[](auto&&) {}
+			},
+			value
+		);
 	}
 
 	template<typename Archive>
@@ -184,7 +206,3 @@ struct SemVer {
 		return ss.str();
 	}
 };
-
-inline void to_json(json& j, const SemVer& v) {
-	j = v.toString();
-}

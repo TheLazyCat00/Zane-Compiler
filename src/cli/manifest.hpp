@@ -1,24 +1,27 @@
 #pragma once
 
 #include "globals/constants.hpp"
-#include "utils/utils.hpp"
 #include "utils/console.hpp"
 #include "utils/types.hpp"
 
+#include <any>
 #include <string>
 #include <map>
-#include <vector>
 #include <fstream>
-#include <nlohmann/json.hpp>
-
-using ordered_json = nlohmann::ordered_json;
-using json = nlohmann::json;
+#include <coda.hpp>
 
 namespace manifest {
 
 struct Dependency {
-	std::string name;
+	std::string url;
 	SemVer version;
+
+	coda::CodaBlock toCoda() const {
+		coda::CodaBlock res;
+		res["url"] = url;
+		res["version"] = version.toString();
+		return res;
+	}
 };
 
 struct Type {
@@ -58,56 +61,44 @@ private:
 };
 
 
-inline void to_json(ordered_json& j, const Dependency& d) {
-	j = json{{"name", d.name}, {"version", d.version}};
-}
-
 struct Manifest {
 	std::string name;
-	SemVer version;
 	Type type;
-	std::vector<Dependency> dependencies;
+	std::map<std::string, Dependency> dependencies;
 
 	Manifest(const char* path) {
 		std::ifstream file(path);
 		if (!file.is_open()) {
-			LOG("Could not open file!");
+			DEBUG("Could not open file!");
 		}
 
-		json j;
-		file >> j;
-		file.close();
+		Coda coda(path);
 
-		name = j["name"];
-		version = SemVer(j["version"]);
-		type = Type(std::string(j["type"]));
-		for (const auto& dep : j["dependencies"]) {
+		name = coda["name"];
+		type = Type(std::string(coda["type"]));
+		for (const auto& [key, dep] : coda["dependencies"].asTable()) {
 			Dependency dependency;
-			dependency.name = dep["name"];
+			dependency.url = dep["url"];
 			dependency.version = SemVer(dep["version"]);
-			dependencies.push_back(dependency);
+			dependencies[key] = dependency;
 		}
 	}
 
 	Manifest(const std::map<std::string, std::any>& m) {
 		for (auto& [key, value] : m) {
-			if (key == "name") {
-				name = std::any_cast<std::string>(value);
-			}
-			else if (key == "type") {
-				type = std::any_cast<Type>(value);
-			}
+			type = std::any_cast<Type>(value);
 		}
 	}
 
-	void save(const std::string& dir) const {
-		ordered_json j;
-		j["name"] = name;
-		j["version"] = version.toString();
-		j["type"] = type.toString();
-		j["dependencies"] = dependencies;
+	void save() const {
+		Coda coda;
+		coda["name"] = name;
+		coda["type"] = type.toString();
+		for (const auto& [key, dep] : dependencies) {
+			coda["dependencies"][key] = dep.toCoda();
+		}
 
-		writeFile(dir + constants::MANIFEST_PATH, j.dump(1, '\t'));
+		coda.save(constants::MANIFEST_PATH);
 	}
 };
 

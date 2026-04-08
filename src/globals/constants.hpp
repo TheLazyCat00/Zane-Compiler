@@ -18,7 +18,7 @@ inline fs::path getHomeDir() {
 }
 
 namespace constants {
-constexpr char MANIFEST_PATH[] = "zane.json";
+constexpr char MANIFEST_PATH[] = "zane.coda";
 
 namespace executable {
 	constexpr char ENTRY[] = "src/main.zn";

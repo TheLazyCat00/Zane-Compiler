@@ -12,14 +12,14 @@ inline void writeFile(const std::string& path, const std::string& content) {
 	std::error_code ec;
 	std::filesystem::create_directories(filePath.parent_path(), ec);
 	if (ec) {
-		LOG("Error creating directories for: " << path
+		DEBUG("Error creating directories for: " << path
 			<< " (" << ec.message() << ")");
 		return;
 	}
 
 	std::ofstream file(path);
 	if (!file) {
-		LOG("Error creating file: " << path);
+		DEBUG("Error creating file: " << path);
 		return;
 	}
 

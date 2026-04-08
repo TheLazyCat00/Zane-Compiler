@@ -1,0 +1,7 @@
+name test
+type executable
+
+dependencies [
+	key url version
+	math https://github.com/zane-lang/math 2.2.1
+]

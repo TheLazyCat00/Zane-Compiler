@@ -223,10 +223,10 @@ class Visitor : public CustomZaneVisitor {
 	std::any visitPrimary(ZaneParser::PrimaryContext *ctx) override {
 		std::shared_ptr<ir::IRNode> current = get<ir::IRNode>(ctx->atom());
 		if (!current) {
-			LOG("returned early");
+			DEBUG("returned early");
 			return {};
 		}
-		LOG(ctx->getText());
+		DEBUG(ctx->getText());
 		for (auto postfixCtx : ctx->postfix()) {
 			if (auto funcCallCtx = dynamic_cast<ZaneParser::FuncCallContext*>(postfixCtx)) {
 				auto funcCall = std::make_shared<ir::FuncCall>();
@@ -241,7 +241,7 @@ class Visitor : public CustomZaneVisitor {
 				current = funcCall;
 			}
 			else if (dynamic_cast<ZaneParser::PropertyAccessContext*>(postfixCtx)) {
-				LOG("Warning: Property access not yet implemented");
+				DEBUG("Warning: Property access not yet implemented");
 			}
 			else if (auto pipeCallCtx = dynamic_cast<ZaneParser::PipeCallContext*>(postfixCtx)) {
 				auto arg = get<ir::IRNode>(pipeCallCtx->value());

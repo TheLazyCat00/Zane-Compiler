@@ -85,7 +85,7 @@ inline bool download() {
 		+ archive.string() + "\" \"" + url + "\"";
 
 	if (std::system(dlCmd.c_str()) != 0) {
-		LOG("Failed to download Zig — is curl installed?");
+		DEBUG("Failed to download Zig — is curl installed?");
 		return false;
 	}
 
@@ -100,7 +100,7 @@ inline bool download() {
 #endif
 
 	if (std::system(extractCmd.c_str()) != 0) {
-		LOG("Failed to extract Zig archive");
+		DEBUG("Failed to extract Zig archive");
 		return false;
 	}
 

@@ -119,7 +119,7 @@ private:
 			+ " -o \"" + objectFile.string() + "\"";
 
 		if (std::system(cmd.c_str()) != 0) {
-			LOG("zig cc failed for " << irFile.filename().string());
+			DEBUG("zig cc failed for " << irFile.filename().string());
 			return false;
 		}
 
@@ -139,7 +139,7 @@ public:
 	void compile() {
 		fs::path srcDir = getEntryDirectory();
 		if (!fs::exists(srcDir) || !fs::is_directory(srcDir)) {
-			LOG("Directory not found: " << srcDir);
+			DEBUG("Directory not found: " << srcDir);
 			return;
 		}
 
@@ -187,7 +187,7 @@ public:
 		llvm::Linker linker(*linkedModule);
 		for (auto it = std::next(modules.begin()); it != modules.end(); ++it) {
 			if (linker.linkInModule(std::move(it->second))) {
-				LOG("Error linking module"); return nullptr;
+				DEBUG("Error linking module"); return nullptr;
 			}
 		}
 		modules.clear();
@@ -228,7 +228,7 @@ public:
 		}
 
 		if (objectFiles.empty()) {
-			LOG("No object files found to link for " << target.name);
+			DEBUG("No object files found to link for " << target.name);
 			return false;
 		}
 
@@ -241,7 +241,7 @@ public:
 
 		PRINT("Linking " << target.name << ": " << cmd.str());
 		if (std::system(cmd.str().c_str()) != 0) {
-			LOG("Linking failed for " << target.name);
+			DEBUG("Linking failed for " << target.name);
 			return false;
 		}
 
@@ -252,7 +252,7 @@ public:
 	// Build for all targets using zig — works on any host OS
 	void buildForAllTargets() {
 		if (!zig::ensure()) {
-			LOG("Could not acquire Zig toolchain. Aborting.");
+			DEBUG("Could not acquire Zig toolchain. Aborting.");
 			return;
 		}
 
@@ -270,12 +270,12 @@ public:
 			fs::path outputPath = buildDir / executableName;
 
 			if (!linkObjectFiles(target, BuildMode::Release, outputPath.string()))
-				LOG("Build failed for " << target.name);
+				DEBUG("Build failed for " << target.name);
 		}
 	}
 
 	void executeNative(const std::string& executable) {
-		if (!fs::exists(executable)) { LOG("Executable not found: " << executable); return; }
+		if (!fs::exists(executable)) { DEBUG("Executable not found: " << executable); return; }
 		PRINT("--- Execution ---");
 #ifdef _WIN32
 		std::system(("\"" + executable + "\"").c_str());

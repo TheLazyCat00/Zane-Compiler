@@ -27,7 +27,7 @@ inline void run(int argc, char* argv[], const manifest::Manifest& manifest) {
 	compiler.generateCode();
 
 	if (!zig::ensure()) {
-		LOG("Could not acquire Zig toolchain. Aborting.");
+		DEBUG("Could not acquire Zig toolchain. Aborting.");
 		return;
 	}
 
@@ -71,7 +71,7 @@ inline void ir(int argc, char* argv[], const manifest::Manifest& manifest) {
 
 	auto linkedModule = compiler.linkLlvmModules();
 	if (!linkedModule) {
-		LOG("Failed to link modules");
+		DEBUG("Failed to link modules");
 		return;
 	}
 
@@ -168,7 +168,7 @@ inline void dispatch(const std::string& cmd, int argc, char* argv[]) {
 
 	namespace fs = std::filesystem;
 	if (!fs::exists(constants::MANIFEST_PATH)) {
-		LOG("Project not initialized.");
+		DEBUG("Project not initialized.");
 		return;
 	}
 

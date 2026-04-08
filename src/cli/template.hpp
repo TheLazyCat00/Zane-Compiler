@@ -23,7 +23,7 @@ inline void createExecutable(const std::string& dir) {
 }
 
 inline void create(const manifest::Manifest& manifest, const std::string& dir) {
-	manifest.save(dir);
+	manifest.save();
 
 	if (manifest.type == manifest::Type::Library) {
 		createLibrary(dir, manifest.name);

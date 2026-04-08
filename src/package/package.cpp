@@ -29,7 +29,7 @@ void Package::parse(const std::vector<fs::path>& files) {
 	contexts.reserve(files.size());
 	for (const auto& path : files) {
 		auto result = parseFile(path);
-		if (!result) { LOG("Parse error: " << result.error()); continue; }
+		if (!result) { DEBUG("Parse error: " << result.error()); continue; }
 		contexts.push_back(std::move(*result));
 	}
 }
@@ -56,7 +56,7 @@ void Package::compile(const std::string& pkgName, const std::vector<fs::path>& f
 	for (const auto& path : files) {
 		auto parseResult = parseFile(path);
 		if (!parseResult) {
-			LOG("Parse error: " << parseResult.error());
+			DEBUG("Parse error: " << parseResult.error());
 			continue;
 		}
 		contexts.push_back(std::move(*parseResult));
