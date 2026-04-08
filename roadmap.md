@@ -1,7 +1,15 @@
 # roadmap
 
-- implement memory model:
-	- implement external packages
+- rewrite mason -> cmake
+- use coda for project manifest
+- add library support
+	- compile with $ as prefix, which will be replaced with the version when pulling
+		($std$print)
+		- only need major, major -> semver remap saved in coda manifest in root
+	- correctly replace $ with major in manifest
+	- imlement name -> registry lookup function, by using the defined urls in manifest
+
+- implement memory model
 	- implement c interop
 	- write c memory management functions
 	- implement structs and classes
