@@ -1,11 +1,11 @@
 init:
-	CC=clang CXX=clang++ meson setup build --buildtype=debug --cmake-prefix-path "$(realpath vcpkg_installed/x64-linux)"
+	CXX=clang++ meson setup build --reconfigure --buildtype=debug --cmake-prefix-path "$(realpath vcpkg_installed/x64-linux)"
 
 build:
 	meson compile -C build
 
 release:
-	CC=clang CXX=clang++ meson setup build --buildtype=release --reconfigure --cmake-prefix-path "$(realpath vcpkg_installed/x64-linux)"
+	CXX=clang++ meson setup build --buildtype=release --reconfigure --cmake-prefix-path "$(realpath vcpkg_installed/x64-linux)"
 
 [working-directory: "test"]
 test:

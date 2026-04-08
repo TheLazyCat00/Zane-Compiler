@@ -11,6 +11,9 @@ project(
 
 python = import('python').find_installation()
 
+coda_inc = include_directories('vendor/coda/include')                      
+coda_dep = declare_dependency(include_directories: coda_inc)               
+
 antlr4_dep = dependency(
   'antlr4-runtime',
   required: true,
@@ -77,14 +80,9 @@ embedded_types_header = custom_target(
   build_by_default: true,
 )
 
-parser_sources = files(
-  'generated-parser/parser/ZaneBaseVisitor.cpp',
-  'generated-parser/parser/ZaneVisitor.cpp',
-  'generated-parser/parser/ZaneBaseListener.cpp',
-  'generated-parser/parser/ZaneListener.cpp',
-  'generated-parser/parser/ZaneParser.cpp',
-  'generated-parser/parser/ZaneLexer.cpp',
-)
+parser_sources = run_command(
+  'find', 'generated-parser/parser', '-name', '*.cpp', check: true
+).stdout().strip().split('\n')
 
 parser_lib = static_library(
   'zane_parser',
@@ -95,17 +93,15 @@ parser_lib = static_library(
   build_by_default: true,
 )
 
-sources = files(
-  'src/main.cpp',
-  'src/package/package.cpp',
-  'src/ir/nodes.cpp',
-)
+sources = run_command(
+  'find', 'src', '-name', '*.cpp', check: true
+).stdout().strip().split('\n')
 
 zane_exe = executable(
   meson.project_name(),
   sources + [embedded_types_header],
   include_directories: [src_dir, generated_dir],
-  dependencies: [nlohmann_dep, cereal_dep, antlr4_dep, llvm_dep],
+  dependencies: [nlohmann_dep, cereal_dep, antlr4_dep, llvm_dep, coda_dep],
   link_with: [parser_lib],
   build_by_default: true,
   cpp_args: exe_cpp_args,
