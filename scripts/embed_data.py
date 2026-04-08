@@ -13,7 +13,7 @@ def escape_cpp_string(value: str) -> str:
 
 
 def main() -> None:
-	root = Path(__file__).resolve().parent
+	root = Path(__file__).resolve().parent.parent
 	data_dir = root / "data"
 	types_file = data_dir / "types.csv"
 	builtins_file = data_dir / "builtins.csv"

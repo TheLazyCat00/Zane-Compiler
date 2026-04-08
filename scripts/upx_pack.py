@@ -8,7 +8,7 @@ from pathlib import Path
 
 def main() -> int:
 	if len(sys.argv) != 4:
-		print("usage: upx_pack.py <upx> <binary> <stamp>")
+		print("usage: scripts/upx_pack.py <upx> <binary> <stamp>")
 		return 2
 
 	upx = sys.argv[1]

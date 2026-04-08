@@ -69,7 +69,7 @@ endif
 embedded_types_header = custom_target(
   'embedded_types',
   output: 'embedded_types.hpp',
-  command: [python, files('embed_data.py')],
+  command: [python, files('scripts/embed_data.py')],
   depend_files: [
     files('data/types.csv'),
     files('data/builtins.csv'),
@@ -117,7 +117,7 @@ if upx.found() and buildtype == 'release'
   upx_target = custom_target(
     'upx_pack',
     output: 'upx_pack.stamp',
-    command: [python, files('upx_pack.py'), upx, zane_exe.full_path(), '@OUTPUT@'],
+    command: [python, files('scripts/upx_pack.py'), upx, zane_exe.full_path(), '@OUTPUT@'],
     depends: zane_exe,
     build_by_default: true,
   )
