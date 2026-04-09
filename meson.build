@@ -11,8 +11,8 @@ project(
 
 python = import('python').find_installation()
 
-coda_inc = include_directories('vendor/coda/include')                      
-coda_dep = declare_dependency(include_directories: coda_inc)               
+coda_inc = include_directories('vendor/coda/include')
+coda_dep = declare_dependency(include_directories: coda_inc)
 
 antlr4_dep = dependency(
   'antlr4-runtime',
@@ -21,33 +21,7 @@ antlr4_dep = dependency(
   modules: ['antlr4_static'],
 )
 nlohmann_dep = dependency('nlohmann_json', required: true, method: 'cmake')
-cereal_dep = dependency('cereal', required: true, method: 'cmake')
-
-llvm_modules = [
-  'core',
-  'orcjit',
-  'executionengine',
-  'support',
-  'x86codegen',
-  'x86asmparser',
-  'x86desc',
-  'x86disassembler',
-  'x86info',
-  'aarch64codegen',
-  'aarch64asmparser',
-  'aarch64desc',
-  'aarch64disassembler',
-  'aarch64info',
-  'aarch64utils',
-  'windowsdriver',
-]
-
-llvm_dep = dependency(
-  'llvm',
-  modules: llvm_modules,
-  method: 'config-tool',
-  required: true,
-)
+cereal_dep  = dependency('cereal', required: true, method: 'cmake')
 
 src_dir = include_directories('src')
 generated_dir = include_directories('generated-parser')
@@ -68,6 +42,71 @@ else
   exe_cpp_args += ['-O3', '-march=native', '-flto', '-fvisibility=hidden']
   exe_link_args += ['-flto', '-Wl,--strip-all', '-Wl,--gc-sections']
 endif
+
+# ---------------- LLVM (manual llvm-config integration) ----------------
+llvm_modules = [
+  'core',
+  'orcjit',
+  'executionengine',
+  'support',
+  'x86codegen',
+  'x86asmparser',
+  'x86desc',
+  'x86disassembler',
+  'x86info',
+  'aarch64codegen',
+  'aarch64asmparser',
+  'aarch64desc',
+  'aarch64disassembler',
+  'aarch64info',
+  'aarch64utils',
+  'windowsdriver',
+]
+
+llvm_config = find_program('llvm-config-21', 'llvm-config', required: true)
+
+llvm_cxxflags_s = run_command(llvm_config, '--cxxflags', check: true).stdout().strip()
+llvm_ldflags_s  = run_command(llvm_config, '--ldflags',  check: true).stdout().strip()
+llvm_libs_s     = run_command(llvm_config, ['--libs'] + llvm_modules, check: true).stdout().strip()
+llvm_syslibs_s  = run_command(llvm_config, '--system-libs', check: true).stdout().strip()
+
+llvm_cxxflags = llvm_cxxflags_s == '' ? [] : llvm_cxxflags_s.split()
+llvm_ldflags  = llvm_ldflags_s  == '' ? [] : llvm_ldflags_s.split()
+llvm_libs     = llvm_libs_s     == '' ? [] : llvm_libs_s.split()
+llvm_syslibs  = llvm_syslibs_s  == '' ? [] : llvm_syslibs_s.split()
+
+# Rewrite -I... include dirs to -idirafter ... to avoid shadowing libstdc++ headers
+# (fixes conflicting <cxxabi.h> / __cxa_init_primary_exception)
+llvm_incdirs = []
+llvm_other_cargs = []
+
+foreach a : llvm_cxxflags
+  if a.startswith('-I')
+    llvm_incdirs += a.substring(2)
+
+  # prevent llvm-config from overriding project configuration / breaking deps
+  elif a.startswith('-std=')
+    # drop
+  elif a == '-fno-exceptions'
+    # drop
+  elif a == '-fno-rtti'
+    # drop
+
+  else
+    llvm_other_cargs += a
+  endif
+endforeach
+
+llvm_fixed_cargs = llvm_other_cargs
+foreach d : llvm_incdirs
+  llvm_fixed_cargs += ['-idirafter', d]
+endforeach
+
+llvm_dep = declare_dependency(
+  compile_args: llvm_fixed_cargs,
+  link_args: llvm_ldflags + llvm_libs + llvm_syslibs,
+)
+# ----------------------------------------------------------------------
 
 embedded_types_header = custom_target(
   'embedded_types',
