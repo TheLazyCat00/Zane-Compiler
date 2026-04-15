@@ -35,13 +35,16 @@ namespace library {
 	constexpr char ENTRY[] = "test/main.zn";
 	constexpr char ENTRY_DIR[] = "test";
 	constexpr char LIBRARY[] = "src/main.zn";
+	constexpr char LIBRARY_DIR[] = "src";
 
 	inline std::string getEntryContent(const std::string& libraryName) {
 		return
+			"package test\n"
+			"\n"
 			"import " + libraryName + "\n"
 			"\n"
 			"Void main() {\n"
-			"\t" + libraryName + ".greet()\n"
+			"\t" + libraryName + "$greet()\n"
 			"}";
 	}
 

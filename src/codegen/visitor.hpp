@@ -44,7 +44,7 @@ public:
 	// }
 
 	void declareSignatures(Ptr<Package> package) {
-		auto symbols = package->symbolCollector->getPackageInfo()->symbols;
+		auto symbols = package->packageInfo->symbols;
 		for (auto& [name, symbol] : symbols) {
 			symbol->type->value.match([&](std::shared_ptr<ir::FuncType> funcType) {
 				declareSignature(symbol);
@@ -67,7 +67,7 @@ public:
 				it->second->getAllocatedType(), it->second, node->name);
 		}
 
-		// Then full mangled name (package-qualified globals)
+		// Full mangled name (package-qualified globals, fully typed)
 		std::string mangled = node->getMangledName();
 		if (llvm::Function* func = module.getFunction(mangled)) {
 			return (llvm::Value*)func;
@@ -250,9 +250,6 @@ private:
 		if (!retType) return;
 
 		llvm::FunctionType* ft = llvm::FunctionType::get(retType, params, false);
-		auto linkage = funcSymbol->name == "main"
-			? llvm::Function::ExternalLinkage
-			: llvm::Function::InternalLinkage;
-		llvm::Function::Create(ft, linkage, funcSymbol->getMangledName(), module);
+		llvm::Function::Create(ft, llvm::Function::ExternalLinkage, funcSymbol->getMangledName(), module);
 	}
 };

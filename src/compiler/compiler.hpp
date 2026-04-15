@@ -29,14 +29,23 @@ enum class BuildMode {
 class Compiler {
 private:
 	Ptr<Packages> packages;
+	Ptr<SymbolCollector> symbolCollector;
 	Modules modules;
 	manifest::Manifest manifest;
 	Ptr<llvm::LLVMContext> context;
 
-	fs::path getEntryDirectory() {
+	struct SourceDir {
+		fs::path dir;
+		std::string rootPkgKey;
+	};
+
+	std::vector<SourceDir> getIncludedDirectories() {
 		if (manifest.type == manifest::Type::Executable)
-			return constants::executable::ENTRY_DIR;
-		return constants::library::ENTRY_DIR;
+			return {{ constants::executable::ENTRY_DIR, manifest.name }};
+		return {
+			{ constants::library::LIBRARY_DIR, manifest.name },
+			{ constants::library::ENTRY_DIR,   "test"        },
+		};
 	}
 
 	fs::file_time_type getLastModified(const fs::path& path) {
@@ -67,7 +76,7 @@ private:
 	}
 
 	void compilePackage(const std::string& pkgName, const std::vector<fs::path>& files, const std::string& packageDir) {
-		(*packages)[pkgName] = Package(packages);
+		(*packages)[pkgName] = Package(symbolCollector);
 		(*packages)[pkgName]->parse(files);
 	}
 
@@ -75,7 +84,11 @@ private:
 		auto wrapperModule = std::make_unique<llvm::Module>("__main_wrapper", *context);
 		llvm::IRBuilder<> builder(*context);
 
-		std::string mangledMain = constants::getMangledMain(manifest.name);
+		std::string entryPackage = manifest.name;
+		if (manifest.type == manifest::Type::Library) {
+			entryPackage = "test";
+		}
+		std::string mangledMain = constants::getMangledMain(entryPackage);
 		llvm::FunctionType* mangledMainType = llvm::FunctionType::get(builder.getVoidTy(), {}, false);
 		wrapperModule->getOrInsertFunction(mangledMain, mangledMainType);
 
@@ -129,7 +142,10 @@ private:
 
 public:
 	Compiler(manifest::Manifest manifest)
-		: manifest(manifest), packages(Packages()), context(makePtr<llvm::LLVMContext>()) {}
+		: manifest(manifest)
+		, packages(Packages())
+		, symbolCollector(SymbolCollector())
+		, context(makePtr<llvm::LLVMContext>()) {}
 
 	~Compiler() {
 		modules.clear();
@@ -137,31 +153,32 @@ public:
 	}
 
 	void compile() {
-		fs::path srcDir = getEntryDirectory();
-		if (!fs::exists(srcDir) || !fs::is_directory(srcDir)) {
-			DEBUG("Directory not found: " << srcDir);
-			return;
-		}
-
-		std::vector<fs::path> sources;
-		for (const auto& entry : fs::recursive_directory_iterator(srcDir)) {
-			if (entry.path().extension() == ".zn")
-				sources.push_back(entry.path());
-		}
-
 		std::map<std::string, std::vector<fs::path>> packageFiles;
 		std::map<std::string, std::string> packageDirs;
 
-		for (const auto& source : sources) {
-			auto relativePath = fs::relative(source.parent_path(), srcDir);
-			std::string pkgName, dir;
-			if (relativePath == ".") {
-				pkgName = manifest.name; dir = "";
-			} else {
-				pkgName = relativePath.string(); dir = relativePath.string();
+		for (const auto& srcDir : getIncludedDirectories()) {
+			if (!fs::exists(srcDir.dir) || !fs::is_directory(srcDir.dir)) {
+				DEBUG("Directory not found: " << srcDir.dir);
+				continue;
 			}
-			packageFiles[pkgName].push_back(source);
-			packageDirs[pkgName] = dir;
+
+			std::vector<fs::path> sources;
+			for (const auto& entry : fs::recursive_directory_iterator(srcDir.dir)) {
+				if (entry.path().extension() == ".zn")
+					sources.push_back(entry.path());
+			}
+
+			for (const auto& source : sources) {
+				auto relativePath = fs::relative(source.parent_path(), srcDir.dir);
+				std::string pkgName, dir;
+				if (relativePath == ".") {
+					pkgName = srcDir.rootPkgKey; dir = "";
+				} else {
+					pkgName = relativePath.string(); dir = relativePath.string();
+				}
+				packageFiles[pkgName].push_back(source);
+				packageDirs[pkgName] = dir;
+			}
 		}
 
 		for (const auto& [pkgName, files] : packageFiles) {
@@ -177,7 +194,7 @@ public:
 
 	void generateCode() {
 		for (auto& [pkgName, package] : *packages)
-			modules[pkgName] = package->getLlvmModule(context, package, "");
+			modules[pkgName] = package->getLlvmModule(context, package, packages, "");
 		generateMainWrapper();
 	}
 

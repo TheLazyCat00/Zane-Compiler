@@ -43,12 +43,11 @@ struct ParserContext {
 struct Package {
 	Ptr<SymbolCollector> symbolCollector;
 	Ptr<Visitor> visitor;
-	Ptr<Packages> packages;
 	std::shared_ptr<ir::PackageInfo> packageInfo;
 	std::shared_ptr<ir::GlobalScope> irProgram;
 
 	Package() = default;
-	Package(Ptr<Packages> packages);
+	Package(Ptr<SymbolCollector> symbolCollector);
 
 	std::expected<std::unique_ptr<ParserContext>, std::string> parseFile(const fs::path& path);
 	void parse(const std::vector<fs::path>& files);
@@ -60,7 +59,7 @@ struct Package {
 		const std::string& packageDir,
 		const std::vector<fs::path>& files
 	);
-	std::unique_ptr<llvm::Module> getLlvmModule(Ptr<llvm::LLVMContext> context, Ptr<Package> package, const std::string& triple);
+	std::unique_ptr<llvm::Module> getLlvmModule(Ptr<llvm::LLVMContext> context, Ptr<Package> package, Ptr<Packages> allPackages, const std::string& triple);
 	std::shared_ptr<ir::PackageInfo> getPackageInfo() const;
 	std::shared_ptr<ir::GlobalScope> getIRProgram() const;
 

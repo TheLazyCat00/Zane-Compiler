@@ -27,7 +27,8 @@ public:
 
 	void generate(Ptr<Package> package, Ptr<Packages> allPackages) {
 		LLVMVisitor visitor(context, builder, *module);
-		visitor.declareSignatures(package);
+		for (auto& [name, pkg] : *allPackages)
+			visitor.declareSignatures(pkg);
 		visitor.generateBodies(package);
 	}
 

@@ -95,9 +95,13 @@ struct Manifest {
 		auto& root = coda.root();
 		root["name"] = name;
 		root["type"] = type.toString();
+		
+		coda::KeyedTable depsTable({"url", "version"});
+		depsTable.setHeaderComment("Package dependencies");
 		for (const auto& [key, dep] : dependencies) {
-			root["dependencies"].asKeyedTable()[key] = dep.toCoda();
+			depsTable.insert(key, dep.toCoda());
 		}
+		root["dependencies"] = std::move(depsTable);
 
 		coda.save(constants::MANIFEST_PATH);
 	}

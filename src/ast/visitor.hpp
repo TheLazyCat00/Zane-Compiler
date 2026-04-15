@@ -24,7 +24,6 @@ using namespace parser;
 class Visitor : public CustomZaneVisitor {
 	std::shared_ptr<ir::GlobalScope> globalScope;
 	std::unordered_set<std::string> builtinSymbols;
-	Ptr<Packages> packages;
 	Stack<std::map<std::string, std::shared_ptr<ir::ValueSymbol>>> scopeSymbols;
 	Ptr<SymbolCollector> symbolCollector;
 	std::string packageName;
@@ -327,6 +326,11 @@ class Visitor : public CustomZaneVisitor {
 		return nullptr;
 	}
 
+	// Get a package's symbol table by its declared package name
+	std::shared_ptr<ir::PackageInfo> getPackageInfo(const std::string& pkgName) {
+		return symbolCollector->getPackageInfo(pkgName);
+	}
+
 	// Resolve callee symbol using argument types
 	std::shared_ptr<ir::ValueSymbol> resolveOverload(
 		std::shared_ptr<ir::IRNode> calleeNode,
@@ -334,12 +338,19 @@ class Visitor : public CustomZaneVisitor {
 		auto sym = std::dynamic_pointer_cast<ir::ValueSymbol>(calleeNode);
 		if (!sym) return nullptr;
 
-		auto packageInfo = symbolCollector->getPackageInfo();
-
-		// Find all overloads of this function
+		// Build candidate list: search own package, or the qualified package if specified
 		std::vector<std::shared_ptr<ir::ValueSymbol>> candidates;
-		for (auto& [key, symbol] : packageInfo->symbols) {
-			if (symbol->name == sym->name) candidates.push_back(symbol);
+		auto searchIn = [&](std::shared_ptr<ir::PackageInfo> info) {
+			if (!info) return;
+			for (auto& [key, symbol] : info->symbols) {
+				if (symbol->name == sym->name) candidates.push_back(symbol);
+			}
+		};
+
+		if (sym->packageName.has_value()) {
+			searchIn(getPackageInfo(sym->packageName.value()));
+		} else {
+			searchIn(symbolCollector->getPackageInfo());
 		}
 
 		// Try each candidate and match param count + types
@@ -366,22 +377,31 @@ class Visitor : public CustomZaneVisitor {
 	std::any visitValueSymbol(ZaneParser::ValueSymbolContext *ctx) override {
 		auto name = ctx->name->getText();
 
-		// 1. Check scope stack (local vars, params)
-		for (auto it = scopeSymbols.rbegin(); it != scopeSymbols.rend(); ++it) {
-			auto found = it->find(name);
-			if (found != it->end()) {
-				return std::static_pointer_cast<ir::IRNode>(found->second);
+		// 1. Check scope stack (local vars, params) — only for unqualified names
+		if (!ctx->package) {
+			for (auto it = scopeSymbols.rbegin(); it != scopeSymbols.rend(); ++it) {
+				auto found = it->find(name);
+				if (found != it->end()) {
+					return std::static_pointer_cast<ir::IRNode>(found->second);
+				}
 			}
 		}
 
-		// 2. Check package symbols
-		auto packageInfo = symbolCollector->getPackageInfo();
+		// 2. Determine which package's symbols to search
+		std::shared_ptr<ir::PackageInfo> searchInfo;
+		if (ctx->package) {
+			searchInfo = getPackageInfo(ctx->package->getText());
+		}
+		if (!searchInfo) {
+			searchInfo = symbolCollector->getPackageInfo();
+		}
+
 		std::vector<std::shared_ptr<ir::ValueSymbol>> candidates;
-		for (auto& [key, symbol] : packageInfo->symbols) {
+		for (auto& [key, symbol] : searchInfo->symbols) {
 			if (symbol->name == name) candidates.push_back(symbol);
 		}
 
-		// Exactly one match — resolve immediately
+		// Exactly one match — resolve immediately with full type info
 		if (candidates.size() == 1) {
 			return std::static_pointer_cast<ir::IRNode>(candidates[0]);
 		}
@@ -390,16 +410,15 @@ class Visitor : public CustomZaneVisitor {
 		if (candidates.size() > 1) {
 			auto symbol = std::make_shared<ir::ValueSymbol>();
 			symbol->name = name;
-			// no type, no package — intentionally unresolved
+			if (ctx->package) symbol->packageName = ctx->package->getText();
+			// no type — intentionally unresolved for overload resolution
 			return std::static_pointer_cast<ir::IRNode>(symbol);
 		}
 
-		// 3. Fallback: builtin
+		// 3. Fallback: builtin or unknown
 		auto symbol = std::make_shared<ir::ValueSymbol>();
 		symbol->name = name;
-		if (ctx->package) {
-			symbol->packageName = ctx->package->getText();
-		}
+		if (ctx->package) symbol->packageName = ctx->package->getText();
 		return std::static_pointer_cast<ir::IRNode>(symbol);
 	}
 
@@ -431,9 +450,8 @@ class Visitor : public CustomZaneVisitor {
 	}
 
 public:
-	Visitor(Ptr<Packages> packages, Ptr<SymbolCollector> symbolCollector)
+	Visitor(Ptr<SymbolCollector> symbolCollector)
 			: globalScope(std::make_shared<ir::GlobalScope>())
-			, packages(packages)
 			, symbolCollector(symbolCollector) {
 		builtinSymbols = utils::getBuiltinSymbols();
 	}

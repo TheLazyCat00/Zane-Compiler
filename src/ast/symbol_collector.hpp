@@ -15,21 +15,21 @@
 using namespace parser;
 
 class SymbolCollector : public CustomZaneVisitor {
-	std::shared_ptr<ir::PackageInfo> packageInfo = std::make_shared<ir::PackageInfo>();
-	std::string packageName;
+	std::map<std::string, std::shared_ptr<ir::PackageInfo>> packages;
+	std::shared_ptr<ir::PackageInfo> current;
 
 	void registerSymbol(std::shared_ptr<ir::ValueSymbol> symbol) {
 		auto mangled = symbol->getMangledName();
-		if (packageInfo->symbols.count(mangled)) {
+		if (current->symbols.count(mangled)) {
 			throw std::runtime_error("Duplicate symbol: " + mangled);
 		}
-		packageInfo->symbols[mangled] = symbol;
+		current->symbols[mangled] = symbol;
 	}
 
 	std::any visitVarDef(ZaneParser::VarDefContext *ctx) override {
 		auto symbol = std::make_shared<ir::ValueSymbol>();
 		symbol->name = ctx->name->getText();
-		symbol->packageName = packageName;
+		symbol->packageName = current->packageName;
 		symbol->type = get<ir::Type>(ctx->type());
 
 		registerSymbol(symbol);
@@ -40,7 +40,7 @@ class SymbolCollector : public CustomZaneVisitor {
 	std::any visitFuncDef(ZaneParser::FuncDefContext *ctx) override {
 		auto symbol = std::make_shared<ir::ValueSymbol>();
 		symbol->name = ctx->name->getText();
-		symbol->packageName = packageName;
+		symbol->packageName = current->packageName;
 		symbol->type = std::make_shared<ir::Type>();
 
 		auto funcType = std::make_shared<ir::FuncType>();
@@ -69,7 +69,7 @@ class SymbolCollector : public CustomZaneVisitor {
 
 	std::any visitGlobalScope(ZaneParser::GlobalScopeContext *ctx) override {
 		for (auto import : ctx->pkgImport()) {
-			packageInfo->importedPackages.push_back(import->name->getText());
+			current->importedPackages.push_back(import->name->getText());
 		}
 		return 0;
 	}
@@ -80,14 +80,30 @@ public:
 			throw std::runtime_error("Global scope context is null");
 		}
 
-		packageName = globalScopeCtx->pkgDef()->name->getText();
-		packageInfo->packageName = packageName;
+		auto pkgName = globalScopeCtx->pkgDef()->name->getText();
+		if (!packages.count(pkgName)) {
+			packages[pkgName] = std::make_shared<ir::PackageInfo>();
+			packages[pkgName]->packageName = pkgName;
+		}
+		current = packages[pkgName];
+
 		for (auto ctx : globalScopeCtx->declaration()) {
 			visit(ctx);
 		}
 	}
 
 	std::shared_ptr<ir::PackageInfo> getPackageInfo() const {
-		return packageInfo;
+		return current;
+	}
+
+	void setCurrentPackage(const std::string& pkgName) {
+		auto it = packages.find(pkgName);
+		if (it != packages.end()) current = it->second;
+	}
+
+	std::shared_ptr<ir::PackageInfo> getPackageInfo(const std::string& pkgName) const {
+		auto it = packages.find(pkgName);
+		if (it != packages.end()) return it->second;
+		return nullptr;
 	}
 };

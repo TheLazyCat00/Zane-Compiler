@@ -2,10 +2,9 @@
 #include "globals/constants.hpp"
 #include "codegen/llvm.hpp"
 
-Package::Package(Ptr<Packages> packages) 
-	: packages(packages) {
-	this->symbolCollector = SymbolCollector();
-	this->visitor = Visitor(packages, symbolCollector);
+Package::Package(Ptr<SymbolCollector> symbolCollector) 
+	: symbolCollector(symbolCollector) {
+	this->visitor = Visitor(symbolCollector);
 }
 
 std::expected<std::unique_ptr<ParserContext>, std::string> Package::parseFile(const fs::path& path) {
@@ -43,6 +42,7 @@ void Package::collectSymbols() {
 
 void Package::buildTree(const std::string& packageDir) {
 	for (const auto& ctx : contexts) {
+		symbolCollector->setCurrentPackage(ctx->getTree()->pkgDef()->name->getText());
 		visitor->buildTree(ctx->getTree());
 	}
 	irProgram = visitor->getGlobalScope();
@@ -93,10 +93,10 @@ void Package::writeSymbolsCache(
 	);
 }
 
-std::unique_ptr<llvm::Module> Package::getLlvmModule(Ptr<llvm::LLVMContext> context, Ptr<Package> package, const std::string& triple) {
+std::unique_ptr<llvm::Module> Package::getLlvmModule(Ptr<llvm::LLVMContext> context, Ptr<Package> package, Ptr<Packages> allPackages, const std::string& triple) {
 	LLVMCodeGen codegen(*context, triple);
 	codegen.setupBuiltins();
-	codegen.generate(package, packages);
+	codegen.generate(package, allPackages);
 	return std::move(codegen.extractModule());
 }
 
