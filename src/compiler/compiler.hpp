@@ -57,7 +57,7 @@ private:
 	}
 
 	bool isCacheValid(const fs::path& packageDir) {
-		#ifdef DEBUG
+		#if IN_DEBUG
 			return false;
 		#endif
 		fs::path symbolsPath = constants::getSymbolsPath(packageDir);

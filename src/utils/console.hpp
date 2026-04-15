@@ -21,7 +21,7 @@ constexpr const char* extract_filename(const char* path) {
 	return file;
 }
 
-#ifdef DEBUG
+#if IN_DEBUG
 	#define DEBUG(msg) \
 		do { \
 			std::ostringstream oss; \

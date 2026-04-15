@@ -3,7 +3,7 @@
 #include "utils/console.hpp"
 
 int main(int argc, char* argv[]) {
-	#ifdef DEBUG
+	#if IN_DEBUG
 		PRINT("Debug build");
 	#else
 		PRINT("Release build");

@@ -16,8 +16,8 @@ struct Dependency {
 	std::string url;
 	SemVer version;
 
-	coda::CodaBlock toCoda() const {
-		coda::CodaBlock res;
+	coda::Row toCoda() const {
+		coda::Row res;
 		res["url"] = url;
 		res["version"] = version.toString();
 		return res;
@@ -72,11 +72,12 @@ struct Manifest {
 			DEBUG("Could not open file!");
 		}
 
-		Coda coda(path);
+		coda::Doc coda(path);
+		auto root = coda.root();
 
-		name = coda["name"];
-		type = Type(std::string(coda["type"]));
-		for (const auto& [key, dep] : coda["dependencies"].asTable()) {
+		name = root["name"].asString();
+		type = Type(root["type"].asString());
+		for (const auto& [key, dep] : root["dependencies"].asKeyedTable()) {
 			Dependency dependency;
 			dependency.url = dep["url"];
 			dependency.version = SemVer(dep["version"]);
@@ -91,11 +92,12 @@ struct Manifest {
 	}
 
 	void save() const {
-		Coda coda;
-		coda["name"] = name;
-		coda["type"] = type.toString();
+		coda::Doc coda;
+		auto root = coda.root();
+		root["name"] = name;
+		root["type"] = type.toString();
 		for (const auto& [key, dep] : dependencies) {
-			coda["dependencies"][key] = dep.toCoda();
+			root["dependencies"].asKeyedTable()[key] = dep.toCoda();
 		}
 
 		coda.save(constants::MANIFEST_PATH);
