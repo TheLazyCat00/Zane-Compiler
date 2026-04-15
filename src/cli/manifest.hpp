@@ -73,7 +73,7 @@ struct Manifest {
 		}
 
 		coda::Doc coda(path);
-		auto root = coda.root();
+		const auto& root = coda.root();
 
 		name = root["name"].asString();
 		type = Type(root["type"].asString());
@@ -86,14 +86,13 @@ struct Manifest {
 	}
 
 	Manifest(const std::map<std::string, std::any>& m) {
-		for (auto& [key, value] : m) {
-			type = std::any_cast<Type>(value);
-		}
+		name = std::any_cast<std::string>(m.at("name"));
+		type = std::any_cast<Type>(m.at("type"));
 	}
 
 	void save() const {
 		coda::Doc coda;
-		auto root = coda.root();
+		auto& root = coda.root();
 		root["name"] = name;
 		root["type"] = type.toString();
 		for (const auto& [key, dep] : dependencies) {
