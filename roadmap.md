@@ -3,11 +3,9 @@
 - [x] rewrite cmake -> mason
 - [x] use coda for project manifest
 - [ ] add library support
-	- [ ] compile with $ as prefix, which will be replaced with the version when pulling
-		($std$print)
-		- [ ] only need major, major -> semver remap saved in coda manifest in root
-	- [ ] correctly replace $ with major in manifest
-	- [ ] imlement name -> registry lookup function, by using the defined urls in manifest
+	- [ ] correctly prefix with version at pull time
+	- [ ] correctly prefix package occurrences during compilation
+	- [ ] imlement name -> package lookup function, by using the defined urls in manifest
 
 - [ ] implement memory model
 	- [ ] implement c interop
