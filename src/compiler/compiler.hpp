@@ -192,9 +192,9 @@ public:
 
 	Ptr<Packages> getPackages() { return packages; }
 
-	void generateCode() {
+	void generateCode(const std::string& targetTriple = "") {
 		for (auto& [pkgName, package] : *packages)
-			modules[pkgName] = package->getLlvmModule(context, package, packages, "");
+			modules[pkgName] = package->getLlvmModule(context, package, packages, targetTriple);
 		generateMainWrapper();
 	}
 
@@ -277,7 +277,7 @@ public:
 			PRINT("\n=== Building for " << target.name << " ===");
 
 			modules.clear();
-			generateCode();
+			generateCode(target.triple);
 			compileToObjectFiles(target, BuildMode::Release, true);
 
 			fs::path buildDir = fs::path(constants::BUILD_DIR) / target.name;

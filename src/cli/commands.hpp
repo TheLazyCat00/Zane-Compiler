@@ -24,7 +24,6 @@ namespace commands {
 inline void run(int argc, char* argv[], const manifest::Manifest& manifest) {
 	Compiler compiler(manifest);
 	compiler.compile();
-	compiler.generateCode();
 
 	if (!zig::ensure()) {
 		DEBUG("Could not acquire Zig toolchain. Aborting.");
@@ -32,7 +31,7 @@ inline void run(int argc, char* argv[], const manifest::Manifest& manifest) {
 	}
 
 	auto hostTarget = constants::targets::getHostTarget();
-
+	compiler.generateCode(hostTarget.triple);
 	compiler.compileToObjectFiles(hostTarget, BuildMode::Dev, true);
 
 	namespace fs = std::filesystem;
@@ -50,7 +49,6 @@ inline void run(int argc, char* argv[], const manifest::Manifest& manifest) {
 inline void build(int argc, char* argv[], const manifest::Manifest& manifest) {
 	Compiler compiler(manifest);
 	compiler.compile();
-	compiler.generateCode();
 	compiler.buildForAllTargets();
 }
 
