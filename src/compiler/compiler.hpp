@@ -266,6 +266,61 @@ public:
 		return true;
 	}
 
+	bool createStaticLibrary(
+			const constants::targets::Target& target,
+			const std::string& outputLibrary) {
+
+		fs::path cacheDir = fs::path(constants::CACHE_DIR) / target.name;
+		std::vector<std::string> objectFiles;
+		for (const auto& entry : fs::recursive_directory_iterator(cacheDir)) {
+			if (entry.path().extension() == ".o")
+				objectFiles.push_back("\"" + entry.path().string() + "\"");
+		}
+
+		if (objectFiles.empty()) {
+			DEBUG("No object files found for static library " << target.name);
+			return false;
+		}
+
+		std::stringstream cmd;
+		cmd << zig::path() << " ar"
+			<< " crs \"" << outputLibrary << "\"";
+		for (const auto& obj : objectFiles) cmd << " " << obj;
+
+		PRINT("Creating static library " << target.name << ": " << cmd.str());
+		if (std::system(cmd.str().c_str()) != 0) {
+			DEBUG("Static library creation failed for " << target.name);
+			return false;
+		}
+
+		PRINT("Created static library: " << outputLibrary);
+		return true;
+	}
+
+	void createArtifactZip() {
+		fs::path buildDir = constants::BUILD_DIR;
+		fs::path zipPath = buildDir / "artifacts.zip";
+
+		std::stringstream cmd;
+		cmd << "cd \"" << fs::absolute(buildDir).string() << "\" && zip -r \""
+			<< fs::absolute(zipPath).filename().string() << "\"";
+
+		for (const auto& target : constants::targets::ALL_TARGETS) {
+			fs::path targetDir = target.name;
+			if (fs::exists(buildDir / targetDir)) {
+				cmd << " \"" << target.name << "\"";
+			}
+		}
+
+		PRINT("Creating artifacts zip: " << cmd.str());
+		if (std::system(cmd.str().c_str()) != 0) {
+			DEBUG("Failed to create artifacts.zip");
+			return;
+		}
+
+		PRINT("Created artifacts: " << fs::absolute(zipPath).string());
+	}
+
 	// Build for all targets using zig — works on any host OS
 	void buildForAllTargets() {
 		if (!zig::ensure()) {
@@ -283,11 +338,23 @@ public:
 			fs::path buildDir = fs::path(constants::BUILD_DIR) / target.name;
 			if (!fs::exists(buildDir)) fs::create_directories(buildDir);
 
-			std::string executableName = manifest.name + std::string(target.extension);
-			fs::path outputPath = buildDir / executableName;
+			if (manifest.type == manifest::Type::Executable) {
+				std::string executableName = manifest.name + std::string(target.extension);
+				fs::path outputPath = buildDir / executableName;
+				if (!linkObjectFiles(target, BuildMode::Release, outputPath.string()))
+					DEBUG("Build failed for " << target.name);
+			} else {
+				std::string targetName(target.name);
+				std::string libExtension = (targetName.find("windows") != std::string::npos) ? ".lib" : ".a";
+				std::string libraryName = "lib" + manifest.name + libExtension;
+				fs::path outputPath = buildDir / libraryName;
+				if (!createStaticLibrary(target, outputPath.string()))
+					DEBUG("Library creation failed for " << target.name);
+			}
+		}
 
-			if (!linkObjectFiles(target, BuildMode::Release, outputPath.string()))
-				DEBUG("Build failed for " << target.name);
+		if (manifest.type == manifest::Type::Library) {
+			createArtifactZip();
 		}
 	}
 
