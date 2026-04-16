@@ -299,7 +299,7 @@ public:
 
 	void createArtifactZip() {
 		fs::path buildDir = constants::BUILD_DIR;
-		fs::path zipPath = buildDir / "artifacts.zip";
+		fs::path zipPath = buildDir / constants::ARTIFACTS_NAME;
 
 		std::stringstream cmd;
 		cmd << "cd \"" << fs::absolute(buildDir).string() << "\" && zip -r \""
@@ -312,9 +312,9 @@ public:
 			}
 		}
 
-		PRINT("Creating artifacts zip: " << cmd.str());
+		PRINT("Creating " << constants::ARTIFACTS_NAME << ":" << cmd.str());
 		if (std::system(cmd.str().c_str()) != 0) {
-			DEBUG("Failed to create artifacts.zip");
+			DEBUG("Failed to create " << constants::ARTIFACTS_NAME);
 			return;
 		}
 

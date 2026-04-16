@@ -19,6 +19,7 @@ inline fs::path getHomeDir() {
 
 namespace constants {
 constexpr char MANIFEST_PATH[] = "zane.coda";
+constexpr char ARTIFACTS_NAME[] = "artifacts.zip";
 
 namespace executable {
 	constexpr char ENTRY[] = "src/main.zn";
@@ -31,6 +32,7 @@ namespace executable {
 			"}";
 	}
 }
+
 namespace library {
 	constexpr char ENTRY[] = "test/main.zn";
 	constexpr char ENTRY_DIR[] = "test";
