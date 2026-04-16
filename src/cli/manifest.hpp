@@ -97,7 +97,6 @@ struct Manifest {
 		root["type"] = type.toString();
 		
 		coda::KeyedTable depsTable({"url", "version"});
-		depsTable.setHeaderComment("Package dependencies");
 		for (const auto& [key, dep] : dependencies) {
 			depsTable.insert(key, dep.toCoda());
 		}
