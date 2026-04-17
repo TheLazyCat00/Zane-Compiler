@@ -76,6 +76,13 @@ inline void ir(int argc, char* argv[], const manifest::Manifest& manifest) {
 	linkedModule->print(llvm::outs(), nullptr);
 }
 
+inline void add(int argc, char* argv[], const manifest::Manifest& manifest) {
+	if (argc == 0) {
+		PRINT("need library url");
+		PRINT("usage: zane add [url] (tag)");
+	}
+}
+
 inline bool directoryIsEmpty(const std::filesystem::path& dir) {
 	return
 		std::filesystem::directory_iterator(dir) ==
@@ -143,6 +150,7 @@ const std::map<std::string, void(*)(int, char*[], const manifest::Manifest&)> pr
 	{ "build", build },
 	{ "debug", debug },
 	{ "ir",    ir    },
+	{ "add", add },
 };
 
 // Commands that don't require an initialized project

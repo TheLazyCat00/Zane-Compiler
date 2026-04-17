@@ -1,9 +1,11 @@
 #pragma once
 
+#include "embedded_data.hpp"
 #include "utils/types.hpp"
 #include <string>
 #include <filesystem>
 #include <llvm-21/llvm/TargetParser/Host.h>
+#include <coda.hpp>
 
 namespace fs = std::filesystem;
 
@@ -66,10 +68,45 @@ constexpr char DEV_DIR[] = ".dev";
 constexpr char SYMBOLS_DIR[] = ".cache/symbols";
 constexpr char SYMBOLS_NAME[] = "symbols.bin";
 constexpr char ZANE_HOME[] = ".zane";
-constexpr char REGISTRY[] = "registry";
+constexpr char PACKAGE_DIR[] = "package";
+
+inline std::string getHost(const std::string& url) {
+	auto start = url.find("://");
+	start = (start == std::string::npos) ? 0 : start + 3;
+	auto end = url.find('/', start);
+	return url.substr(start, end - start);
+}
+
+inline std::string substituteTemplate(const std::string& tmpl, 
+									  const std::unordered_map<std::string, 
+									  std::string>& vars) {
+	std::string result = tmpl;
+	for (const auto& [key, value] : vars) {
+		const std::string placeholder = "$" + key;
+		size_t pos = 0;
+		while ((pos = result.find(placeholder, pos)) != std::string::npos)
+		{
+			result.replace(pos, placeholder.length(), value);
+			pos += value.length();
+		}
+	}
+	return result;
+}
+
+inline std::string getRelease(const std::string& repoUrl, const 
+							  std::string& tag) {
+	const std::string& host = getHost(repoUrl);
+	auto coda = coda::Doc::parse(embedded::PROVIDERS_CODA);
+	const auto& urlTemplate = coda.root()[host].asString();
+
+	return substituteTemplate(urlTemplate, {
+		{"repo", repoUrl},
+		{"tag", tag}
+	});
+}
 
 inline fs::path getPackagePath(const SemVer& semVer) {
-	return getHomeDir() / ZANE_HOME / REGISTRY / semVer.toString();
+	return getHomeDir() / ZANE_HOME / PACKAGE_DIR / semVer.toString();
 }
 
 inline fs::path getSymbolsPath(const fs::path& packageDir) {

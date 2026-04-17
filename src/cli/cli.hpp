@@ -4,7 +4,6 @@
 #include "utils/console.hpp"
 
 #include <string>
-#include <iostream>
 #include <antlr4-runtime.h>
 #include <parser/ZaneLexer.h>
 #include <parser/ZaneParser.h>

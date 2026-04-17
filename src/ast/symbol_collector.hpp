@@ -10,7 +10,7 @@
 #include <stdexcept>
 #include <string>
 #include <tree/ParseTree.h>
-#include <utils/embedded_types.hpp>
+#include <utils/embedded_data.hpp>
 
 using namespace parser;
 

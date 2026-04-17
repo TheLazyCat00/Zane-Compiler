@@ -108,9 +108,9 @@ llvm_dep = declare_dependency(
 )
 # ----------------------------------------------------------------------
 
-embedded_types_header = custom_target(
-  'embedded_types',
-  output: 'embedded_types.hpp',
+embedded_data_header = custom_target(
+  'embedded_data',
+  output: 'embedded_data.hpp',
   command: [python, files('scripts/embed_data.py')],
   depend_files: [
     files('data/types.csv'),
@@ -138,7 +138,7 @@ sources = run_command(
 
 zane_exe = executable(
   meson.project_name(),
-  sources + [embedded_types_header],
+  sources + [embedded_data_header],
   include_directories: [src_dir, generated_dir],
   dependencies: [nlohmann_dep, cereal_dep, antlr4_dep, llvm_dep, coda_dep],
   link_with: [parser_lib],
