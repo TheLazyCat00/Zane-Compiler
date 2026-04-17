@@ -80,7 +80,18 @@ inline void add(int argc, char* argv[], const manifest::Manifest& manifest) {
 	if (argc == 0) {
 		PRINT("need library url");
 		PRINT("usage: zane add [url] (tag)");
+		return;
 	}
+
+	auto repoUrl = argv[0];
+	std::string tag;
+
+	if (argc == 2) {
+		tag = argv[1];
+	}
+
+	// NOTE: installPackage needs to only accept releaseUrl
+	constants::installPackage(repoUrl, tag);
 }
 
 inline bool directoryIsEmpty(const std::filesystem::path& dir) {

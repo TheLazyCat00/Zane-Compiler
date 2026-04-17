@@ -93,6 +93,25 @@ inline std::string substituteTemplate(const std::string& tmpl,
 	return result;
 }
 
+inline std::string getLatestTag(const std::string& repoUrl) {
+	std::string cmd = "git ls-remote --tags " + repoUrl + " | grep -v '^' | tail -1 | awk '{print $2}' | sed 's|refs/tags/||' | sed 's/\\^{}//'";
+
+	std::array<char, 128> buffer;
+	std::string result;
+	std::unique_ptr<FILE, decltype(&pclose)> pipe(
+		popen(cmd.c_str(), "r"),
+		&pclose);
+
+	if (!pipe) throw std::runtime_error("popen() failed!");
+	while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr) {
+		result += buffer.data();
+	}
+
+	// Trim whitespace
+	result.erase(result.find_last_not_of("\n\r") + 1);
+	return result;
+}
+
 inline std::string getRelease(const std::string& repoUrl, const 
 							  std::string& tag) {
 	const std::string& host = getHost(repoUrl);
