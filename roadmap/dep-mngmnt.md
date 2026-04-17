@@ -3,9 +3,10 @@
 
 2. Fetcher & Platform Support (3 todos)
 	- [ ] Add `add` cmd to cli
-	- [ ] Fetch release artifacts from GitHub/Codeberg
-	- [ ] Select correct platform-specific .o file (x86_64-linux, aarch64-macos, etc.)
-	- [ ] Parse GitHub release JSON
+		- [x] Fetch release artifacts from GitHub/Codeberg
+		- [ ] Select correct platform-specific .o file (x86_64-linux, aarch64-macos, etc.)
+		- [ ] Finalize installPackage func
+	- [ ] Compile projects with ! as version placeholder
 
 3. Symbol Prefixing & Installation (3 todos)
 	- [ ] Wrapper around llvm-objcopy for symbol rewriting (math$vec → vers1.0.1math$vec)
