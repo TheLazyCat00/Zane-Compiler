@@ -90,7 +90,6 @@ inline void add(int argc, char* argv[], const manifest::Manifest& manifest) {
 		tag = argv[1];
 	}
 
-	// NOTE: installPackage needs to only accept releaseUrl
 	constants::installPackage(repoUrl, tag);
 }
 

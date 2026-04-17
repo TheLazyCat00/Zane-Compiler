@@ -138,6 +138,15 @@ inline std::string getMangledMain(const std::string& projectName) {
 	return projectName + "$main()";
 }
 
+// TODO: finish
+inline void installPackage(const std::string& repoUrl, const std::string& tagP) {
+	const std::string tag = tagP.empty() ? tagP : getLatestTag(repoUrl);
+	const std::string release = getRelease(repoUrl, tag);
+
+
+
+}
+
 namespace targets {
 	struct Target {
 		const char* name;
