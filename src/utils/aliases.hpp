@@ -1,3 +1,4 @@
+// aliases.hpp - no PackageInfoMap needed
 #pragma once
 
 #include "utils/zane_ptr.hpp"

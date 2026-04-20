@@ -1,57 +1,27 @@
 #pragma once
 
 #include "globals/constants.hpp"
-#include "utils/utils.hpp"
 #include "utils/console.hpp"
+#include "utils/types.hpp"
 
-#include <iostream>
+#include <any>
 #include <string>
 #include <map>
-#include <vector>
-#include <sstream>
 #include <fstream>
-#include <nlohmann/json.hpp>
-
-using ordered_json = nlohmann::ordered_json;
-using json = nlohmann::json;
+#include <coda.hpp>
 
 namespace manifest {
 
-struct SemVer {
-	int major;
-	int minor;
-	int patch;
-
-	SemVer() {
-		major = 0;
-		minor = 0;
-		patch = 0;
-	}
-
-	SemVer(const std::string& s) {
-		std::stringstream ss(s);
-		std::string part;
-		std::getline(ss, part, '.'); major = std::stoi(part);
-		std::getline(ss, part, '.'); minor = std::stoi(part);
-		std::getline(ss, part, '.'); patch = std::stoi(part);
-	}
-
-	std::string toString() const {
-		std::stringstream ss;
-		ss << major << "." << minor << "." << patch;
-		return ss.str();
-	}
-};
-
 struct Dependency {
-	std::string name;
+	std::string url;
 	SemVer version;
-};
 
-struct Target {
-	json getJson() {
-		return json{};
-	};
+	coda::Row toCoda() const {
+		coda::Row res;
+		res["url"] = url;
+		res["version"] = version.toString();
+		return res;
+	}
 };
 
 struct Type {
@@ -90,77 +60,49 @@ private:
 	Value value;
 };
 
-inline void to_json(json& j, const SemVer& v) {
-	j = v.toString();
-}
-
-inline void to_json(ordered_json& j, const Dependency& d) {
-	j = json{{"name", d.name}, {"version", d.version}};
-}
-
-inline void to_json(ordered_json& j, const std::map<std::string, Target>& targets) {
-	if (targets.size() == 0) {
-		j = json::object();
-	}
-	for (auto [key, value] : targets) {
-		j = json{key, value.getJson()};
-	}
-}
 
 struct Manifest {
 	std::string name;
-	SemVer version;
 	Type type;
-	std::vector<Dependency> dependencies;
-	std::map<std::string, Target> targets;
+	std::map<std::string, Dependency> dependencies;
 
 	Manifest(const char* path) {
 		std::ifstream file(path);
 		if (!file.is_open()) {
-			LOG("Could not open file!");
+			DEBUG("Could not open file!");
 		}
 
-		json j;
-		file >> j;
-		file.close();
+		coda::Doc coda(path);
+		const auto& root = coda.root();
 
-		name = j["name"];
-		version = SemVer(j["version"]);
-		type = Type(std::string(j["type"]));
-		for (const auto& dep : j["dependencies"]) {
+		name = root["name"].asString();
+		type = Type(root["type"].asString());
+		for (const auto& [key, dep] : root["dependencies"].asKeyedTable()) {
 			Dependency dependency;
-			dependency.name = dep["name"];
-			dependency.version = manifest::SemVer(dep["version"]);
-			dependencies.push_back(dependency);
-		}
-
-		auto targets = j["targets"];
-		for (auto& [key, value] : targets.items()) {
-			Target target;
-			this->targets[key] = target;
+			dependency.url = dep["url"];
+			dependency.version = SemVer(dep["version"]);
+			dependencies[key] = dependency;
 		}
 	}
 
 	Manifest(const std::map<std::string, std::any>& m) {
-		for (auto& [key, value] : m) {
-			if (key == "name") {
-				name = std::any_cast<std::string>(value);
-			}
-			else if (key == "type") {
-				type = std::any_cast<Type>(value);
-			}
-		}
+		name = std::any_cast<std::string>(m.at("name"));
+		type = std::any_cast<Type>(m.at("type"));
 	}
 
-	void save(const std::string& dir) const {
-		ordered_json j;
-		j["name"] = name;
-		j["version"] = version.toString();
-		j["type"] = type.toString();
-		j["dependencies"] = dependencies;
-		j["targets"] = targets;
+	void save() const {
+		coda::Doc coda;
+		auto& root = coda.root();
+		root["name"] = name;
+		root["type"] = type.toString();
+		
+		coda::KeyedTable depsTable({"url", "version"});
+		for (const auto& [key, dep] : dependencies) {
+			depsTable.insert(key, dep.toCoda());
+		}
+		root["dependencies"] = std::move(depsTable);
 
-		writeFile(dir + constants::MANIFEST_PATH, j.dump(1, '\t'));
+		coda.save(constants::MANIFEST_PATH);
 	}
 };
 

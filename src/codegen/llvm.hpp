@@ -22,12 +22,13 @@ public:
 		if (!triple.empty()) {
 			module->setTargetTriple(llvm::Triple(triple));
 		}
-		LOG("LLVMCodeGen triple: " << triple);
+		DEBUG("LLVMCodeGen triple: " << triple);
 	}
 
 	void generate(Ptr<Package> package, Ptr<Packages> allPackages) {
 		LLVMVisitor visitor(context, builder, *module);
-		visitor.declareSignatures(package);
+		for (auto& [name, pkg] : *allPackages)
+			visitor.declareSignatures(pkg);
 		visitor.generateBodies(package);
 	}
 

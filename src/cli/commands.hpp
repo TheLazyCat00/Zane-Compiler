@@ -24,15 +24,14 @@ namespace commands {
 inline void run(int argc, char* argv[], const manifest::Manifest& manifest) {
 	Compiler compiler(manifest);
 	compiler.compile();
-	compiler.generateCode();
 
 	if (!zig::ensure()) {
-		LOG("Could not acquire Zig toolchain. Aborting.");
+		DEBUG("Could not acquire Zig toolchain. Aborting.");
 		return;
 	}
 
 	auto hostTarget = constants::targets::getHostTarget();
-
+	compiler.generateCode(hostTarget.triple);
 	compiler.compileToObjectFiles(hostTarget, BuildMode::Dev, true);
 
 	namespace fs = std::filesystem;
@@ -50,7 +49,6 @@ inline void run(int argc, char* argv[], const manifest::Manifest& manifest) {
 inline void build(int argc, char* argv[], const manifest::Manifest& manifest) {
 	Compiler compiler(manifest);
 	compiler.compile();
-	compiler.generateCode();
 	compiler.buildForAllTargets();
 }
 
@@ -71,11 +69,28 @@ inline void ir(int argc, char* argv[], const manifest::Manifest& manifest) {
 
 	auto linkedModule = compiler.linkLlvmModules();
 	if (!linkedModule) {
-		LOG("Failed to link modules");
+		DEBUG("Failed to link modules");
 		return;
 	}
 
 	linkedModule->print(llvm::outs(), nullptr);
+}
+
+inline void add(int argc, char* argv[], const manifest::Manifest& manifest) {
+	if (argc == 0) {
+		PRINT("need library url");
+		PRINT("usage: zane add [url] (tag)");
+		return;
+	}
+
+	auto repoUrl = argv[0];
+	std::string tag;
+
+	if (argc == 2) {
+		tag = argv[1];
+	}
+
+	constants::installPackage(repoUrl, tag);
 }
 
 inline bool directoryIsEmpty(const std::filesystem::path& dir) {
@@ -145,6 +160,7 @@ const std::map<std::string, void(*)(int, char*[], const manifest::Manifest&)> pr
 	{ "build", build },
 	{ "debug", debug },
 	{ "ir",    ir    },
+	{ "add", add },
 };
 
 // Commands that don't require an initialized project
@@ -168,7 +184,7 @@ inline void dispatch(const std::string& cmd, int argc, char* argv[]) {
 
 	namespace fs = std::filesystem;
 	if (!fs::exists(constants::MANIFEST_PATH)) {
-		LOG("Project not initialized.");
+		DEBUG("Project not initialized.");
 		return;
 	}
 

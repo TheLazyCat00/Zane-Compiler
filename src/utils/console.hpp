@@ -21,8 +21,8 @@ constexpr const char* extract_filename(const char* path) {
 	return file;
 }
 
-#ifdef DEBUG
-	#define LOG(msg) \
+#if IN_DEBUG
+	#define DEBUG(msg) \
 		do { \
 			std::ostringstream oss; \
 			oss << msg; \
@@ -38,7 +38,7 @@ constexpr const char* extract_filename(const char* path) {
 			          << oss.str() << std::endl; \
 		} while(false)
 #else
-	#define LOG(msg) do {} while(false)
+	#define DEBUG(msg) do {} while(false)
 	
 	#define PRINT(msg) \
 		do { \

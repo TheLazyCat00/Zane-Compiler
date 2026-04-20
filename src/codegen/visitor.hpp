@@ -44,7 +44,7 @@ public:
 	// }
 
 	void declareSignatures(Ptr<Package> package) {
-		auto symbols = package->symbolCollector->getPackageInfo()->symbols;
+		auto symbols = package->packageInfo->symbols;
 		for (auto& [name, symbol] : symbols) {
 			symbol->type->value.match([&](std::shared_ptr<ir::FuncType> funcType) {
 				declareSignature(symbol);
@@ -67,7 +67,7 @@ public:
 				it->second->getAllocatedType(), it->second, node->name);
 		}
 
-		// Then full mangled name (package-qualified globals)
+		// Full mangled name (package-qualified globals, fully typed)
 		std::string mangled = node->getMangledName();
 		if (llvm::Function* func = module.getFunction(mangled)) {
 			return (llvm::Value*)func;
@@ -76,7 +76,7 @@ public:
 			return (llvm::Value*)func;
 		}
 
-		LOG("Unknown symbol: " << mangled);
+		DEBUG("Unknown symbol: " << mangled);
 		return (llvm::Value*)nullptr;
 	}
 
@@ -146,17 +146,17 @@ public:
 				return (llvm::Value*)&func;
 			}
 		}
-		LOG("Unknown lambda: " << node->name);
+		DEBUG("Unknown lambda: " << node->name);
 		return (llvm::Value*)nullptr;
 	}
 
 	std::any visitFuncCall(ir::FuncCall* node) override {
-		LOG("visitFuncCall: " << node->arguments.size() << " args");
+		DEBUG("visitFuncCall: " << node->arguments.size() << " args");
 		std::vector<llvm::Value*> args;
 		for (const auto& arg : node->arguments) {
 			auto val = get<llvm::Value*>(arg.get());
 			if (!val) {
-				LOG("null arg");
+				DEBUG("null arg");
 				return {};
 			}
 			args.push_back(val);
@@ -164,7 +164,7 @@ public:
 
 		llvm::Value* calleeValue = get<llvm::Value*>(node->callee.get());
 		if (!calleeValue) {
-			LOG("null callee for: " << node->getNodeName());
+			DEBUG("null callee for: " << node->getNodeName());
 			return {};
 		}
 
@@ -250,9 +250,6 @@ private:
 		if (!retType) return;
 
 		llvm::FunctionType* ft = llvm::FunctionType::get(retType, params, false);
-		auto linkage = funcSymbol->name == "main"
-			? llvm::Function::ExternalLinkage
-			: llvm::Function::InternalLinkage;
-		llvm::Function::Create(ft, linkage, funcSymbol->getMangledName(), module);
+		llvm::Function::Create(ft, llvm::Function::ExternalLinkage, funcSymbol->getMangledName(), module);
 	}
 };

@@ -4,7 +4,7 @@
 #include <llvm/IR/Type.h>
 #include <llvm/IR/DerivedTypes.h>
 #include <llvm/IR/LLVMContext.h>
-#include <utils/embedded_types.hpp>
+#include <utils/embedded_data.hpp>
 
 class TypeMapper {
 private:

@@ -1,13 +1,27 @@
 #pragma once
 
+#include "embedded_data.hpp"
+#include "utils/types.hpp"
 #include <string>
 #include <filesystem>
 #include <llvm-21/llvm/TargetParser/Host.h>
+#include <coda.hpp>
 
 namespace fs = std::filesystem;
 
+inline fs::path getHomeDir() {
+#ifdef _WIN32
+	const char* home = std::getenv("USERPROFILE");
+#else
+	const char* home = std::getenv("HOME");
+#endif
+	if (!home) throw std::runtime_error("Could not determine home directory");
+	return fs::path(home);
+}
+
 namespace constants {
-constexpr char MANIFEST_PATH[] = "zane.json";
+constexpr char MANIFEST_PATH[] = "zane.coda";
+constexpr char ARTIFACTS_NAME[] = "artifacts.zip";
 
 namespace executable {
 	constexpr char ENTRY[] = "src/main.zn";
@@ -20,17 +34,21 @@ namespace executable {
 			"}";
 	}
 }
+
 namespace library {
 	constexpr char ENTRY[] = "test/main.zn";
 	constexpr char ENTRY_DIR[] = "test";
 	constexpr char LIBRARY[] = "src/main.zn";
+	constexpr char LIBRARY_DIR[] = "src";
 
 	inline std::string getEntryContent(const std::string& libraryName) {
 		return
+			"package test\n"
+			"\n"
 			"import " + libraryName + "\n"
 			"\n"
 			"Void main() {\n"
-			"\t" + libraryName + ".greet()\n"
+			"\t" + libraryName + "$greet()\n"
 			"}";
 	}
 
@@ -49,6 +67,66 @@ constexpr char BUILD_DIR[] = "build";
 constexpr char DEV_DIR[] = ".dev";
 constexpr char SYMBOLS_DIR[] = ".cache/symbols";
 constexpr char SYMBOLS_NAME[] = "symbols.bin";
+constexpr char ZANE_HOME[] = ".zane";
+constexpr char PACKAGE_DIR[] = "package";
+
+inline std::string getHost(const std::string& url) {
+	auto start = url.find("://");
+	start = (start == std::string::npos) ? 0 : start + 3;
+	auto end = url.find('/', start);
+	return url.substr(start, end - start);
+}
+
+inline std::string substituteTemplate(const std::string& tmpl, 
+									  const std::unordered_map<std::string, 
+									  std::string>& vars) {
+	std::string result = tmpl;
+	for (const auto& [key, value] : vars) {
+		const std::string placeholder = "$" + key;
+		size_t pos = 0;
+		while ((pos = result.find(placeholder, pos)) != std::string::npos)
+		{
+			result.replace(pos, placeholder.length(), value);
+			pos += value.length();
+		}
+	}
+	return result;
+}
+
+inline std::string getLatestTag(const std::string& repoUrl) {
+	std::string cmd = "git ls-remote --tags " + repoUrl + " | grep -v '^' | tail -1 | awk '{print $2}' | sed 's|refs/tags/||' | sed 's/\\^{}//'";
+
+	std::array<char, 128> buffer;
+	std::string result;
+	std::unique_ptr<FILE, decltype(&pclose)> pipe(
+		popen(cmd.c_str(), "r"),
+		&pclose);
+
+	if (!pipe) throw std::runtime_error("popen() failed!");
+	while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr) {
+		result += buffer.data();
+	}
+
+	// Trim whitespace
+	result.erase(result.find_last_not_of("\n\r") + 1);
+	return result;
+}
+
+inline std::string getRelease(const std::string& repoUrl, const 
+							  std::string& tag) {
+	const std::string& host = getHost(repoUrl);
+	auto coda = coda::Doc::parse(embedded::PROVIDERS_CODA);
+	const auto& urlTemplate = coda.root()[host].asString();
+
+	return substituteTemplate(urlTemplate, {
+		{"repo", repoUrl},
+		{"tag", tag}
+	});
+}
+
+inline fs::path getPackagePath(const SemVer& semVer) {
+	return getHomeDir() / ZANE_HOME / PACKAGE_DIR / semVer.toString();
+}
 
 inline fs::path getSymbolsPath(const fs::path& packageDir) {
 	const fs::path symbolsDir(SYMBOLS_DIR);
@@ -58,6 +136,15 @@ inline fs::path getSymbolsPath(const fs::path& packageDir) {
 
 inline std::string getMangledMain(const std::string& projectName) {
 	return projectName + "$main()";
+}
+
+// TODO: finish
+inline void installPackage(const std::string& repoUrl, const std::string& tagP) {
+	const std::string tag = tagP.empty() ? tagP : getLatestTag(repoUrl);
+	const std::string release = getRelease(repoUrl, tag);
+
+
+
 }
 
 namespace targets {

@@ -1,8 +1,11 @@
 build:
-	cmake --build build --clean-first
+	meson compile -C build
 
 init:
-	cmake --preset clang-ninja --fresh
+	CXX=clang++ meson setup build --buildtype=debug --reconfigure --cmake-prefix-path "$(realpath vcpkg_installed/x64-linux)"
+
+release:
+	CXX=clang++ meson setup build --buildtype=release --reconfigure --cmake-prefix-path "$(realpath vcpkg_installed/x64-linux)"
 
 [working-directory: "test"]
 test:
