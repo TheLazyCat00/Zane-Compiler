@@ -15,7 +15,7 @@
 #include <stdexcept>
 #include <string>
 #include <tree/ParseTree.h>
-#include <utils/embedded_data.hpp>
+#include <utils/embedded_types.hpp>
 #include <unordered_set>
 #include <vector>
 

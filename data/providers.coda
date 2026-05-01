@@ -1,5 +1,0 @@
-releases [
-	# key is the host
-	key template
-	github.com $repo/releases/downloads/$tag
-]

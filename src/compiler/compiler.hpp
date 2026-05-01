@@ -297,30 +297,6 @@ public:
 		return true;
 	}
 
-	void createArtifactZip() {
-		fs::path buildDir = constants::BUILD_DIR;
-		fs::path zipPath = buildDir / constants::ARTIFACTS_NAME;
-
-		std::stringstream cmd;
-		cmd << "cd \"" << fs::absolute(buildDir).string() << "\" && zip -r \""
-			<< fs::absolute(zipPath).filename().string() << "\"";
-
-		for (const auto& target : constants::targets::ALL_TARGETS) {
-			fs::path targetDir = target.name;
-			if (fs::exists(buildDir / targetDir)) {
-				cmd << " \"" << target.name << "\"";
-			}
-		}
-
-		PRINT("Creating " << constants::ARTIFACTS_NAME << ":" << cmd.str());
-		if (std::system(cmd.str().c_str()) != 0) {
-			DEBUG("Failed to create " << constants::ARTIFACTS_NAME);
-			return;
-		}
-
-		PRINT("Created artifacts: " << fs::absolute(zipPath).string());
-	}
-
 	// Build for all targets using zig — works on any host OS
 	void buildForAllTargets() {
 		if (!zig::ensure()) {
@@ -351,10 +327,6 @@ public:
 				if (!createStaticLibrary(target, outputPath.string()))
 					DEBUG("Library creation failed for " << target.name);
 			}
-		}
-
-		if (manifest.type == manifest::Type::Library) {
-			createArtifactZip();
 		}
 	}
 

@@ -1,11 +1,11 @@
 #pragma once
 
-#include "embedded_data.hpp"
 #include "utils/types.hpp"
 #include <string>
 #include <filesystem>
 #include <llvm-21/llvm/TargetParser/Host.h>
-#include <coda.hpp>
+#include <unordered_map>
+#include <array>
 
 namespace fs = std::filesystem;
 
@@ -21,7 +21,6 @@ inline fs::path getHomeDir() {
 
 namespace constants {
 constexpr char MANIFEST_PATH[] = "zane.coda";
-constexpr char ARTIFACTS_NAME[] = "artifacts.zip";
 
 namespace executable {
 	constexpr char ENTRY[] = "src/main.zn";
@@ -112,18 +111,6 @@ inline std::string getLatestTag(const std::string& repoUrl) {
 	return result;
 }
 
-inline std::string getRelease(const std::string& repoUrl, const 
-							  std::string& tag) {
-	const std::string& host = getHost(repoUrl);
-	auto coda = coda::Doc::parse(embedded::PROVIDERS_CODA);
-	const auto& urlTemplate = coda.root()[host].asString();
-
-	return substituteTemplate(urlTemplate, {
-		{"repo", repoUrl},
-		{"tag", tag}
-	});
-}
-
 inline fs::path getPackagePath(const SemVer& semVer) {
 	return getHomeDir() / ZANE_HOME / PACKAGE_DIR / semVer.toString();
 }
@@ -141,7 +128,7 @@ inline std::string getMangledMain(const std::string& projectName) {
 // TODO: finish
 inline void installPackage(const std::string& repoUrl, const std::string& tagP) {
 	const std::string tag = tagP.empty() ? tagP : getLatestTag(repoUrl);
-	const std::string release = getRelease(repoUrl, tag);
+	std::cout << tag;
 
 
 

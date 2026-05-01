@@ -3,7 +3,7 @@
 
 2. Fetcher & Platform Support (3 todos)
 	- [ ] Add `add` cmd to cli
-		- [x] Fetch release artifacts from GitHub/Codeberg
+		- [ ] Clone into the right directory
 		- [ ] Select correct platform-specific .o file (x86_64-linux, aarch64-macos, etc.)
 		- [ ] Finalize installPackage func
 	- [ ] Compile projects with ! as version placeholder
