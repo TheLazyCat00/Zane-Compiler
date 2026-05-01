@@ -169,6 +169,15 @@ const std::map<std::string, void(*)(int, char*[])> standaloneCommands = {
 	{ "help", help },
 };
 
+inline void configureVersionPlaceholder(const manifest::Manifest& manifest) {
+	if (manifest.type == manifest::Type::Library) {
+		ir::setVersionPlaceholderPackage(manifest.name);
+	}
+	else {
+		ir::clearVersionPlaceholderPackage();
+	}
+}
+
 inline void dispatch(const std::string& cmd, int argc, char* argv[]) {
 	auto standaloneIt = standaloneCommands.find(cmd);
 	if (standaloneIt != standaloneCommands.end()) {
@@ -189,6 +198,7 @@ inline void dispatch(const std::string& cmd, int argc, char* argv[]) {
 	}
 
 	manifest::Manifest manifest(constants::MANIFEST_PATH);
+	configureVersionPlaceholder(manifest);
 	projectIt->second(argc, argv, manifest);
 }
 

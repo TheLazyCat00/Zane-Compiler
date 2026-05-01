@@ -22,6 +22,29 @@ using namespace parser;
 
 namespace ir {
 
+inline thread_local std::optional<std::string> versionPlaceholderPackage;
+
+inline void setVersionPlaceholderPackage(const std::string& packageName) {
+	versionPlaceholderPackage = packageName;
+}
+
+inline void clearVersionPlaceholderPackage() {
+	versionPlaceholderPackage.reset();
+}
+
+inline std::string getMangledPackageName(const std::optional<std::string>& packageName) {
+	if (!packageName.has_value()) {
+		return "";
+	}
+
+	if (versionPlaceholderPackage.has_value() &&
+		packageName.value() == versionPlaceholderPackage.value()) {
+		return "!" + packageName.value();
+	}
+
+	return packageName.value();
+}
+
 struct ValueSymbol : public IRNode {
 	std::optional<std::string> packageName;
 	std::string name;

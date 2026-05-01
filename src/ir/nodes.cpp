@@ -20,7 +20,7 @@ std::string ValueSymbol::getMangledName() const {
 	}
 	std::string prefix = "";
 	if (packageName.has_value()) {
-		prefix = packageName.value() + "$";
+		prefix = getMangledPackageName(packageName) + "$";
 	}
 	return prefix + name + suffix;
 }
@@ -37,7 +37,7 @@ std::string TypeSymbol::getNodeName() const {
 std::string TypeSymbol::getMangledName() const {
 	std::string result = "";
 	if (packageName.has_value()) {
-		result = packageName.value() + "$" + name;
+		result = getMangledPackageName(packageName) + "$" + name;
 	}
 	else {
 		result = name;
