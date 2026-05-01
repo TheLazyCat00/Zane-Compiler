@@ -90,7 +90,7 @@ inline void add(int argc, char* argv[], const manifest::Manifest& manifest) {
 		tag = argv[1];
 	}
 
-	constants::installPackage(repoUrl, tag);
+	constants::fetchPackage(repoUrl, tag);
 }
 
 inline bool directoryIsEmpty(const std::filesystem::path& dir) {

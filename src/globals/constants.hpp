@@ -4,6 +4,8 @@
 #include "utils/types.hpp"
 #include <string>
 #include <filesystem>
+#include <fstream>
+#include <sstream>
 #include <llvm-21/llvm/TargetParser/Host.h>
 #include <unordered_map>
 #include <array>
@@ -133,13 +135,126 @@ inline void cloneTag(const std::string& repoUrl, const std::string& tag, const s
 		throw std::runtime_error("Failed to clone tag: " + tag);
 }
 
-// TODO: finish
-inline void installPackage(const std::string& repoUrl, const std::string& tagP) {
-	const std::string tag = tagP.empty() ? getLatestTag(repoUrl) : tagP;
-	PRINT(tag);
+inline void fetchPackage(const std::string& repoUrl, const std::string& tag) {
+	// ── 1. Validate characters ──────────────────────────────────────────────
+	// Strip scheme; the path portion is what ends up on disk.
+	const auto schemeEnd = repoUrl.find("://");
+	if (schemeEnd == std::string::npos)
+		throw std::runtime_error("Invalid package URL (missing scheme): " + repoUrl);
+	const std::string urlPath = repoUrl.substr(schemeEnd + 3);
 
+	// Per spec §7 and §12: any character that is unsafe as a path component
+	// must cause an immediate hard failure — no mangling or escaping.
+	constexpr std::string_view UNSAFE = ":@?#";
+	for (char c : urlPath)
+	if (UNSAFE.find(c) != std::string_view::npos)
+		throw std::runtime_error(
+			std::string("Package URL contains illegal path character '") + c + "': " + repoUrl);
+	for (char c : tag)
+	if (UNSAFE.find(c) != std::string_view::npos)
+		throw std::runtime_error(
+			std::string("Version tag contains illegal path character '") + c + "': " + tag);
 
+	// ── 2. Resolve cache paths ──────────────────────────────────────────────
+	// Layout: ~/.zane/package/<urlPath>/<tag>/
+	//           src/   ← full clone (contains the library's own src/ and build/)
+	//           build/ ← rewritten, version-stamped object files
+	const fs::path cacheRoot = getHomeDir() / ZANE_HOME / PACKAGE_DIR / urlPath / tag;
+	const fs::path srcDir    = cacheRoot / "src";
+	const fs::path buildDir  = cacheRoot / "build";
 
+	// ── 3. Reuse existing cache ─────────────────────────────────────────────
+	if (fs::exists(buildDir) && !fs::is_empty(buildDir)) {
+		PRINT("Reusing cached package: " + repoUrl + "@" + tag);
+		return;
+	}
+
+	// ── 4. Clone ────────────────────────────────────────────────────────────
+	if (!fs::exists(srcDir)) {
+		fs::create_directories(srcDir);
+		cloneTag(repoUrl, tag, srcDir.string());
+	}
+
+	// ── 5. Rewrite !-prefixed symbols ───────────────────────────────────────
+	// The library's prebuilt objects live at src/build/ (inside the clone).
+	// Per spec §6.1 only the fetched library's own !-prefixed exports are
+	// rewritten; already-versioned transitive symbols are left as-is.
+	const fs::path srcBuildDir = srcDir / "build";
+	if (!fs::exists(srcBuildDir))
+		throw std::runtime_error(
+			"Package missing build/ directory — cannot fetch: " + repoUrl + "@" + tag);
+
+	fs::create_directories(buildDir);
+
+	for (const auto& entry : fs::recursive_directory_iterator(srcBuildDir)) {
+		if (!entry.is_regular_file()) continue;
+		const auto ext = entry.path().extension().string();
+		if (ext != ".o" && ext != ".obj") continue;
+
+		const fs::path inputObj  = entry.path();
+		const fs::path outputObj = buildDir / fs::relative(inputObj, srcBuildDir);
+		fs::create_directories(outputObj.parent_path());
+
+		// --- Enumerate !-prefixed defined symbols via nm ---
+		const std::string nmCmd =
+			"nm --defined-only --format=posix " + inputObj.string() +
+			" 2>/dev/null | awk '{print $1}' | grep '^!'";
+
+		std::string nmOut;
+		{
+			std::array<char, 512> buf{};
+			std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(nmCmd.c_str(), "r"), &pclose);
+			if (!pipe)
+				throw std::runtime_error("Failed to run nm on: " + inputObj.string());
+			while (fgets(buf.data(), buf.size(), pipe.get()))
+				nmOut += buf.data();
+		}
+
+		// --- Build redefine-syms map:  !foo  →  <tag>foo ---
+		std::string symsContent;
+		{
+			std::istringstream ss(nmOut);
+			for (std::string sym; std::getline(ss, sym);) {
+				// Trim trailing whitespace / CR
+				sym.erase(sym.find_last_not_of("\r\n\t ") + 1);
+				if (sym.empty() || sym.front() != '!') continue;
+				// Replace the leading '!' placeholder with the version tag.
+				symsContent += sym + ' ' + tag + sym.substr(1) + '\n';
+			}
+		}
+
+		if (!symsContent.empty()) {
+			// Write a temporary syms file alongside the output object.
+			const fs::path symsFile = outputObj.string() + ".syms";
+			{
+				std::ofstream f(symsFile);
+				if (!f)
+					throw std::runtime_error("Failed to write syms file: " + symsFile.string());
+				f << symsContent;
+			}
+
+			// Prefer llvm-objcopy (guaranteed present given the LLVM dep);
+			// fall back to binutils objcopy.
+			const std::string redefineFlag =
+				" --redefine-syms=" + symsFile.string() +
+				" " + inputObj.string() + " " + outputObj.string();
+
+			bool ok = (std::system(("llvm-objcopy" + redefineFlag).c_str()) == 0);
+			if (!ok)
+				ok = (std::system(("objcopy" + redefineFlag).c_str()) == 0);
+			if (!ok)
+				throw std::runtime_error(
+					"Symbol rewrite failed for: " + inputObj.string());
+
+			fs::remove(symsFile);
+		}
+		else {
+			// No !-prefixed symbols — copy the object file verbatim.
+			fs::copy_file(inputObj, outputObj, fs::copy_options::overwrite_existing);
+		}
+	}
+
+	PRINT("Fetched and versioned: " + repoUrl + "@" + tag);
 }
 
 namespace targets {
