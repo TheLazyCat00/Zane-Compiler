@@ -22,27 +22,26 @@ using namespace parser;
 
 namespace ir {
 
-inline thread_local std::optional<std::string> versionPlaceholderPackage;
+inline constexpr char VERSION_PLACEHOLDER_PREFIX = '!';
+// Compilation currently runs one project command per thread; keep the
+// active placeholder package isolated to that thread while a command runs.
+inline thread_local std::optional<std::string> versionPlaceholderPackageName;
 
 inline void setVersionPlaceholderPackage(const std::string& packageName) {
-	versionPlaceholderPackage = packageName;
+	versionPlaceholderPackageName = packageName;
 }
 
 inline void clearVersionPlaceholderPackage() {
-	versionPlaceholderPackage.reset();
+	versionPlaceholderPackageName.reset();
 }
 
-inline std::string getMangledPackageName(const std::optional<std::string>& packageName) {
-	if (!packageName.has_value()) {
-		return "";
+inline std::string getMangledPackageName(const std::string& packageName) {
+	if (versionPlaceholderPackageName.has_value() &&
+		packageName == versionPlaceholderPackageName.value()) {
+		return std::string{VERSION_PLACEHOLDER_PREFIX} + packageName;
 	}
 
-	if (versionPlaceholderPackage.has_value() &&
-		packageName.value() == versionPlaceholderPackage.value()) {
-		return "!" + packageName.value();
-	}
-
-	return packageName.value();
+	return packageName;
 }
 
 struct ValueSymbol : public IRNode {

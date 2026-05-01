@@ -199,7 +199,14 @@ inline void dispatch(const std::string& cmd, int argc, char* argv[]) {
 
 	manifest::Manifest manifest(constants::MANIFEST_PATH);
 	configureVersionPlaceholder(manifest);
-	projectIt->second(argc, argv, manifest);
+	try {
+		projectIt->second(argc, argv, manifest);
+	}
+	catch (...) {
+		ir::clearVersionPlaceholderPackage();
+		throw;
+	}
+	ir::clearVersionPlaceholderPackage();
 }
 
 } // namespace commands
