@@ -1,5 +1,6 @@
 #pragma once
 
+#include "utils/console.hpp"
 #include "utils/types.hpp"
 #include <string>
 #include <filesystem>
@@ -93,7 +94,8 @@ inline std::string substituteTemplate(const std::string& tmpl,
 }
 
 inline std::string getLatestTag(const std::string& repoUrl) {
-	std::string cmd = "git ls-remote --tags " + repoUrl + " | grep -v '^' | tail -1 | awk '{print $2}' | sed 's|refs/tags/||' | sed 's/\\^{}//'";
+	std::string cmd = "git ls-remote --tags " + repoUrl +
+		" | grep -v '\\^{}' | tail -1 | awk '{print $2}' | sed 's|refs/tags/||'";
 
 	std::array<char, 128> buffer;
 	std::string result;
@@ -125,10 +127,16 @@ inline std::string getMangledMain(const std::string& projectName) {
 	return projectName + "$main()";
 }
 
+inline void cloneTag(const std::string& repoUrl, const std::string& tag, const std::string& targetDir) {
+	std::string cmd = "git clone --depth 1 --branch " + tag + " " + repoUrl + " " + targetDir;
+	if (std::system(cmd.c_str()) != 0)
+		throw std::runtime_error("Failed to clone tag: " + tag);
+}
+
 // TODO: finish
 inline void installPackage(const std::string& repoUrl, const std::string& tagP) {
-	const std::string tag = tagP.empty() ? tagP : getLatestTag(repoUrl);
-	std::cout << tag;
+	const std::string tag = tagP.empty() ? getLatestTag(repoUrl) : tagP;
+	PRINT(tag);
 
 
 
