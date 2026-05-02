@@ -12,7 +12,7 @@ curl -fsSL https://get.jetify.com/devbox | bash
 ## Building
 
 ```sh
-devbox shell --pure
+devbox shell
 just init # initialize meson
 just build
 ```
