@@ -95,7 +95,7 @@ struct Manifest {
 	void addDependency(const std::string& url, const std::string& tag) {
 		std::string name = constants::getRepoNameFromUrl(url);
 		std::string commitHash = constants::getCommitHashFromTag(url, tag);
-		dependencies[name] = Dependency{ url, tag };
+		dependencies[name] = Dependency { url, tag, commitHash };
 	}
 
 	void save() const {

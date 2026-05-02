@@ -96,6 +96,16 @@ inline void add(int argc, char* argv[], manifest::Manifest& manifest) {
 
 inline void fetch(int argc, char* argv[], manifest::Manifest& manifest) {
 	for (const auto& [name, dep] : manifest.dependencies) {
+		std::string commitHash = constants::getCommitHashFromTag(dep.url, dep.tag);
+		if (commitHash != dep.commitHash) {
+			std::string warning =
+				"WARNING: The tag '" + dep.tag + "' for dependency '"
+				+ name + "' has changed since it was added to the manifest.\n"
+				+ "This is a security risk, as the new tag may point to different code than what was originally reviewed and approved.\n"
+				+ "Aborting fetch";
+			PRINT(warning);
+			return;
+		}
 		constants::ensurePackageFetched(dep.url, dep.tag);
 	}
 }

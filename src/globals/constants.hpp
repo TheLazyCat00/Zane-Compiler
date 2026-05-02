@@ -317,8 +317,9 @@ inline void fetchPackage(const std::string& repoUrl, const std::string& tag) {
 // Ensures a package is present in the local cache, fetching it if necessary.
 // Resolves "latest" to the actual latest remote tag before delegating.
 // Throws on any network, filesystem, or symbol-rewrite error.
-inline void ensurePackageFetched(const std::string& repoUrl,
-                                 const std::string& tag) {
+inline void ensurePackageFetched(
+		const std::string& repoUrl,
+		const std::string& tag) {
 	const std::string resolvedTag = (tag == "latest")
 		? getLatestTag(repoUrl)
 		: tag;
