@@ -2,17 +2,13 @@
 
 This repository contains the Zane language compiler and CLI.
 
-## Build
+## Setup
+To setup this project in a new environment, run:
 
 ```sh
-cmake --preset clang-ninja
-cmake --build build
+./scripts/setup.sh
 ```
 
-## CLI
+## Usage
 
-- `Zane init [dir]` creates a new project
-- `Zane build` builds the current project
-- `Zane run` builds and runs the current project
-- `Zane debug` prints the internal IR tree
-- `Zane ir` prints the generated LLVM IR
+Checkout the `justfile` for all available commands.
