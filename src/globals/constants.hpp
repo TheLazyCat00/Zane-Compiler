@@ -7,6 +7,8 @@
 #include <filesystem>
 #include <fstream>
 #include <sstream>
+#include <chrono>
+#include <vector>
 #include <llvm/TargetParser/Host.h>
 
 namespace fs = std::filesystem;
@@ -190,6 +192,11 @@ inline fs::path getPackageBuildPath(const std::string& repoUrl,
 	return getPackageCacheRoot(repoUrl, tag) / "build";
 }
 
+inline bool isPackageArtifact(const fs::path& path) {
+	const auto ext = path.extension().string();
+	return ext == ".o" || ext == ".obj" || ext == ".a" || ext == ".lib";
+}
+
 // Returns true when the build directory exists and is non-empty, meaning the
 // package has already been fetched and versioned.
 inline bool isPackageCached(const std::string& repoUrl,
@@ -206,7 +213,7 @@ inline bool isPackageCached(const std::string& repoUrl,
 // Returns a newline-separated list of raw symbol names (leading '!' included).
 inline std::string collectBangSymbols(const fs::path& objFile) {
 	return shell::runCommand(
-		"nm --defined-only --format=posix " + objFile.string() +
+		"nm --defined-only --format=posix " + shell::quote(objFile.string()) +
 		" 2>/dev/null | awk '{print $1}' | grep '^!'");
 }
 
@@ -246,8 +253,9 @@ inline void rewriteObjectSymbols(const fs::path& srcObj,
 	}
 
 	const std::string redefineArgs =
-		" --redefine-syms=" + symsFile.string() +
-		" " + srcObj.string() + " " + dstObj.string();
+		" --redefine-syms=" + shell::quote(symsFile.string()) +
+		" " + shell::quote(srcObj.string()) +
+		" " + shell::quote(dstObj.string());
 
 	const bool ok = (std::system(("llvm-objcopy" + redefineArgs).c_str()) == 0)
 	             || (std::system(("objcopy"       + redefineArgs).c_str()) == 0);
@@ -259,21 +267,103 @@ inline void rewriteObjectSymbols(const fs::path& srcObj,
 			"Symbol rewrite failed for: " + srcObj.string());
 }
 
-// Iterates over every .o / .obj file under srcBuildDir, rewrites !-prefixed
-// symbols, and writes the results under dstBuildDir preserving sub-structure.
-inline void rewritePackageObjects(const fs::path& srcBuildDir,
-                                  const fs::path& dstBuildDir,
+inline std::string getArchiverCommand() {
+	return (std::system("llvm-ar --version > /dev/null 2>&1") == 0)
+		? "llvm-ar"
+		: "ar";
+}
+
+inline std::vector<std::string> listArchiveMembers(const fs::path& archivePath) {
+	std::vector<std::string> members;
+	std::istringstream ss(shell::runCommand(
+		getArchiverCommand() + " t " + shell::quote(archivePath.string())));
+	for (std::string member; std::getline(ss, member);) {
+		trimTrailing(member);
+		if (!member.empty()) members.push_back(member);
+	}
+	return members;
+}
+
+inline void rewriteArchiveSymbols(const fs::path& srcArchive,
+                                  const fs::path& dstArchive,
                                   const std::string& tag) {
+	const auto uniqueSuffix = std::to_string(
+		std::chrono::steady_clock::now().time_since_epoch().count());
+	const fs::path tempRoot = fs::temp_directory_path() / ("zane-archive-" + uniqueSuffix);
+	const fs::path extractDir = tempRoot / "src";
+	const fs::path rewrittenDir = tempRoot / "dst";
+	fs::create_directories(extractDir);
+	fs::create_directories(rewrittenDir);
+
+	const auto members = listArchiveMembers(srcArchive);
+	const std::string archiver = getArchiverCommand();
+	const std::string extractCmd =
+		"cd " + shell::quote(extractDir.string()) +
+		" && " + archiver + " x " + shell::quote(srcArchive.string());
+	if (std::system(extractCmd.c_str()) != 0) {
+		fs::remove_all(tempRoot);
+		throw std::runtime_error("Failed to extract archive: " + srcArchive.string());
+	}
+
+	for (const auto& member : members) {
+		const fs::path srcMember = extractDir / member;
+		const fs::path dstMember = rewrittenDir / member;
+		rewriteObjectSymbols(srcMember, dstMember, tag);
+	}
+
+	fs::create_directories(dstArchive.parent_path());
+	std::string createCmd =
+		"cd " + shell::quote(rewrittenDir.string()) +
+		" && " + archiver + " crs " + shell::quote(dstArchive.string());
+	for (const auto& member : members) {
+		createCmd += " " + shell::quote(member);
+	}
+	if (std::system(createCmd.c_str()) != 0) {
+		fs::remove_all(tempRoot);
+		throw std::runtime_error("Failed to rebuild archive: " + dstArchive.string());
+	}
+
+	fs::remove_all(tempRoot);
+}
+
+inline bool packageBuildUsesVersionedSymbols(const fs::path& buildDir,
+                                             const std::string& packageName,
+                                             const std::string& tag) {
+	if (!fs::exists(buildDir)) return false;
+
+	const std::string expected = tag + packageName + "$";
+	for (const auto& entry : fs::recursive_directory_iterator(buildDir)) {
+		if (!entry.is_regular_file()) continue;
+		if (!isPackageArtifact(entry.path())) continue;
+
+		const auto symbols = shell::runCommand(
+			"nm --defined-only " + shell::quote(entry.path().string()) + " 2>/dev/null");
+		if (symbols.find(expected) != std::string::npos) return true;
+	}
+
+	return false;
+}
+
+// Iterates over every package artifact under srcBuildDir, rewrites !-prefixed
+// symbols, and writes the results under dstBuildDir preserving sub-structure.
+inline void rewritePackageArtifacts(const fs::path& srcBuildDir,
+                                    const fs::path& dstBuildDir,
+                                    const std::string& tag) {
 	for (const auto& entry : fs::recursive_directory_iterator(srcBuildDir)) {
 		if (!entry.is_regular_file()) continue;
-		const auto ext = entry.path().extension().string();
-		if (ext != ".o" && ext != ".obj") continue;
+		if (!isPackageArtifact(entry.path())) continue;
 
-		const fs::path srcObj = entry.path();
-		const fs::path dstObj = dstBuildDir / fs::relative(srcObj, srcBuildDir);
-		fs::create_directories(dstObj.parent_path());
+		const fs::path srcPath = entry.path();
+		const fs::path dstPath = dstBuildDir / fs::relative(srcPath, srcBuildDir);
+		fs::create_directories(dstPath.parent_path());
 
-		rewriteObjectSymbols(srcObj, dstObj, tag);
+		const auto ext = srcPath.extension().string();
+		if (ext == ".a" || ext == ".lib") {
+			rewriteArchiveSymbols(srcPath, dstPath, tag);
+		}
+		else {
+			rewriteObjectSymbols(srcPath, dstPath, tag);
+		}
 	}
 }
 
@@ -309,7 +399,7 @@ inline void fetchPackage(const std::string& repoUrl, const std::string& tag) {
 			+ repoUrl + "@" + tag);
 
 	fs::create_directories(buildDir);
-	rewritePackageObjects(srcBuildDir, buildDir, tag);
+	rewritePackageArtifacts(srcBuildDir, buildDir, tag);
 
 	PRINT("Fetched and versioned: " + repoUrl + "@" + tag);
 }
