@@ -12,6 +12,10 @@
 
 namespace fs = std::filesystem;
 
+// ─────────────────────────────────────────────────────────────────────────────
+//  Home directory
+// ─────────────────────────────────────────────────────────────────────────────
+
 inline fs::path getHomeDir() {
 #ifdef _WIN32
 	const char* home = std::getenv("USERPROFILE");
@@ -22,11 +26,25 @@ inline fs::path getHomeDir() {
 	return fs::path(home);
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+//  Constants
+// ─────────────────────────────────────────────────────────────────────────────
+
 namespace constants {
+
 constexpr char MANIFEST_PATH[] = "zane.coda";
+constexpr char CACHE_DIR[]	 = ".cache";
+constexpr char BUILD_DIR[]	 = "build";
+constexpr char DEV_DIR[]	   = ".dev";
+constexpr char SYMBOLS_DIR[]   = ".cache/symbols";
+constexpr char SYMBOLS_NAME[]  = "symbols.bin";
+constexpr char ZANE_HOME[]	 = ".zane";
+constexpr char PACKAGE_DIR[]   = "packages";
+
+// ── Project templates ────────────────────────────────────────────────────────
 
 namespace executable {
-	constexpr char ENTRY[] = "src/main.zn";
+	constexpr char ENTRY[]	 = "src/main.zn";
 	constexpr char ENTRY_DIR[] = "src";
 
 	inline std::string getEntryContent() {
@@ -38,9 +56,9 @@ namespace executable {
 }
 
 namespace library {
-	constexpr char ENTRY[] = "test/main.zn";
-	constexpr char ENTRY_DIR[] = "test";
-	constexpr char LIBRARY[] = "src/main.zn";
+	constexpr char ENTRY[]	   = "test/main.zn";
+	constexpr char ENTRY_DIR[]   = "test";
+	constexpr char LIBRARY[]	 = "src/main.zn";
 	constexpr char LIBRARY_DIR[] = "src";
 
 	inline std::string getEntryContent(const std::string& libraryName) {
@@ -64,198 +82,267 @@ namespace library {
 	}
 }
 
-constexpr char CACHE_DIR[] = ".cache";
-constexpr char BUILD_DIR[] = "build";
-constexpr char DEV_DIR[] = ".dev";
-constexpr char SYMBOLS_DIR[] = ".cache/symbols";
-constexpr char SYMBOLS_NAME[] = "symbols.bin";
-constexpr char ZANE_HOME[] = ".zane";
-constexpr char PACKAGE_DIR[] = "package";
-
-inline std::string getHost(const std::string& url) {
-	auto start = url.find("://");
-	start = (start == std::string::npos) ? 0 : start + 3;
-	auto end = url.find('/', start);
-	return url.substr(start, end - start);
-}
-
-inline std::string substituteTemplate(const std::string& tmpl, 
-									  const std::unordered_map<std::string, 
-									  std::string>& vars) {
-	std::string result = tmpl;
-	for (const auto& [key, value] : vars) {
-		const std::string placeholder = "$" + key;
-		size_t pos = 0;
-		while ((pos = result.find(placeholder, pos)) != std::string::npos)
-		{
-			result.replace(pos, placeholder.length(), value);
-			pos += value.length();
-		}
-	}
-	return result;
-}
-
-inline std::string getLatestTag(const std::string& repoUrl) {
-	std::string cmd = "git ls-remote --tags " + repoUrl +
-		" | grep -v '\\^{}' | tail -1 | awk '{print $2}' | sed 's|refs/tags/||'";
-
-	std::array<char, 128> buffer;
-	std::string result;
-	std::unique_ptr<FILE, decltype(&pclose)> pipe(
-		popen(cmd.c_str(), "r"),
-		&pclose);
-
-	if (!pipe) throw std::runtime_error("popen() failed!");
-	while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr) {
-		result += buffer.data();
-	}
-
-	// Trim whitespace
-	result.erase(result.find_last_not_of("\n\r") + 1);
-	return result;
-}
-
-inline fs::path getPackagePath(const SemVer& semVer) {
-	return getHomeDir() / ZANE_HOME / PACKAGE_DIR / semVer.toString();
-}
+// ── Symbol / mangling helpers ─────────────────────────────────────────────────
 
 inline fs::path getSymbolsPath(const fs::path& packageDir) {
-	const fs::path symbolsDir(SYMBOLS_DIR);
-	const fs::path symbolsName(SYMBOLS_NAME);
-	return symbolsDir / packageDir / symbolsName;
-};
+	return fs::path(SYMBOLS_DIR) / packageDir / SYMBOLS_NAME;
+}
 
 inline std::string getMangledMain(const std::string& projectName) {
 	return projectName + "$main()";
 }
 
-inline void cloneTag(const std::string& repoUrl, const std::string& tag, const std::string& targetDir) {
-	std::string cmd = "git clone --depth 1 --branch " + tag + " " + repoUrl + " " + targetDir;
+// ── URL / git helpers ─────────────────────────────────────────────────────────
+
+inline std::string getRepoNameFromUrl(const std::string& repoUrl) {
+	auto lastSlash = repoUrl.find_last_of("/\\");
+	std::string name = (lastSlash == std::string::npos)
+		? repoUrl
+		: repoUrl.substr(lastSlash + 1);
+	if (name.size() > 4 && name.substr(name.size() - 4) == ".git")
+		name = name.substr(0, name.size() - 4);
+	return name;
+}
+
+inline std::string getLatestTag(const std::string& repoUrl) {
+	std::string cmd =
+		"git ls-remote --tags " + repoUrl +
+		" | grep -v '\\^{}' | tail -1 | awk '{print $2}' | sed 's|refs/tags/||'";
+
+	std::array<char, 128> buffer;
+	std::string result;
+	std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(cmd.c_str(), "r"), &pclose);
+	if (!pipe) throw std::runtime_error("popen() failed!");
+	while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr)
+		result += buffer.data();
+	result.erase(result.find_last_not_of("\n\r") + 1);
+	return result;
+}
+
+inline void cloneTag(const std::string& repoUrl,
+					 const std::string& tag,
+					 const std::string& targetDir) {
+	std::string cmd =
+		"git clone --depth 1 --branch " + tag + " " + repoUrl + " " + targetDir;
 	if (std::system(cmd.c_str()) != 0)
 		throw std::runtime_error("Failed to clone tag: " + tag);
 }
 
-inline void fetchPackage(const std::string& repoUrl, const std::string& tag) {
-	// ── 1. Validate characters ──────────────────────────────────────────────
-	// Strip scheme; the path portion is what ends up on disk.
+// ─────────────────────────────────────────────────────────────────────────────
+//  Package cache layout
+//
+//  ~/.zane/packages/<url-path>/<tag>/
+//	src/	← shallow clone of the repo
+//	build/  ← version-stamped object files (our cache artefact)
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Validate that a URL's path component and a version tag contain no characters
+// that are unsafe as filesystem path components (per spec §7 and §12).
+inline void validatePackageUrlAndTag(const std::string& repoUrl,
+									 const std::string& tag) {
 	const auto schemeEnd = repoUrl.find("://");
 	if (schemeEnd == std::string::npos)
-		throw std::runtime_error("Invalid package URL (missing scheme): " + repoUrl);
+		throw std::runtime_error(
+			"Invalid package URL (missing scheme): " + repoUrl);
+
 	const std::string urlPath = repoUrl.substr(schemeEnd + 3);
-
-	// Per spec §7 and §12: any character that is unsafe as a path component
-	// must cause an immediate hard failure — no mangling or escaping.
 	constexpr std::string_view UNSAFE = ":@?#";
+
 	for (char c : urlPath)
-	if (UNSAFE.find(c) != std::string_view::npos)
-		throw std::runtime_error(
-			std::string("Package URL contains illegal path character '") + c + "': " + repoUrl);
+		if (UNSAFE.find(c) != std::string_view::npos)
+			throw std::runtime_error(
+				std::string("Package URL contains illegal path character '")
+				+ c + "': " + repoUrl);
+
 	for (char c : tag)
-	if (UNSAFE.find(c) != std::string_view::npos)
+		if (UNSAFE.find(c) != std::string_view::npos)
+			throw std::runtime_error(
+				std::string("Version tag contains illegal path character '")
+				+ c + "': " + tag);
+}
+
+// Root cache directory for a specific (url, tag) pair.
+inline fs::path getPackageCacheRoot(const std::string& repoUrl,
+									const std::string& tag) {
+	const auto schemeEnd = repoUrl.find("://");
+	if (schemeEnd == std::string::npos)
 		throw std::runtime_error(
-			std::string("Version tag contains illegal path character '") + c + "': " + tag);
+			"Invalid package URL (missing scheme): " + repoUrl);
+	const std::string urlPath = repoUrl.substr(schemeEnd + 3);
+	return getHomeDir() / ZANE_HOME / PACKAGE_DIR / urlPath / tag;
+}
 
-	// ── 2. Resolve cache paths ──────────────────────────────────────────────
-	// Layout: ~/.zane/package/<urlPath>/<tag>/
-	//           src/   ← full clone (contains the library's own src/ and build/)
-	//           build/ ← rewritten, version-stamped object files
-	const fs::path cacheRoot = getHomeDir() / ZANE_HOME / PACKAGE_DIR / urlPath / tag;
-	const fs::path srcDir    = cacheRoot / "src";
-	const fs::path buildDir  = cacheRoot / "build";
+// Convenience accessors built on top of getPackageCacheRoot.
+inline fs::path getPackageSrcPath(const std::string& repoUrl,
+								  const std::string& tag) {
+	return getPackageCacheRoot(repoUrl, tag) / "src";
+}
 
-	// ── 3. Reuse existing cache ─────────────────────────────────────────────
-	if (fs::exists(buildDir) && !fs::is_empty(buildDir)) {
-		PRINT("Reusing cached package: " + repoUrl + "@" + tag);
+inline fs::path getPackageBuildPath(const std::string& repoUrl,
+									const std::string& tag) {
+	return getPackageCacheRoot(repoUrl, tag) / "build";
+}
+
+// Returns true when the build directory exists and is non-empty, meaning the
+// package has already been fetched and versioned.
+inline bool isPackageCached(const std::string& repoUrl,
+							 const std::string& tag) {
+	const fs::path buildDir = getPackageBuildPath(repoUrl, tag);
+	return fs::exists(buildDir) && !fs::is_empty(buildDir);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Symbol-rewriting helpers (used by fetchPackage)
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Collects every !-prefixed defined symbol from an object file via nm.
+// Returns a newline-separated list of raw symbol names (leading '!' included).
+inline std::string collectBangSymbols(const fs::path& objFile) {
+	const std::string cmd =
+		"nm --defined-only --format=posix " + objFile.string() +
+		" 2>/dev/null | awk '{print $1}' | grep '^!'";
+
+	std::array<char, 512> buf{};
+	std::string out;
+	std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(cmd.c_str(), "r"), &pclose);
+	if (!pipe)
+		throw std::runtime_error("Failed to run nm on: " + objFile.string());
+	while (fgets(buf.data(), buf.size(), pipe.get()))
+		out += buf.data();
+	return out;
+}
+
+// Builds the redefine-syms map content:  !foo  →  <tag>foo
+// Returns an empty string when there are no !-prefixed symbols.
+inline std::string buildRedefineSymsContent(const std::string& nmOut,
+											const std::string& tag) {
+	std::string content;
+	std::istringstream ss(nmOut);
+	for (std::string sym; std::getline(ss, sym);) {
+		sym.erase(sym.find_last_not_of("\r\n\t ") + 1);
+		if (sym.empty() || sym.front() != '!') continue;
+		content += sym + ' ' + tag + sym.substr(1) + '\n';
+	}
+	return content;
+}
+
+// Rewrites !-prefixed symbols in srcObj → dstObj using llvm-objcopy / objcopy.
+// If there are no !-prefixed symbols the file is simply copied.
+inline void rewriteObjectSymbols(const fs::path& srcObj,
+								 const fs::path& dstObj,
+								 const std::string& tag) {
+	const std::string nmOut = collectBangSymbols(srcObj);
+	const std::string symsContent = buildRedefineSymsContent(nmOut, tag);
+
+	if (symsContent.empty()) {
+		fs::copy_file(srcObj, dstObj, fs::copy_options::overwrite_existing);
 		return;
 	}
 
-	// ── 4. Clone ────────────────────────────────────────────────────────────
-	if (!fs::exists(srcDir)) {
-		fs::create_directories(srcDir);
-		cloneTag(repoUrl, tag, srcDir.string());
+	const fs::path symsFile = dstObj.string() + ".syms";
+	{
+		std::ofstream f(symsFile);
+		if (!f) throw std::runtime_error(
+			"Failed to write syms file: " + symsFile.string());
+		f << symsContent;
 	}
 
-	// ── 5. Rewrite !-prefixed symbols ───────────────────────────────────────
-	// The library's prebuilt objects live at src/build/ (inside the clone).
-	// Per spec §6.1 only the fetched library's own !-prefixed exports are
-	// rewritten; already-versioned transitive symbols are left as-is.
-	const fs::path srcBuildDir = srcDir / "build";
-	if (!fs::exists(srcBuildDir))
+	const std::string redefineArgs =
+		" --redefine-syms=" + symsFile.string() +
+		" " + srcObj.string() + " " + dstObj.string();
+
+	bool ok = (std::system(("llvm-objcopy" + redefineArgs).c_str()) == 0);
+	if (!ok)
+		ok = (std::system(("objcopy" + redefineArgs).c_str()) == 0);
+
+	fs::remove(symsFile);
+
+	if (!ok)
 		throw std::runtime_error(
-			"Package missing build/ directory — cannot fetch: " + repoUrl + "@" + tag);
+			"Symbol rewrite failed for: " + srcObj.string());
+}
 
-	fs::create_directories(buildDir);
-
+// Iterates over every .o / .obj file under srcBuildDir, rewrites !-prefixed
+// symbols, and writes the results under dstBuildDir preserving sub-structure.
+inline void rewritePackageObjects(const fs::path& srcBuildDir,
+								  const fs::path& dstBuildDir,
+								  const std::string& tag) {
 	for (const auto& entry : fs::recursive_directory_iterator(srcBuildDir)) {
 		if (!entry.is_regular_file()) continue;
 		const auto ext = entry.path().extension().string();
 		if (ext != ".o" && ext != ".obj") continue;
 
-		const fs::path inputObj  = entry.path();
-		const fs::path outputObj = buildDir / fs::relative(inputObj, srcBuildDir);
-		fs::create_directories(outputObj.parent_path());
+		const fs::path srcObj = entry.path();
+		const fs::path dstObj = dstBuildDir / fs::relative(srcObj, srcBuildDir);
+		fs::create_directories(dstObj.parent_path());
 
-		// --- Enumerate !-prefixed defined symbols via nm ---
-		const std::string nmCmd =
-			"nm --defined-only --format=posix " + inputObj.string() +
-			" 2>/dev/null | awk '{print $1}' | grep '^!'";
-
-		std::string nmOut;
-		{
-			std::array<char, 512> buf{};
-			std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(nmCmd.c_str(), "r"), &pclose);
-			if (!pipe)
-				throw std::runtime_error("Failed to run nm on: " + inputObj.string());
-			while (fgets(buf.data(), buf.size(), pipe.get()))
-				nmOut += buf.data();
-		}
-
-		// --- Build redefine-syms map:  !foo  →  <tag>foo ---
-		std::string symsContent;
-		{
-			std::istringstream ss(nmOut);
-			for (std::string sym; std::getline(ss, sym);) {
-				// Trim trailing whitespace / CR
-				sym.erase(sym.find_last_not_of("\r\n\t ") + 1);
-				if (sym.empty() || sym.front() != '!') continue;
-				// Replace the leading '!' placeholder with the version tag.
-				symsContent += sym + ' ' + tag + sym.substr(1) + '\n';
-			}
-		}
-
-		if (!symsContent.empty()) {
-			// Write a temporary syms file alongside the output object.
-			const fs::path symsFile = outputObj.string() + ".syms";
-			{
-				std::ofstream f(symsFile);
-				if (!f)
-					throw std::runtime_error("Failed to write syms file: " + symsFile.string());
-				f << symsContent;
-			}
-
-			// Prefer llvm-objcopy (guaranteed present given the LLVM dep);
-			// fall back to binutils objcopy.
-			const std::string redefineFlag =
-				" --redefine-syms=" + symsFile.string() +
-				" " + inputObj.string() + " " + outputObj.string();
-
-			bool ok = (std::system(("llvm-objcopy" + redefineFlag).c_str()) == 0);
-			if (!ok)
-				ok = (std::system(("objcopy" + redefineFlag).c_str()) == 0);
-			if (!ok)
-				throw std::runtime_error(
-					"Symbol rewrite failed for: " + inputObj.string());
-
-			fs::remove(symsFile);
-		}
-		else {
-			// No !-prefixed symbols — copy the object file verbatim.
-			fs::copy_file(inputObj, outputObj, fs::copy_options::overwrite_existing);
-		}
+		rewriteObjectSymbols(srcObj, dstObj, tag);
 	}
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Public package API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Fetches and caches a specific (repoUrl, tag) package.
+// Clones the repo, rewrites !-prefixed symbols with version stamps, and stores
+// the processed objects in the build cache.  Safe to call concurrently on
+// different packages; callers are responsible for higher-level locking if the
+// same package is fetched from multiple threads simultaneously.
+inline void fetchPackage(const std::string& repoUrl, const std::string& tag) {
+	validatePackageUrlAndTag(repoUrl, tag);
+
+	const fs::path srcDir   = getPackageSrcPath(repoUrl, tag);
+	const fs::path buildDir = getPackageBuildPath(repoUrl, tag);
+
+	// Fast path: build artefacts already present.
+	if (isPackageCached(repoUrl, tag)) {
+		PRINT("Reusing cached package: " + repoUrl + "@" + tag);
+		return;
+	}
+
+	// Clone the tagged release if we don't have it yet.
+	if (!fs::exists(srcDir)) {
+		fs::create_directories(srcDir);
+		cloneTag(repoUrl, tag, srcDir.string());
+	}
+
+	// Every library must ship a build/ directory of prebuilt objects.
+	const fs::path srcBuildDir = srcDir / "build";
+	if (!fs::exists(srcBuildDir))
+		throw std::runtime_error(
+			"Package missing build/ directory — cannot fetch: "
+			+ repoUrl + "@" + tag);
+
+	fs::create_directories(buildDir);
+	rewritePackageObjects(srcBuildDir, buildDir, tag);
 
 	PRINT("Fetched and versioned: " + repoUrl + "@" + tag);
 }
+
+// Ensures a package is present in the local cache, fetching it if necessary.
+// Resolves "latest" to the actual latest remote tag before delegating.
+// Throws on any network, filesystem, or symbol-rewrite error.
+inline void ensurePackageFetched(const std::string& repoUrl,
+								 const std::string& tag) {
+	// Allow callers to pass "latest" as a convenience alias.
+	const std::string resolvedTag = (tag == "latest")
+		? getLatestTag(repoUrl)
+		: tag;
+
+	if (resolvedTag.empty())
+		throw std::runtime_error(
+			"Could not resolve version tag for package: " + repoUrl);
+
+	if (!isPackageCached(repoUrl, resolvedTag)) {
+		PRINT("Fetching package: " + repoUrl + "@" + resolvedTag);
+		fetchPackage(repoUrl, resolvedTag);
+	}
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Cross-compilation targets
+// ─────────────────────────────────────────────────────────────────────────────
 
 namespace targets {
 	struct Target {
@@ -265,35 +352,29 @@ namespace targets {
 	};
 
 	constexpr Target LINUX_X64 = {
-		"linux-x64",
-		"x86_64-unknown-linux-gnu",
-		""
+		"linux-x64", "x86_64-unknown-linux-gnu", ""
 	};
 	constexpr Target LINUX_ARM64 = {
-		"linux-arm64",
-		"aarch64-unknown-linux-gnu",
-		""
+		"linux-arm64", "aarch64-unknown-linux-gnu", ""
 	};
 	constexpr Target WINDOWS_X64 = {
-		"windows-x64",
-		"x86_64-w64-mingw32",
-		".exe"
+		"windows-x64", "x86_64-w64-mingw32", ".exe"
 	};
+
 	constexpr Target ALL_TARGETS[] = {
 		LINUX_X64,
 		LINUX_ARM64,
-		WINDOWS_X64
+		WINDOWS_X64,
 	};
 
 	inline Target getHostTarget() {
-		auto triple = llvm::sys::getDefaultTargetTriple();
+		const auto triple = llvm::sys::getDefaultTargetTriple();
 		for (const auto& target : ALL_TARGETS) {
 			if (triple.find(target.triple) != std::string::npos ||
-			    std::string(target.triple).find(triple) != std::string::npos) {
+				std::string(target.triple).find(triple) != std::string::npos)
 				return target;
-			}
 		}
-		return LINUX_X64;
+		return LINUX_X64; // safe fallback
 	}
 }
 
