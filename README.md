@@ -3,10 +3,18 @@
 This repository contains the Zane language compiler and CLI.
 
 ## Setup
-To setup this project in a new environment, run:
+To setup this project in a new environment or sandbox, run:
 
 ```sh
-./scripts/setup.sh
+curl -fsSL https://get.jetify.com/devbox | bash
+```
+
+## Building
+
+```sh
+devbox shell --pure
+just init # initialize meson
+just build
 ```
 
 ## Usage
