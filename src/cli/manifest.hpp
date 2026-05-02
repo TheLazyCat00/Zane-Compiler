@@ -15,11 +15,13 @@ namespace manifest {
 struct Dependency {
 	std::string url;
 	std::string tag;
+	std::string commitHash;
 
 	coda::Row toCoda() const {
 		coda::Row res;
 		res["url"] = url;
 		res["tag"] = tag;
+		res["commitHash"] = commitHash;
 		return res;
 	}
 };
@@ -80,7 +82,7 @@ struct Manifest {
 		for (const auto& [key, dep] : root["dependencies"].asKeyedTable()) {
 			Dependency dependency;
 			dependency.url = dep["url"];
-			dependency.tag = dep["version"];
+			dependency.tag = dep["tag"];
 			dependencies[key] = dependency;
 		}
 	}
@@ -92,6 +94,7 @@ struct Manifest {
 
 	void addDependency(const std::string& url, const std::string& tag) {
 		std::string name = constants::getRepoNameFromUrl(url);
+		std::string commitHash = constants::getCommitHashFromTag(url, tag);
 		dependencies[name] = Dependency{ url, tag };
 	}
 
@@ -101,7 +104,7 @@ struct Manifest {
 		root["name"] = name;
 		root["type"] = type.toString();
 		
-		coda::KeyedTable depsTable({"url", "version"});
+		coda::KeyedTable depsTable({ "url", "tag" });
 		for (const auto& [key, dep] : dependencies) {
 			depsTable.insert(key, dep.toCoda());
 		}
