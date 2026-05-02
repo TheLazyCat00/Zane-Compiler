@@ -8,6 +8,8 @@
 #include <fstream>
 #include <sstream>
 #include <chrono>
+#include <atomic>
+#include <thread>
 #include <vector>
 #include <llvm/TargetParser/Host.h>
 
@@ -287,8 +289,13 @@ inline std::vector<std::string> listArchiveMembers(const fs::path& archivePath) 
 inline void rewriteArchiveSymbols(const fs::path& srcArchive,
                                   const fs::path& dstArchive,
                                   const std::string& tag) {
-	const auto uniqueSuffix = std::to_string(
-		std::chrono::steady_clock::now().time_since_epoch().count());
+	static std::atomic_uint64_t uniqueCounter = 0;
+	const auto uniqueSuffix =
+		std::to_string(std::chrono::steady_clock::now().time_since_epoch().count())
+		+ "-"
+		+ std::to_string(std::hash<std::thread::id>{}(std::this_thread::get_id()))
+		+ "-"
+		+ std::to_string(uniqueCounter.fetch_add(1, std::memory_order_relaxed));
 	const fs::path tempRoot = fs::temp_directory_path() / ("zane-archive-" + uniqueSuffix);
 	const fs::path extractDir = tempRoot / "src";
 	const fs::path rewrittenDir = tempRoot / "dst";

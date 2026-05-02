@@ -432,6 +432,7 @@ public:
 		const auto dependencyArtifacts = getDependencyArtifacts(target);
 		for (const auto& path : dependencyArtifacts)
 			objectFiles.push_back(shell::quote(path.string()));
+		std::optional<fs::path> mergedObject;
 
 		if (objectFiles.empty()) {
 			DEBUG("No object files found for static library " << target.name);
@@ -442,22 +443,23 @@ public:
 		fs::create_directories(outputPath.parent_path());
 
 		if (!dependencyArtifacts.empty()) {
-			const fs::path mergedObject =
+			mergedObject =
 				outputPath.parent_path() / (outputPath.stem().string() + ".merged.o");
 			std::stringstream mergeCmd;
 			mergeCmd << zig::path() << " cc"
 				<< " --target=" << zig::toZigTarget(target.triple)
 				<< " -r";
 			for (const auto& obj : objectFiles) mergeCmd << " " << obj;
-			mergeCmd << " -o " << shell::quote(mergedObject.string());
+			mergeCmd << " -o " << shell::quote(mergedObject->string());
 
 			PRINT("Flattening dependency objects for " << target.name << ": " << mergeCmd.str());
 			if (std::system(mergeCmd.str().c_str()) != 0) {
+				if (mergedObject.has_value()) fs::remove(*mergedObject);
 				DEBUG("Failed to merge dependency objects for " << target.name);
 				return false;
 			}
 
-			objectFiles = { shell::quote(mergedObject.string()) };
+			objectFiles = { shell::quote(mergedObject->string()) };
 		}
 
 		std::stringstream cmd;
@@ -467,9 +469,11 @@ public:
 
 		PRINT("Creating static library " << target.name << ": " << cmd.str());
 		if (std::system(cmd.str().c_str()) != 0) {
+			if (mergedObject.has_value()) fs::remove(*mergedObject);
 			DEBUG("Static library creation failed for " << target.name);
 			return false;
 		}
+		if (mergedObject.has_value()) fs::remove(*mergedObject);
 
 		PRINT("Created static library: " << outputLibrary);
 		return true;

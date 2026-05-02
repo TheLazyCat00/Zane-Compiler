@@ -36,7 +36,7 @@ inline bool fetchManifestDependencies(
 					"WARNING: The tag '" + dep.tag + "' for dependency '"
 					+ alias + "' has changed since it was added to the manifest.\n"
 					+ "This is a security risk, as the new tag may point to different code than what was originally reviewed and approved.\n"
-					+ "Aborting fetch";
+					+ "Aborting fetch. If this tag move is intentional, update the recorded commit hash in zane.coda with the appropriate dependency update flow.";
 				PRINT(warning);
 				return false;
 			}
