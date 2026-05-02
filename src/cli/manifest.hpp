@@ -83,6 +83,7 @@ struct Manifest {
 			Dependency dependency;
 			dependency.url = dep["url"];
 			dependency.tag = dep["tag"];
+			dependency.commitHash = dep["commitHash"];
 			dependencies[key] = dependency;
 		}
 	}
@@ -104,7 +105,7 @@ struct Manifest {
 		root["name"] = name;
 		root["type"] = type.toString();
 		
-		coda::KeyedTable depsTable({ "url", "tag" });
+		coda::KeyedTable depsTable({ "url", "tag", "commitHash" });
 		for (const auto& [key, dep] : dependencies) {
 			depsTable.insert(key, dep.toCoda());
 		}
