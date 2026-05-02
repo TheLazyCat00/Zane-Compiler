@@ -7,7 +7,7 @@
 #include <filesystem>
 #include <fstream>
 #include <sstream>
-#include <llvm-21/llvm/TargetParser/Host.h>
+#include <llvm/TargetParser/Host.h>
 
 namespace fs = std::filesystem;
 
