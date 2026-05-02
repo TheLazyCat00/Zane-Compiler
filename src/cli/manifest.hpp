@@ -14,12 +14,12 @@ namespace manifest {
 
 struct Dependency {
 	std::string url;
-	SemVer version;
+	std::string tag;
 
 	coda::Row toCoda() const {
 		coda::Row res;
 		res["url"] = url;
-		res["version"] = version.toString();
+		res["tag"] = tag;
 		return res;
 	}
 };
@@ -80,7 +80,7 @@ struct Manifest {
 		for (const auto& [key, dep] : root["dependencies"].asKeyedTable()) {
 			Dependency dependency;
 			dependency.url = dep["url"];
-			dependency.version = SemVer(dep["version"]);
+			dependency.tag = dep["version"];
 			dependencies[key] = dependency;
 		}
 	}
@@ -88,6 +88,11 @@ struct Manifest {
 	Manifest(const std::map<std::string, std::any>& m) {
 		name = std::any_cast<std::string>(m.at("name"));
 		type = std::any_cast<Type>(m.at("type"));
+	}
+
+	void addDependency(const std::string& url, const std::string& tag) {
+		std::string name = constants::getRepoNameFromUrl(url);
+		dependencies[name] = Dependency{ url, tag };
 	}
 
 	void save() const {

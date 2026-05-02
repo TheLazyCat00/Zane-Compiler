@@ -180,29 +180,3 @@ public:
 	auto begin()  { return stack.begin(); }
 	auto end()    { return stack.end(); }
 };
-
-struct SemVer {
-	int major;
-	int minor;
-	int patch;
-
-	SemVer() {
-		major = 0;
-		minor = 0;
-		patch = 0;
-	}
-
-	SemVer(const std::string& s) {
-		std::stringstream ss(s);
-		std::string part;
-		std::getline(ss, part, '.'); major = std::stoi(part);
-		std::getline(ss, part, '.'); minor = std::stoi(part);
-		std::getline(ss, part, '.'); patch = std::stoi(part);
-	}
-
-	std::string toString() const {
-		std::stringstream ss;
-		ss << major << "." << minor << "." << patch;
-		return ss.str();
-	}
-};

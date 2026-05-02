@@ -21,7 +21,7 @@
 
 namespace commands {
 
-inline void run(int argc, char* argv[], const manifest::Manifest& manifest) {
+inline void run(int argc, char* argv[], manifest::Manifest& manifest) {
 	Compiler compiler(manifest);
 	compiler.compile();
 
@@ -46,13 +46,13 @@ inline void run(int argc, char* argv[], const manifest::Manifest& manifest) {
 	compiler.executeNative(outputPath.string());
 }
 
-inline void build(int argc, char* argv[], const manifest::Manifest& manifest) {
+inline void build(int argc, char* argv[], manifest::Manifest& manifest) {
 	Compiler compiler(manifest);
 	compiler.compile();
 	compiler.buildForAllTargets();
 }
 
-inline void debug(int argc, char* argv[], const manifest::Manifest& manifest) {
+inline void debug(int argc, char* argv[], manifest::Manifest& manifest) {
 	Compiler compiler(manifest);
 	compiler.compile();
 
@@ -62,7 +62,7 @@ inline void debug(int argc, char* argv[], const manifest::Manifest& manifest) {
 	}
 }
 
-inline void ir(int argc, char* argv[], const manifest::Manifest& manifest) {
+inline void ir(int argc, char* argv[], manifest::Manifest& manifest) {
 	Compiler compiler(manifest);
 	compiler.compile();
 	compiler.generateCode();
@@ -76,7 +76,7 @@ inline void ir(int argc, char* argv[], const manifest::Manifest& manifest) {
 	linkedModule->print(llvm::outs(), nullptr);
 }
 
-inline void add(int argc, char* argv[], const manifest::Manifest& manifest) {
+inline void add(int argc, char* argv[], manifest::Manifest& manifest) {
 	if (argc == 0) {
 		PRINT("need library url");
 		PRINT("usage: zane add [url] (tag)");
@@ -85,12 +85,19 @@ inline void add(int argc, char* argv[], const manifest::Manifest& manifest) {
 
 	auto repoUrl = argv[0];
 	std::string tag;
-
 	if (argc == 2) {
 		tag = argv[1];
 	}
 
-	constants::fetchPackage(repoUrl, tag);
+	constants::ensurePackageFetched(repoUrl, tag);
+	manifest.addDependency(repoUrl, tag);
+	manifest.save();
+}
+
+inline void fetch(int argc, char* argv[], manifest::Manifest& manifest) {
+	for (const auto& [name, dep] : manifest.dependencies) {
+		constants::ensurePackageFetched(dep.url, dep.tag);
+	}
 }
 
 inline bool directoryIsEmpty(const std::filesystem::path& dir) {
@@ -155,12 +162,13 @@ inline void help(int argc, char* argv[]) {
 }
 
 // Commands that require an initialized project
-const std::map<std::string, void(*)(int, char*[], const manifest::Manifest&)> projectCommands = {
+const std::map<std::string, void(*)(int, char*[], manifest::Manifest&)> projectCommands = {
 	{ "run",   run   },
 	{ "build", build },
 	{ "debug", debug },
 	{ "ir",    ir    },
 	{ "add", add },
+	{ "fetch", fetch },
 };
 
 // Commands that don't require an initialized project
