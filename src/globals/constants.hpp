@@ -331,6 +331,9 @@ inline void ensurePackageFetched(const std::string& repoUrl,
 		PRINT("Fetching package: " + repoUrl + "@" + resolvedTag);
 		fetchPackage(repoUrl, resolvedTag);
 	}
+	else {
+		PRINT("Package already cached: " + repoUrl + "@" + resolvedTag);
+	}
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
