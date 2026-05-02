@@ -10,16 +10,34 @@ project(
 )
 
 python = import('python').find_installation()
+fs_mod = import('fs')
+thread_dep = dependency('threads')
 
 coda_inc = include_directories('vendor/coda/include')
 coda_dep = declare_dependency(include_directories: coda_inc)
 
-antlr4_dep = dependency(
-  'antlr4-runtime',
-  required: true,
-  method: 'cmake',
-  modules: ['antlr4_static'],
-)
+antlr4_root = meson.project_source_root() / '.cache' / 'tooling' / 'antlr4' / 'runtime' / '4.13.2'
+antlr4_incdir = '.cache/tooling/antlr4/runtime/4.13.2/include/antlr4-runtime'
+antlr4_static_lib = antlr4_root / 'lib' / 'libantlr4-runtime.a'
+if fs_mod.exists(antlr4_root / 'include' / 'antlr4-runtime' / 'antlr4-runtime.h') and fs_mod.exists(antlr4_static_lib)
+  antlr4_dep = declare_dependency(
+    include_directories: [include_directories(antlr4_incdir)],
+    link_args: [antlr4_static_lib],
+    dependencies: [thread_dep],
+  )
+else
+  antlr4_fallback = dependency(
+    'antlr4-runtime',
+    required: false,
+    method: 'cmake',
+    modules: ['antlr4_static'],
+  )
+  if antlr4_fallback.found() and antlr4_fallback.version().version_compare('>=4.13.2')
+    antlr4_dep = antlr4_fallback
+  else
+    error('ANTLR4 C++ runtime 4.13.2+ is required. Run "just init" to bootstrap the pinned runtime used by generated-parser/.')
+  endif
+endif
 nlohmann_dep = dependency('nlohmann_json', required: true, method: 'cmake')
 cereal_dep  = dependency('cereal', required: true, method: 'cmake')
 

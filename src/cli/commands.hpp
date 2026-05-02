@@ -14,6 +14,7 @@
 #include <string>
 #include <map>
 #include <filesystem>
+#include <set>
 #include <vector>
 #include <antlr4-runtime.h>
 #include <parser/ZaneLexer.h>
@@ -21,7 +22,46 @@
 
 namespace commands {
 
+inline bool fetchManifestDependencies(
+		const manifest::Manifest& manifest,
+		std::set<std::string>& visited) {
+	for (const auto& [alias, dep] : manifest.dependencies) {
+		const std::string cacheKey = dep.url + "@" + dep.tag;
+		if (!visited.insert(cacheKey).second) continue;
+
+		if (!dep.commitHash.empty()) {
+			std::string commitHash = constants::getCommitHashFromTag(dep.url, dep.tag);
+			if (commitHash != dep.commitHash) {
+				std::string warning =
+					"WARNING: The tag '" + dep.tag + "' for dependency '"
+					+ alias + "' has changed since it was added to the manifest.\n"
+					+ "This is a security risk, as the new tag may point to different code than what was originally reviewed and approved.\n"
+					+ "Aborting fetch. If this tag move is intentional, update the recorded commit hash in zane.coda with the appropriate dependency update flow.";
+				PRINT(warning);
+				return false;
+			}
+		}
+
+		constants::ensurePackageFetched(dep.url, dep.tag);
+
+		const fs::path dependencyManifestPath =
+			constants::getPackageSrcPath(dep.url, dep.tag) / constants::MANIFEST_PATH;
+		if (!fs::exists(dependencyManifestPath)) continue;
+
+		manifest::Manifest dependencyManifest(dependencyManifestPath.string().c_str());
+		if (!fetchManifestDependencies(dependencyManifest, visited)) return false;
+	}
+
+	return true;
+}
+
+inline bool fetchManifestDependencies(const manifest::Manifest& manifest) {
+	std::set<std::string> visited;
+	return fetchManifestDependencies(manifest, visited);
+}
+
 inline void run(int argc, char* argv[], manifest::Manifest& manifest) {
+	if (!fetchManifestDependencies(manifest)) return;
 	Compiler compiler(manifest);
 	compiler.compile();
 
@@ -47,12 +87,14 @@ inline void run(int argc, char* argv[], manifest::Manifest& manifest) {
 }
 
 inline void build(int argc, char* argv[], manifest::Manifest& manifest) {
+	if (!fetchManifestDependencies(manifest)) return;
 	Compiler compiler(manifest);
 	compiler.compile();
 	compiler.buildForAllTargets();
 }
 
 inline void debug(int argc, char* argv[], manifest::Manifest& manifest) {
+	if (!fetchManifestDependencies(manifest)) return;
 	Compiler compiler(manifest);
 	compiler.compile();
 
@@ -63,6 +105,7 @@ inline void debug(int argc, char* argv[], manifest::Manifest& manifest) {
 }
 
 inline void ir(int argc, char* argv[], manifest::Manifest& manifest) {
+	if (!fetchManifestDependencies(manifest)) return;
 	Compiler compiler(manifest);
 	compiler.compile();
 	compiler.generateCode();
@@ -95,19 +138,7 @@ inline void add(int argc, char* argv[], manifest::Manifest& manifest) {
 }
 
 inline void fetch(int argc, char* argv[], manifest::Manifest& manifest) {
-	for (const auto& [name, dep] : manifest.dependencies) {
-		std::string commitHash = constants::getCommitHashFromTag(dep.url, dep.tag);
-		if (commitHash != dep.commitHash) {
-			std::string warning =
-				"WARNING: The tag '" + dep.tag + "' for dependency '"
-				+ name + "' has changed since it was added to the manifest.\n"
-				+ "This is a security risk, as the new tag may point to different code than what was originally reviewed and approved.\n"
-				+ "Aborting fetch";
-			PRINT(warning);
-			return;
-		}
-		constants::ensurePackageFetched(dep.url, dep.tag);
-	}
+	fetchManifestDependencies(manifest);
 }
 
 inline bool directoryIsEmpty(const std::filesystem::path& dir) {

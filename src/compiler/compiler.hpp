@@ -17,8 +17,13 @@
 #include <llvm/IR/Module.h>
 #include <llvm/Linker/Linker.h>
 #include <llvm/Support/FileSystem.h>
+#include <map>
 #include <memory>
+#include <optional>
+#include <set>
+#include <sstream>
 #include <string>
+#include <vector>
 #include <nlohmann/json.hpp>
 
 enum class BuildMode {
@@ -33,6 +38,20 @@ private:
 	Modules modules;
 	manifest::Manifest manifest;
 	Ptr<llvm::LLVMContext> context;
+	bool dependenciesPrepared = false;
+
+	struct ResolvedDependency {
+		std::string alias;
+		std::string url;
+		std::string tag;
+		std::string packageName;
+		fs::path srcRoot;
+		fs::path buildRoot;
+		bool usesVersionedSymbols = false;
+	};
+
+	std::vector<ResolvedDependency> directDependencies;
+	std::vector<ResolvedDependency> linkedDependencies;
 
 	struct SourceDir {
 		fs::path dir;
@@ -46,6 +65,144 @@ private:
 			{ constants::library::LIBRARY_DIR, manifest.name },
 			{ constants::library::ENTRY_DIR,   "test"        },
 		};
+	}
+
+	std::vector<fs::path> collectSourceFiles(const fs::path& dir) {
+		std::vector<fs::path> sources;
+		if (!fs::exists(dir) || !fs::is_directory(dir)) return sources;
+
+		for (const auto& entry : fs::recursive_directory_iterator(dir)) {
+			if (entry.path().extension() == ".zn")
+				sources.push_back(entry.path());
+		}
+
+		return sources;
+	}
+
+	ResolvedDependency resolveDependency(
+			const std::string& alias,
+			const manifest::Dependency& dependency) {
+		ResolvedDependency resolved;
+		resolved.alias = alias;
+		resolved.url = dependency.url;
+		resolved.tag = dependency.tag;
+		resolved.srcRoot = constants::getPackageSrcPath(dependency.url, dependency.tag);
+		resolved.buildRoot = constants::getPackageBuildPath(dependency.url, dependency.tag);
+
+		const fs::path dependencyManifestPath =
+			resolved.srcRoot / constants::MANIFEST_PATH;
+		if (fs::exists(dependencyManifestPath)) {
+			manifest::Manifest dependencyManifest(dependencyManifestPath.string().c_str());
+			resolved.packageName = dependencyManifest.name;
+			resolved.usesVersionedSymbols =
+				!resolved.packageName.empty()
+				&& constants::packageBuildUsesVersionedSymbols(
+					resolved.buildRoot,
+					resolved.packageName,
+					resolved.tag);
+		}
+
+		return resolved;
+	}
+
+	void collectLinkedDependencies(
+			const manifest::Manifest& currentManifest,
+			std::set<std::string>& visited) {
+		for (const auto& [alias, dependency] : currentManifest.dependencies) {
+			const std::string cacheKey = dependency.url + "@" + dependency.tag;
+			if (!visited.insert(cacheKey).second) continue;
+
+			auto resolved = resolveDependency(alias, dependency);
+			linkedDependencies.push_back(resolved);
+
+			const fs::path dependencyManifestPath =
+				resolved.srcRoot / constants::MANIFEST_PATH;
+			if (!fs::exists(dependencyManifestPath)) continue;
+
+			manifest::Manifest dependencyManifest(dependencyManifestPath.string().c_str());
+			collectLinkedDependencies(dependencyManifest, visited);
+		}
+	}
+
+	void prepareDependencies() {
+		if (dependenciesPrepared) return;
+		dependenciesPrepared = true;
+
+		std::set<std::string> visited;
+		for (const auto& [alias, dependency] : manifest.dependencies) {
+			auto resolved = resolveDependency(alias, dependency);
+			directDependencies.push_back(resolved);
+		}
+
+		collectLinkedDependencies(manifest, visited);
+	}
+
+	void loadExternalPackageSymbols() {
+		prepareDependencies();
+
+		for (const auto& dependency : directDependencies) {
+			const fs::path sourceDir =
+				dependency.srcRoot / constants::library::LIBRARY_DIR;
+			auto sourceFiles = collectSourceFiles(sourceDir);
+			if (sourceFiles.empty()) continue;
+
+			Package externalPackage(symbolCollector);
+			externalPackage.parse(sourceFiles);
+			externalPackage.collectSymbols();
+
+			std::shared_ptr<ir::PackageInfo> packageInfo;
+			if (!dependency.packageName.empty()) {
+				packageInfo = symbolCollector->getPackageInfo(dependency.packageName);
+			}
+
+			if (!packageInfo) {
+				packageInfo = externalPackage.getPackageInfo();
+			}
+
+			if (!packageInfo) continue;
+
+			if (dependency.usesVersionedSymbols && !dependency.packageName.empty()) {
+				ir::setVersionedPackageName(dependency.packageName, dependency.tag);
+			}
+
+			if (!dependency.alias.empty()) {
+				symbolCollector->registerPackageAlias(dependency.alias, packageInfo);
+			}
+		}
+	}
+
+	std::vector<fs::path> getLocalObjectFiles(const fs::path& cacheDir) {
+		std::vector<fs::path> objectFiles;
+		if (!fs::exists(cacheDir)) return objectFiles;
+
+		for (const auto& entry : fs::recursive_directory_iterator(cacheDir)) {
+			if (!entry.is_regular_file()) continue;
+			const auto ext = entry.path().extension().string();
+			if (ext == ".o" || ext == ".obj") {
+				objectFiles.push_back(entry.path());
+			}
+		}
+
+		return objectFiles;
+	}
+
+	std::vector<fs::path> getDependencyArtifacts(
+			const constants::targets::Target& target) {
+		prepareDependencies();
+
+		std::vector<fs::path> artifacts;
+		for (const auto& dependency : linkedDependencies) {
+			const fs::path targetBuildDir = dependency.buildRoot / target.name;
+			if (!fs::exists(targetBuildDir)) continue;
+
+			for (const auto& entry : fs::recursive_directory_iterator(targetBuildDir)) {
+				if (!entry.is_regular_file()) continue;
+				if (!constants::isPackageArtifact(entry.path())) continue;
+				artifacts.push_back(entry.path());
+			}
+		}
+
+		return artifacts;
 	}
 
 	fs::file_time_type getLastModified(const fs::path& path) {
@@ -156,17 +313,15 @@ public:
 		std::map<std::string, std::vector<fs::path>> packageFiles;
 		std::map<std::string, std::string> packageDirs;
 
+		loadExternalPackageSymbols();
+
 		for (const auto& srcDir : getIncludedDirectories()) {
 			if (!fs::exists(srcDir.dir) || !fs::is_directory(srcDir.dir)) {
 				DEBUG("Directory not found: " << srcDir.dir);
 				continue;
 			}
 
-			std::vector<fs::path> sources;
-			for (const auto& entry : fs::recursive_directory_iterator(srcDir.dir)) {
-				if (entry.path().extension() == ".zn")
-					sources.push_back(entry.path());
-			}
+			auto sources = collectSourceFiles(srcDir.dir);
 
 			for (const auto& source : sources) {
 				auto relativePath = fs::relative(source.parent_path(), srcDir.dir);
@@ -239,10 +394,10 @@ public:
 
 		fs::path cacheDir = fs::path(constants::CACHE_DIR) / target.name;
 		std::vector<std::string> objectFiles;
-		for (const auto& entry : fs::recursive_directory_iterator(cacheDir)) {
-			if (entry.path().extension() == ".o")
-				objectFiles.push_back("\"" + entry.path().string() + "\"");
-		}
+		for (const auto& path : getLocalObjectFiles(cacheDir))
+			objectFiles.push_back(shell::quote(path.string()));
+		for (const auto& path : getDependencyArtifacts(target))
+			objectFiles.push_back(shell::quote(path.string()));
 
 		if (objectFiles.empty()) {
 			DEBUG("No object files found to link for " << target.name);
@@ -254,7 +409,7 @@ public:
 			<< " --target=" << zig::toZigTarget(target.triple)
 			<< (mode == BuildMode::Release ? " -O3" : "");
 		for (const auto& obj : objectFiles) cmd << " " << obj;
-		cmd << " -o \"" << outputExecutable << "\"";
+		cmd << " -o " << shell::quote(outputExecutable);
 
 		PRINT("Linking " << target.name << ": " << cmd.str());
 		if (std::system(cmd.str().c_str()) != 0) {
@@ -272,26 +427,53 @@ public:
 
 		fs::path cacheDir = fs::path(constants::CACHE_DIR) / target.name;
 		std::vector<std::string> objectFiles;
-		for (const auto& entry : fs::recursive_directory_iterator(cacheDir)) {
-			if (entry.path().extension() == ".o")
-				objectFiles.push_back("\"" + entry.path().string() + "\"");
-		}
+		for (const auto& path : getLocalObjectFiles(cacheDir))
+			objectFiles.push_back(shell::quote(path.string()));
+		const auto dependencyArtifacts = getDependencyArtifacts(target);
+		for (const auto& path : dependencyArtifacts)
+			objectFiles.push_back(shell::quote(path.string()));
+		std::optional<fs::path> mergedObject;
 
 		if (objectFiles.empty()) {
 			DEBUG("No object files found for static library " << target.name);
 			return false;
 		}
 
+		const fs::path outputPath(outputLibrary);
+		fs::create_directories(outputPath.parent_path());
+
+		if (!dependencyArtifacts.empty()) {
+			mergedObject =
+				outputPath.parent_path() / (outputPath.stem().string() + ".merged.o");
+			std::stringstream mergeCmd;
+			mergeCmd << zig::path() << " cc"
+				<< " --target=" << zig::toZigTarget(target.triple)
+				<< " -r";
+			for (const auto& obj : objectFiles) mergeCmd << " " << obj;
+			mergeCmd << " -o " << shell::quote(mergedObject->string());
+
+			PRINT("Flattening dependency objects for " << target.name << ": " << mergeCmd.str());
+			if (std::system(mergeCmd.str().c_str()) != 0) {
+				if (mergedObject.has_value()) fs::remove(*mergedObject);
+				DEBUG("Failed to merge dependency objects for " << target.name);
+				return false;
+			}
+
+			objectFiles = { shell::quote(mergedObject->string()) };
+		}
+
 		std::stringstream cmd;
 		cmd << zig::path() << " ar"
-			<< " crs \"" << outputLibrary << "\"";
+			<< " crs " << shell::quote(outputLibrary);
 		for (const auto& obj : objectFiles) cmd << " " << obj;
 
 		PRINT("Creating static library " << target.name << ": " << cmd.str());
 		if (std::system(cmd.str().c_str()) != 0) {
+			if (mergedObject.has_value()) fs::remove(*mergedObject);
 			DEBUG("Static library creation failed for " << target.name);
 			return false;
 		}
+		if (mergedObject.has_value()) fs::remove(*mergedObject);
 
 		PRINT("Created static library: " << outputLibrary);
 		return true;

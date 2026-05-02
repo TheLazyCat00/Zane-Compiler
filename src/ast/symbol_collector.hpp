@@ -106,4 +106,11 @@ public:
 		if (it != packages.end()) return it->second;
 		return nullptr;
 	}
+
+	void registerPackageAlias(
+			const std::string& alias,
+			std::shared_ptr<ir::PackageInfo> packageInfo) {
+		if (!packageInfo) return;
+		packages[alias] = std::move(packageInfo);
+	}
 };

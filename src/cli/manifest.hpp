@@ -12,6 +12,17 @@
 
 namespace manifest {
 
+inline std::string getDependencyField(
+		const coda::Row& dep,
+		const std::initializer_list<const char*> keys) {
+	for (const char* key : keys) {
+		for (const auto& [field, value] : dep) {
+			if (field == key) return value;
+		}
+	}
+	return "";
+}
+
 struct Dependency {
 	std::string url;
 	std::string tag;
@@ -79,12 +90,17 @@ struct Manifest {
 
 		name = root["name"].asString();
 		type = Type(root["type"].asString());
-		for (const auto& [key, dep] : root["dependencies"].asKeyedTable()) {
-			Dependency dependency;
-			dependency.url = dep["url"];
-			dependency.tag = dep["tag"];
-			dependency.commitHash = dep["commitHash"];
-			dependencies[key] = dependency;
+		if (root.has("dependencies") || root.has("deps")) {
+			const auto& dependencyTable = root.has("dependencies")
+				? root["dependencies"].asKeyedTable()
+				: root["deps"].asKeyedTable();
+			for (const auto& [key, dep] : dependencyTable) {
+				Dependency dependency;
+				dependency.url = getDependencyField(dep, { "url" });
+				dependency.tag = getDependencyField(dep, { "tag", "version" });
+				dependency.commitHash = getDependencyField(dep, { "commitHash", "commit" });
+				dependencies[key] = dependency;
+			}
 		}
 	}
 
