@@ -17,9 +17,11 @@
 #include <llvm/IR/Module.h>
 #include <llvm/Linker/Linker.h>
 #include <llvm/Support/FileSystem.h>
+#include <algorithm>
 #include <memory>
 #include <string>
 #include <nlohmann/json.hpp>
+#include <unordered_set>
 
 enum class BuildMode {
 	Dev,
@@ -33,6 +35,9 @@ private:
 	Modules modules;
 	manifest::Manifest manifest;
 	Ptr<llvm::LLVMContext> context;
+	std::vector<manifest::Dependency> linkedDependencies;
+	std::unordered_set<std::string> loadedDependencyKeys;
+	std::map<std::string, std::string> dependencyPackageNames;
 
 	struct SourceDir {
 		fs::path dir;
@@ -78,6 +83,91 @@ private:
 	void compilePackage(const std::string& pkgName, const std::vector<fs::path>& files, const std::string& packageDir) {
 		(*packages)[pkgName] = Package(symbolCollector);
 		(*packages)[pkgName]->parse(files);
+	}
+
+	std::vector<fs::path> getSourceFiles(const fs::path& sourceDir) {
+		std::vector<fs::path> files;
+		if (!fs::exists(sourceDir) || !fs::is_directory(sourceDir)) return files;
+
+		for (const auto& entry : fs::recursive_directory_iterator(sourceDir)) {
+			if (entry.path().extension() == ".zn")
+				files.push_back(entry.path());
+		}
+
+		std::sort(files.begin(), files.end());
+		return files;
+	}
+
+	std::string getDependencyKey(const manifest::Dependency& dependency) const {
+		return dependency.url + "@" + dependency.tag;
+	}
+
+	void loadDependencySymbols(const fs::path& sourceDir) {
+		auto files = getSourceFiles(sourceDir);
+		if (files.empty()) return;
+
+		Package dependencyPackage(symbolCollector);
+		dependencyPackage.parse(files);
+		dependencyPackage.collectSymbols();
+	}
+
+	void loadDependency(const std::string& alias, const manifest::Dependency& dependency) {
+		const auto key = getDependencyKey(dependency);
+
+		if (!loadedDependencyKeys.contains(key)) {
+			constants::ensurePackageFetched(dependency.url, dependency.tag);
+
+			const fs::path dependencyRoot = constants::getPackageSrcPath(dependency.url, dependency.tag);
+			loadDependencySymbols(dependencyRoot / constants::library::LIBRARY_DIR);
+			linkedDependencies.push_back(dependency);
+			loadedDependencyKeys.insert(key);
+
+			const fs::path dependencyManifestPath = dependencyRoot / constants::MANIFEST_PATH;
+			if (fs::exists(dependencyManifestPath)) {
+				dependencyPackageNames[key] = manifest::readPackageName(dependencyManifestPath);
+				for (const auto& [childAlias, childDependency] : manifest::Manifest(dependencyManifestPath.string().c_str()).dependencies) {
+					loadDependency(childAlias, childDependency);
+				}
+			}
+		}
+
+		if (!alias.empty()) {
+			auto it = dependencyPackageNames.find(key);
+			if (it != dependencyPackageNames.end()) {
+				symbolCollector->registerPackageAlias(alias, it->second);
+			}
+		}
+	}
+
+	std::vector<std::string> getDependencyArtifacts(const constants::targets::Target& target) const {
+		std::vector<std::string> artifacts;
+
+		for (const auto& dependency : linkedDependencies) {
+			const fs::path targetBuildDir =
+				constants::getPackageBuildPath(dependency.url, dependency.tag) / target.name;
+			if (!fs::exists(targetBuildDir))
+				throw std::runtime_error(
+					"Package missing target build artifact: "
+					+ dependency.url + "@" + dependency.tag + " for " + target.name);
+
+			bool foundArtifact = false;
+			for (const auto& entry : fs::recursive_directory_iterator(targetBuildDir)) {
+				if (!entry.is_regular_file()) continue;
+
+				const auto ext = entry.path().extension().string();
+				if (ext != ".o" && ext != ".obj" && ext != ".a" && ext != ".lib") continue;
+
+				artifacts.push_back("\"" + entry.path().string() + "\"");
+				foundArtifact = true;
+			}
+
+			if (!foundArtifact)
+				throw std::runtime_error(
+					"Package build artifact directory is empty: "
+					+ targetBuildDir.string());
+		}
+
+		return artifacts;
 	}
 
 	void generateMainWrapper() {
@@ -187,6 +277,9 @@ public:
 		}
 
 		for (auto& [pkgName, package] : *packages) package->collectSymbols();
+		for (const auto& [alias, dependency] : manifest.dependencies) {
+			loadDependency(alias, dependency);
+		}
 		for (auto& [pkgName, package] : *packages) package->buildTree(packageDirs[pkgName]);
 	}
 
@@ -242,6 +335,9 @@ public:
 		for (const auto& entry : fs::recursive_directory_iterator(cacheDir)) {
 			if (entry.path().extension() == ".o")
 				objectFiles.push_back("\"" + entry.path().string() + "\"");
+		}
+		for (const auto& dependencyArtifact : getDependencyArtifacts(target)) {
+			objectFiles.push_back(dependencyArtifact);
 		}
 
 		if (objectFiles.empty()) {

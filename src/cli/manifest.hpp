@@ -8,9 +8,17 @@
 #include <string>
 #include <map>
 #include <fstream>
+#include <filesystem>
 #include <coda.hpp>
 
 namespace manifest {
+
+namespace fs = std::filesystem;
+
+inline std::string readPackageName(const fs::path& manifestPath) {
+	coda::Doc coda(manifestPath.string().c_str());
+	return coda.root()["name"].asString();
+}
 
 struct Dependency {
 	std::string url;
@@ -79,12 +87,25 @@ struct Manifest {
 
 		name = root["name"].asString();
 		type = Type(root["type"].asString());
-		for (const auto& [key, dep] : root["dependencies"].asKeyedTable()) {
-			Dependency dependency;
-			dependency.url = dep["url"];
-			dependency.tag = dep["tag"];
-			dependency.commitHash = dep["commitHash"];
-			dependencies[key] = dependency;
+
+		const auto dependenciesKey = root.has("dependencies")
+			? "dependencies"
+			: (root.has("deps") ? "deps" : nullptr);
+		if (dependenciesKey) {
+			const auto& deps = root[dependenciesKey].asKeyedTable();
+			const auto& headers = deps.getHeaders();
+
+			for (const auto& [key, dep] : deps) {
+				Dependency dependency;
+				dependency.url = dep["url"];
+				if (headers.contains("tag")) dependency.tag = dep["tag"];
+				else if (headers.contains("version")) dependency.tag = dep["version"];
+
+				if (headers.contains("commitHash")) dependency.commitHash = dep["commitHash"];
+				else if (headers.contains("commit")) dependency.commitHash = dep["commit"];
+
+				dependencies[key] = dependency;
+			}
 		}
 	}
 
@@ -95,6 +116,12 @@ struct Manifest {
 
 	void addDependency(const std::string& url, const std::string& tag) {
 		std::string name = constants::getRepoNameFromUrl(url);
+		const fs::path dependencyManifestPath =
+			constants::getPackageSrcPath(url, tag) / constants::MANIFEST_PATH;
+		if (fs::exists(dependencyManifestPath)) {
+			name = readPackageName(dependencyManifestPath);
+		}
+
 		std::string commitHash = constants::getCommitHashFromTag(url, tag);
 		dependencies[name] = Dependency { url, tag, commitHash };
 	}

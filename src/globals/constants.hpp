@@ -3,10 +3,13 @@
 #include "utils/console.hpp"
 #include "utils/string.hpp"
 #include "utils/shell.hpp"
+#include <algorithm>
+#include <chrono>
 #include <string>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
+#include <vector>
 #include <llvm/TargetParser/Host.h>
 
 namespace fs = std::filesystem;
@@ -94,10 +97,16 @@ inline std::string getMangledMain(const std::string& projectName) {
 // ── URL / git helpers ─────────────────────────────────────────────────────────
 
 inline std::string getRepoNameFromUrl(const std::string& repoUrl) {
-	auto lastSlash = repoUrl.find_last_of("/\\");
+	auto trimmedUrl = repoUrl;
+	while (!trimmedUrl.empty() &&
+		(trimmedUrl.back() == '/' || trimmedUrl.back() == '\\')) {
+		trimmedUrl.pop_back();
+	}
+
+	auto lastSlash = trimmedUrl.find_last_of("/\\");
 	std::string name = (lastSlash == std::string::npos)
-		? repoUrl
-		: repoUrl.substr(lastSlash + 1);
+		? trimmedUrl
+		: trimmedUrl.substr(lastSlash + 1);
 	if (name.size() > 4 && name.substr(name.size() - 4) == ".git")
 		name = name.substr(0, name.size() - 4);
 	return name;
@@ -202,6 +211,22 @@ inline bool isPackageCached(const std::string& repoUrl,
 //  Symbol-rewriting helpers (used by fetchPackage)
 // ─────────────────────────────────────────────────────────────────────────────
 
+inline std::string shellQuote(const std::string& value) {
+	std::string quoted = "'";
+	for (char c : value) {
+		if (c == '\'') quoted += "'\\''";
+		else quoted += c;
+	}
+	quoted += "'";
+	return quoted;
+}
+
+inline fs::path makeTemporaryRewriteDir(const std::string& prefix) {
+	return fs::temp_directory_path() / fs::path(
+		prefix + "-" + std::to_string(
+			std::chrono::steady_clock::now().time_since_epoch().count()));
+}
+
 // Collects every !-prefixed defined symbol from an object file via nm.
 // Returns a newline-separated list of raw symbol names (leading '!' included).
 inline std::string collectBangSymbols(const fs::path& objFile) {
@@ -259,6 +284,73 @@ inline void rewriteObjectSymbols(const fs::path& srcObj,
 			"Symbol rewrite failed for: " + srcObj.string());
 }
 
+inline void rewriteArchiveSymbols(const fs::path& srcArchive,
+                                  const fs::path& dstArchive,
+                                  const std::string& tag) {
+	const fs::path tempRoot = makeTemporaryRewriteDir("zane-archive");
+	const fs::path extractedDir = tempRoot / "input";
+	const fs::path rewrittenDir = tempRoot / "output";
+
+	try {
+		fs::create_directories(extractedDir);
+		fs::create_directories(rewrittenDir);
+
+		const std::string extractCmd =
+			"cd " + shellQuote(extractedDir.string()) + " && "
+			+ "(llvm-ar x " + shellQuote(srcArchive.string())
+			+ " || ar x " + shellQuote(srcArchive.string()) + ")";
+		if (std::system(extractCmd.c_str()) != 0)
+			throw std::runtime_error(
+				"Failed to extract archive: " + srcArchive.string());
+
+		std::vector<fs::path> members;
+		for (const auto& entry : fs::directory_iterator(extractedDir)) {
+			if (!entry.is_regular_file()) continue;
+			members.push_back(entry.path().filename());
+		}
+
+		if (members.empty()) {
+			fs::create_directories(dstArchive.parent_path());
+			fs::copy_file(srcArchive, dstArchive, fs::copy_options::overwrite_existing);
+			fs::remove_all(tempRoot);
+			return;
+		}
+
+		std::sort(members.begin(), members.end());
+
+		std::string memberArgs;
+		for (const auto& member : members) {
+			const fs::path srcMember = extractedDir / member;
+			const fs::path dstMember = rewrittenDir / member;
+			const auto ext = srcMember.extension().string();
+
+			if (ext == ".o" || ext == ".obj") {
+				rewriteObjectSymbols(srcMember, dstMember, tag);
+			}
+			else {
+				fs::copy_file(srcMember, dstMember, fs::copy_options::overwrite_existing);
+			}
+
+			memberArgs += " " + shellQuote(member.string());
+		}
+
+		fs::create_directories(dstArchive.parent_path());
+		const std::string createCmd =
+			"cd " + shellQuote(rewrittenDir.string()) + " && "
+			+ "(llvm-ar crs " + shellQuote(dstArchive.string()) + memberArgs
+			+ " || ar crs " + shellQuote(dstArchive.string()) + memberArgs + ")";
+		if (std::system(createCmd.c_str()) != 0)
+			throw std::runtime_error(
+				"Failed to rebuild archive: " + dstArchive.string());
+	}
+	catch (...) {
+		fs::remove_all(tempRoot);
+		throw;
+	}
+
+	fs::remove_all(tempRoot);
+}
+
 // Iterates over every .o / .obj file under srcBuildDir, rewrites !-prefixed
 // symbols, and writes the results under dstBuildDir preserving sub-structure.
 inline void rewritePackageObjects(const fs::path& srcBuildDir,
@@ -267,13 +359,18 @@ inline void rewritePackageObjects(const fs::path& srcBuildDir,
 	for (const auto& entry : fs::recursive_directory_iterator(srcBuildDir)) {
 		if (!entry.is_regular_file()) continue;
 		const auto ext = entry.path().extension().string();
-		if (ext != ".o" && ext != ".obj") continue;
+		if (ext != ".o" && ext != ".obj" && ext != ".a" && ext != ".lib") continue;
 
 		const fs::path srcObj = entry.path();
 		const fs::path dstObj = dstBuildDir / fs::relative(srcObj, srcBuildDir);
 		fs::create_directories(dstObj.parent_path());
 
-		rewriteObjectSymbols(srcObj, dstObj, tag);
+		if (ext == ".o" || ext == ".obj") {
+			rewriteObjectSymbols(srcObj, dstObj, tag);
+		}
+		else if (ext == ".a" || ext == ".lib") {
+			rewriteArchiveSymbols(srcObj, dstObj, tag);
+		}
 	}
 }
 

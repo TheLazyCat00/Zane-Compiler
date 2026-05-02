@@ -106,4 +106,9 @@ public:
 		if (it != packages.end()) return it->second;
 		return nullptr;
 	}
+
+	void registerPackageAlias(const std::string& alias, const std::string& pkgName) {
+		auto info = getPackageInfo(pkgName);
+		if (info) packages[alias] = info;
+	}
 };
