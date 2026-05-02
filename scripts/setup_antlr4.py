@@ -11,7 +11,7 @@ from pathlib import Path
 
 
 ANTLR4_VERSION = "4.13.2"
-ANTLR4_JAR_URL = f"https://github.com/antlr/antlr4/releases/download/{ANTLR4_VERSION}/antlr-{ANTLR4_VERSION}-complete.jar"
+ANTLR4_JAR_URL = f"https://repo1.maven.org/maven2/org/antlr/antlr4/{ANTLR4_VERSION}/antlr4-{ANTLR4_VERSION}-complete.jar"
 ANTLR4_SRC_URL = f"https://github.com/antlr/antlr4/archive/refs/tags/{ANTLR4_VERSION}.tar.gz"
 
 
@@ -24,7 +24,7 @@ def tools_root() -> Path:
 
 
 def jar_path() -> Path:
-	return tools_root() / f"antlr-{ANTLR4_VERSION}-complete.jar"
+	return tools_root() / f"antlr4-{ANTLR4_VERSION}-complete.jar"
 
 
 def runtime_prefix() -> Path:
@@ -86,7 +86,7 @@ def ensure_runtime() -> Path:
 			"-S", str(source_root / "runtime" / "Cpp"),
 			"-B", str(build_dir),
 			"-DANTLR_BUILD_SHARED=OFF",
-			"-DANTLR_BUILD_TESTS=OFF",
+			"-DANTLR_BUILD_CPP_TESTS=OFF",
 			"-DCMAKE_BUILD_TYPE=Release",
 			f"-DCMAKE_INSTALL_PREFIX={prefix}",
 		])

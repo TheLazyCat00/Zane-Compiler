@@ -16,7 +16,9 @@ inline std::string getDependencyField(
 		const coda::Row& dep,
 		const std::initializer_list<const char*> keys) {
 	for (const char* key : keys) {
-		if (dep.has(key)) return dep[key];
+		for (const auto& [field, value] : dep) {
+			if (field == key) return value;
+		}
 	}
 	return "";
 }

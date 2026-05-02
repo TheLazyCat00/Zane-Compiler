@@ -17,10 +17,9 @@ coda_inc = include_directories('vendor/coda/include')
 coda_dep = declare_dependency(include_directories: coda_inc)
 
 antlr4_root = meson.project_source_root() / '.cache' / 'tooling' / 'antlr4' / 'runtime' / '4.13.2'
-antlr4_incdir = antlr4_root / 'include' / 'antlr4-runtime'
+antlr4_incdir = '.cache/tooling/antlr4/runtime/4.13.2/include/antlr4-runtime'
 antlr4_static_lib = antlr4_root / 'lib' / 'libantlr4-runtime.a'
-antlr4_dep = not_found_dependency()
-if fs_mod.exists(antlr4_incdir / 'antlr4-runtime.h') and fs_mod.exists(antlr4_static_lib)
+if fs_mod.exists(antlr4_root / 'include' / 'antlr4-runtime' / 'antlr4-runtime.h') and fs_mod.exists(antlr4_static_lib)
   antlr4_dep = declare_dependency(
     include_directories: [include_directories(antlr4_incdir)],
     link_args: [antlr4_static_lib],

@@ -2,11 +2,13 @@ build:
 	meson compile -C build
 
 init:
+	git submodule update --init --recursive
 	python3 ./scripts/setup_antlr4.py
 	vcpkg install
 	CXX=clang++ meson setup build --buildtype=debug --reconfigure --cmake-prefix-path "$(realpath vcpkg_installed/x64-linux)"
 
 release:
+	git submodule update --init --recursive
 	python3 ./scripts/setup_antlr4.py
 	vcpkg install
 	CXX=clang++ meson setup build --buildtype=release --reconfigure --cmake-prefix-path "$(realpath vcpkg_installed/x64-linux)"
