@@ -5,12 +5,19 @@
 #include "utils/shell.hpp"
 #include <algorithm>
 #include <chrono>
+#include <random>
 #include <string>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
 #include <vector>
 #include <llvm/TargetParser/Host.h>
+#ifdef _WIN32
+#include <process.h>
+#else
+#include <sys/wait.h>
+#include <unistd.h>
+#endif
 
 namespace fs = std::filesystem;
 
@@ -211,20 +218,83 @@ inline bool isPackageCached(const std::string& repoUrl,
 //  Symbol-rewriting helpers (used by fetchPackage)
 // ─────────────────────────────────────────────────────────────────────────────
 
-inline std::string shellQuote(const std::string& value) {
-	std::string quoted = "'";
-	for (char c : value) {
-		if (c == '\'') quoted += "'\\''";
-		else quoted += c;
+inline fs::path makeTemporaryRewriteDir(const std::string& prefix) {
+	std::mt19937_64 random(std::random_device{}());
+
+	for (size_t attempt = 0; attempt < 16; ++attempt) {
+		const fs::path dir = fs::temp_directory_path() / fs::path(
+			prefix + "-" + std::to_string(random()));
+		if (fs::create_directories(dir)) return dir;
 	}
-	quoted += "'";
-	return quoted;
+
+	throw std::runtime_error("Could not create temporary rewrite directory");
 }
 
-inline fs::path makeTemporaryRewriteDir(const std::string& prefix) {
-	return fs::temp_directory_path() / fs::path(
-		prefix + "-" + std::to_string(
-			std::chrono::steady_clock::now().time_since_epoch().count()));
+inline int runProcess(const std::vector<std::string>& args,
+                      const fs::path& workingDir = {}) {
+	if (args.empty())
+		throw std::runtime_error("runProcess requires at least one argument");
+
+#ifdef _WIN32
+	const fs::path originalDir = fs::current_path();
+	try {
+		if (!workingDir.empty()) fs::current_path(workingDir);
+
+		std::vector<std::string> mutableArgs(args.begin(), args.end());
+		std::vector<char*> argv;
+		argv.reserve(mutableArgs.size() + 1);
+		for (auto& arg : mutableArgs) argv.push_back(arg.data());
+		argv.push_back(nullptr);
+
+		const int result = _spawnvp(_P_WAIT, mutableArgs[0].c_str(), argv.data());
+		fs::current_path(originalDir);
+		return result;
+	}
+	catch (...) {
+		fs::current_path(originalDir);
+		throw;
+	}
+#else
+	pid_t pid = fork();
+	if (pid < 0)
+		throw std::runtime_error("fork() failed");
+
+	if (pid == 0) {
+		if (!workingDir.empty()) {
+			std::error_code ec;
+			fs::current_path(workingDir, ec);
+			if (ec) _exit(127);
+		}
+
+		std::vector<char*> argv;
+		argv.reserve(args.size() + 1);
+		for (const auto& arg : args)
+			argv.push_back(const_cast<char*>(arg.c_str()));
+		argv.push_back(nullptr);
+
+		execvp(args[0].c_str(), argv.data());
+		_exit(127);
+	}
+
+	int status = 0;
+	if (waitpid(pid, &status, 0) < 0)
+		throw std::runtime_error("waitpid() failed");
+
+	if (WIFEXITED(status)) return WEXITSTATUS(status);
+	return -1;
+#endif
+}
+
+inline bool runToolWithFallback(const std::vector<std::string>& tools,
+                                const std::vector<std::string>& args,
+                                const fs::path& workingDir = {}) {
+	for (const auto& tool : tools) {
+		auto commandArgs = args;
+		commandArgs.insert(commandArgs.begin(), tool);
+		if (runProcess(commandArgs, workingDir) == 0) return true;
+	}
+
+	return false;
 }
 
 // Collects every !-prefixed defined symbol from an object file via nm.
@@ -295,11 +365,10 @@ inline void rewriteArchiveSymbols(const fs::path& srcArchive,
 		fs::create_directories(extractedDir);
 		fs::create_directories(rewrittenDir);
 
-		const std::string extractCmd =
-			"cd " + shellQuote(extractedDir.string()) + " && "
-			+ "(llvm-ar x " + shellQuote(srcArchive.string())
-			+ " || ar x " + shellQuote(srcArchive.string()) + ")";
-		if (std::system(extractCmd.c_str()) != 0)
+		if (!runToolWithFallback(
+				{ "llvm-ar", "ar" },
+				{ "x", srcArchive.string() },
+				extractedDir))
 			throw std::runtime_error(
 				"Failed to extract archive: " + srcArchive.string());
 
@@ -318,7 +387,10 @@ inline void rewriteArchiveSymbols(const fs::path& srcArchive,
 
 		std::sort(members.begin(), members.end());
 
-		std::string memberArgs;
+		std::vector<std::string> createArgs = {
+			"crs",
+			dstArchive.string(),
+		};
 		for (const auto& member : members) {
 			const fs::path srcMember = extractedDir / member;
 			const fs::path dstMember = rewrittenDir / member;
@@ -331,15 +403,14 @@ inline void rewriteArchiveSymbols(const fs::path& srcArchive,
 				fs::copy_file(srcMember, dstMember, fs::copy_options::overwrite_existing);
 			}
 
-			memberArgs += " " + shellQuote(member.string());
+			createArgs.push_back(member.string());
 		}
 
 		fs::create_directories(dstArchive.parent_path());
-		const std::string createCmd =
-			"cd " + shellQuote(rewrittenDir.string()) + " && "
-			+ "(llvm-ar crs " + shellQuote(dstArchive.string()) + memberArgs
-			+ " || ar crs " + shellQuote(dstArchive.string()) + memberArgs + ")";
-		if (std::system(createCmd.c_str()) != 0)
+		if (!runToolWithFallback(
+				{ "llvm-ar", "ar" },
+				createArgs,
+				rewrittenDir))
 			throw std::runtime_error(
 				"Failed to rebuild archive: " + dstArchive.string());
 	}

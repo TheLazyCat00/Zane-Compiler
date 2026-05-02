@@ -88,9 +88,9 @@ struct Manifest {
 		name = root["name"].asString();
 		type = Type(root["type"].asString());
 
-		const auto dependenciesKey = root.has("dependencies")
-			? "dependencies"
-			: (root.has("deps") ? "deps" : nullptr);
+		const char* dependenciesKey = nullptr;
+		if (root.has("dependencies")) dependenciesKey = "dependencies";
+		else if (root.has("deps")) dependenciesKey = "deps";
 		if (dependenciesKey) {
 			const auto& deps = root[dependenciesKey].asKeyedTable();
 			const auto& headers = deps.getHeaders();
