@@ -73,7 +73,7 @@ If at any point before or during a task you notice that you are missing informat
 This avoids a chain of back-and-forth requests where each answer reveals a new question. One well-structured "I need these things before I can proceed" message is far better than three sequential single-question messages.
 
 ### 4.2 After completing work: always self-review before responding
-After finishing any edit, generation, or plan, run through this checklist before presenting the result. Do not skip steps.
+After you complete the entire request, run through this checklist before presenting the result. Do not skip steps.
 
 - [ ] **Correctness**: Does the output match what was asked? Re-read the original request and verify each requirement is met.
 - [ ] **Standards**: Did I check `contributing/` and other local guidance for the target repo? Are formatting, naming, and style conventions followed?
@@ -84,6 +84,19 @@ After finishing any edit, generation, or plan, run through this checklist before
 - [ ] **Completeness**: Is there anything the user would immediately notice is missing?
 
 If any item fails, **fix it before responding** — do not surface a known issue and leave it for the user to catch.
+
+### 4.3 Complex tasks: decompose before acting
+Before starting any task, assess its complexity.
+
+- **Simple task** (single file change, obvious solution, no cross-repo impact): proceed directly.
+- **Complex task** (multiple steps, multiple repos, unclear sequencing, or significant risk of error): follow the subagent-controller flow below.
+
+#### Subagent-controller flow
+1. **Build a to-do list.** Write out every discrete action needed to complete the task — including file reads, spec checks, and cross-repo changes.
+2. **Segment into subagent workloads.** Group related to-do items into coherent units of work. The goal is not the fewest subagents, but the most sensible groupings — each subagent should have a clear, self-contained scope.
+3. **Act as controller, not implementer.** Launch each subagent in turn. Verify its output against the to-do list and the self-review checklist (§ 4.2) before proceeding to the next. Do not implement changes yourself while in controller mode — your job is oversight and verification.
+
+This pairs with § 4.1 (gather unknowns upfront): resolve all unknowns *before* decomposing, so subagents are not blocked mid-task.
 
 ## 5) Writing style
 
