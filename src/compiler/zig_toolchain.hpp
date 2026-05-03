@@ -1,5 +1,7 @@
 #pragma once
 
+#include "utils/shell.hpp"
+#include "utils/string.hpp"
 #include "utils/console.hpp"
 
 #include <cstdlib>
@@ -65,8 +67,23 @@ inline fs::path getBinary() {
 #endif
 }
 
+inline fs::path getSystemBinary() {
+#ifdef _WIN32
+	std::string result = shell::runCommand("where zig 2>NUL");
+#else
+	std::string result = shell::runCommand("command -v zig 2>/dev/null");
+#endif
+	trimTrailing(result);
+	auto lineEnd = result.find_first_of("\r\n");
+	if (lineEnd != std::string::npos) {
+		result = result.substr(0, lineEnd);
+	}
+	return result;
+}
+
 inline bool isAvailable() {
-	return fs::exists(getBinary());
+	if (fs::exists(getBinary())) return true;
+	return !getSystemBinary().empty();
 }
 
 inline bool download() {
@@ -116,7 +133,11 @@ inline bool ensure() {
 }
 
 inline std::string path() {
-	return "\"" + getBinary().string() + "\"";
+	if (fs::exists(getBinary())) {
+		return "\"" + getBinary().string() + "\"";
+	}
+	const auto systemBinary = getSystemBinary();
+	return "\"" + systemBinary.string() + "\"";
 }
 
 // Convert LLVM triple to zig target triple

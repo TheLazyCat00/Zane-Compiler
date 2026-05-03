@@ -52,6 +52,15 @@ public:
 		}
 	}
 
+	void declareSignatures(const std::shared_ptr<ir::PackageInfo>& packageInfo) {
+		if (!packageInfo) return;
+		for (auto& [name, symbol] : packageInfo->symbols) {
+			symbol->type->value.match([&](std::shared_ptr<ir::FuncType> funcType) {
+				declareSignature(symbol);
+			});
+		}
+	}
+
 	void generateBodies(Ptr<Package> package) {
 		auto globalScope = package->getIRProgram();
 		for (auto& node : globalScope->body) {
@@ -238,6 +247,8 @@ public:
 
 private:
 	void declareSignature(std::shared_ptr<ir::ValueSymbol> funcSymbol) {
+		if (module.getFunction(funcSymbol->getMangledName())) return;
+
 		llvm::Type* retType = nullptr;
 		std::vector<llvm::Type*> params;
 

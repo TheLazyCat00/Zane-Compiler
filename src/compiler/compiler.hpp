@@ -39,6 +39,7 @@ private:
 	manifest::Manifest manifest;
 	Ptr<llvm::LLVMContext> context;
 	bool dependenciesPrepared = false;
+	std::vector<std::shared_ptr<ir::PackageInfo>> externalPackageInfos;
 
 	struct ResolvedDependency {
 		std::string alias;
@@ -139,6 +140,7 @@ private:
 
 	void loadExternalPackageSymbols() {
 		prepareDependencies();
+		externalPackageInfos.clear();
 
 		for (const auto& dependency : directDependencies) {
 			const fs::path sourceDir =
@@ -160,6 +162,8 @@ private:
 			}
 
 			if (!packageInfo) continue;
+
+			externalPackageInfos.push_back(packageInfo);
 
 			if (dependency.usesVersionedSymbols && !dependency.packageName.empty()) {
 				ir::setVersionedPackageName(dependency.packageName, dependency.tag);
@@ -349,7 +353,12 @@ public:
 
 	void generateCode(const std::string& targetTriple = "") {
 		for (auto& [pkgName, package] : *packages)
-			modules[pkgName] = package->getLlvmModule(context, package, packages, targetTriple);
+			modules[pkgName] = package->getLlvmModule(
+				context,
+				package,
+				packages,
+				externalPackageInfos,
+				targetTriple);
 		generateMainWrapper();
 	}
 
