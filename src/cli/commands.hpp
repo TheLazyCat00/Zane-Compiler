@@ -14,6 +14,7 @@
 #include <string>
 #include <map>
 #include <filesystem>
+#include <optional>
 #include <set>
 #include <vector>
 #include <antlr4-runtime.h>
@@ -147,6 +148,22 @@ inline bool directoryIsEmpty(const std::filesystem::path& dir) {
 		std::filesystem::directory_iterator{};
 }
 
+inline std::optional<std::filesystem::path> findProjectRoot(
+		std::filesystem::path startDir = std::filesystem::current_path()) {
+	namespace fs = std::filesystem;
+	startDir = fs::absolute(startDir);
+
+	while (true) {
+		if (fs::exists(startDir / constants::MANIFEST_PATH)) {
+			return startDir;
+		}
+		if (!startDir.has_parent_path() || startDir.parent_path() == startDir) {
+			return std::nullopt;
+		}
+		startDir = startDir.parent_path();
+	}
+}
+
 inline void init(int argc, char* argv[]) {
 	std::string dir = ".";
 	if (argc != 0) {
@@ -241,20 +258,26 @@ inline void dispatch(const std::string& cmd, int argc, char* argv[]) {
 	}
 
 	namespace fs = std::filesystem;
-	if (!fs::exists(constants::MANIFEST_PATH)) {
+	auto projectRoot = findProjectRoot();
+	if (!projectRoot.has_value()) {
 		DEBUG("Project not initialized.");
 		return;
 	}
 
-	manifest::Manifest manifest(constants::MANIFEST_PATH);
-	configureVersionPlaceholder(manifest);
+	const fs::path originalCwd = fs::current_path();
+	fs::current_path(*projectRoot);
+
 	try {
+		manifest::Manifest manifest(constants::MANIFEST_PATH);
+		configureVersionPlaceholder(manifest);
 		projectIt->second(argc, argv, manifest);
 	}
 	catch (...) {
+		fs::current_path(originalCwd);
 		ir::clearVersionPlaceholderPackage();
 		throw;
 	}
+	fs::current_path(originalCwd);
 	ir::clearVersionPlaceholderPackage();
 }
 
