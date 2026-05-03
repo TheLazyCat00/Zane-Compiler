@@ -15,6 +15,7 @@
 #include <map>
 #include <filesystem>
 #include <optional>
+#include <scope>
 #include <set>
 #include <vector>
 #include <antlr4-runtime.h>
@@ -266,6 +267,9 @@ inline void dispatch(const std::string& cmd, int argc, char* argv[]) {
 
 	const fs::path originalCwd = fs::current_path();
 	fs::current_path(*projectRoot);
+	auto restoreWorkingDirectory = std::scope_exit([&]() {
+		fs::current_path(originalCwd);
+	});
 
 	try {
 		manifest::Manifest manifest(constants::MANIFEST_PATH);
@@ -273,11 +277,9 @@ inline void dispatch(const std::string& cmd, int argc, char* argv[]) {
 		projectIt->second(argc, argv, manifest);
 	}
 	catch (...) {
-		fs::current_path(originalCwd);
 		ir::clearVersionPlaceholderPackage();
 		throw;
 	}
-	fs::current_path(originalCwd);
 	ir::clearVersionPlaceholderPackage();
 }
 
