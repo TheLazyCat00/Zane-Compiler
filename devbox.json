@@ -8,7 +8,8 @@
     "antlr4@latest",
     "llvm_21@latest",
     "upx@latest",
-    "ninja@latest"
+    "ninja@latest",
+    "zig@latest"
   ],
   "shell": {
     "init_hook": [
