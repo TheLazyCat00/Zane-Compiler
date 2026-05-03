@@ -59,7 +59,12 @@ struct Package {
 		const std::string& packageDir,
 		const std::vector<fs::path>& files
 	);
-	std::unique_ptr<llvm::Module> getLlvmModule(Ptr<llvm::LLVMContext> context, Ptr<Package> package, Ptr<Packages> allPackages, const std::string& triple);
+	std::unique_ptr<llvm::Module> getLlvmModule(
+		Ptr<llvm::LLVMContext> context,
+		Ptr<Package> package,
+		Ptr<Packages> allPackages,
+		const std::vector<std::shared_ptr<ir::PackageInfo>>& externalPackages,
+		const std::string& triple);
 	std::shared_ptr<ir::PackageInfo> getPackageInfo() const;
 	std::shared_ptr<ir::GlobalScope> getIRProgram() const;
 
