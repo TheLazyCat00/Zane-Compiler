@@ -15,7 +15,6 @@
 #include <map>
 #include <filesystem>
 #include <optional>
-#include <scope>
 #include <set>
 #include <vector>
 #include <antlr4-runtime.h>
@@ -165,6 +164,19 @@ inline std::optional<std::filesystem::path> findProjectRoot(
 	}
 }
 
+struct WorkingDirectoryGuard {
+	std::filesystem::path originalPath;
+
+	explicit WorkingDirectoryGuard(const std::filesystem::path& path)
+		: originalPath(std::filesystem::current_path()) {
+		std::filesystem::current_path(path);
+	}
+
+	~WorkingDirectoryGuard() {
+		std::filesystem::current_path(originalPath);
+	}
+};
+
 inline void init(int argc, char* argv[]) {
 	std::string dir = ".";
 	if (argc != 0) {
@@ -265,11 +277,7 @@ inline void dispatch(const std::string& cmd, int argc, char* argv[]) {
 		return;
 	}
 
-	const fs::path originalCwd = fs::current_path();
-	fs::current_path(*projectRoot);
-	auto restoreWorkingDirectory = std::scope_exit([&]() {
-		fs::current_path(originalCwd);
-	});
+	WorkingDirectoryGuard workingDirectoryGuard(*projectRoot);
 
 	try {
 		manifest::Manifest manifest(constants::MANIFEST_PATH);
