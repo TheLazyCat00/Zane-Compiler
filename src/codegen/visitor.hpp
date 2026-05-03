@@ -44,21 +44,12 @@ public:
 	// }
 
 	void declareSignatures(Ptr<Package> package) {
-		auto symbols = package->packageInfo->symbols;
-		for (auto& [name, symbol] : symbols) {
-			symbol->type->value.match([&](std::shared_ptr<ir::FuncType> funcType) {
-				declareSignature(symbol);
-			});
-		}
+		declareSignatures(package->packageInfo);
 	}
 
 	void declareSignatures(const std::shared_ptr<ir::PackageInfo>& packageInfo) {
 		if (!packageInfo) return;
-		for (auto& [name, symbol] : packageInfo->symbols) {
-			symbol->type->value.match([&](std::shared_ptr<ir::FuncType> funcType) {
-				declareSignature(symbol);
-			});
-		}
+		declarePackageSymbols(packageInfo->symbols);
 	}
 
 	void generateBodies(Ptr<Package> package) {
@@ -246,6 +237,15 @@ public:
 	}
 
 private:
+	void declarePackageSymbols(
+			const std::map<std::string, std::shared_ptr<ir::ValueSymbol>>& symbols) {
+		for (auto& [name, symbol] : symbols) {
+			symbol->type->value.match([&](std::shared_ptr<ir::FuncType> funcType) {
+				declareSignature(symbol);
+			});
+		}
+	}
+
 	void declareSignature(std::shared_ptr<ir::ValueSymbol> funcSymbol) {
 		if (module.getFunction(funcSymbol->getMangledName())) return;
 
