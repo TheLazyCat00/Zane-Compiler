@@ -25,3 +25,6 @@ run:
 
 parser:
 	bash ./parser/generate.sh
+
+check:
+	clang-check -p build src/*.*

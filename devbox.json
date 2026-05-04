@@ -9,7 +9,8 @@
     "llvm_21@latest",
     "upx@latest",
     "ninja@latest",
-    "zig@latest"
+    "zig@latest",
+    "clang-tools@latest"
   ],
   "shell": {
     "init_hook": [
