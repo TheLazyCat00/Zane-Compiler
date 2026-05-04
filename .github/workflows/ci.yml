@@ -19,10 +19,13 @@ jobs:
           submodules: recursive
 
       - name: Install devbox + Nix + devbox.json packages
-        uses: jetify-com/devbox-install-action@v0.12.0
+        uses: jetify-com/devbox-install-action@v0.15.0
 
       - name: Sanity check
         run: devbox list
+
+      - name: Init Meson 
+        run: devbox run -- just init
 
       - name: clang-check
         run: devbox run -- just check
