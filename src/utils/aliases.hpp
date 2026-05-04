@@ -1,15 +1,15 @@
 // aliases.hpp - no PackageInfoMap needed
 #pragma once
 
-#include "utils/zane_ptr.hpp"
 #include <llvm/IR/Module.h>
 #include <map>
 #include <string>
 #include <filesystem>
+#include <memory>
 
 struct Package;
 
-using Packages = std::map<std::string, Ptr<Package>>;
+using Packages = std::map<std::string, std::unique_ptr<Package>>;
 using Modules = std::map<std::string, std::unique_ptr<llvm::Module>>;
 
 namespace fs = std::filesystem;

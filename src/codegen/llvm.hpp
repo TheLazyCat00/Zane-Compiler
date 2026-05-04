@@ -2,8 +2,8 @@
 
 #include "codegen/visitor.hpp"
 #include "utils/aliases.hpp"
-#include "utils/zane_ptr.hpp"
 
+#include <zane-cpp.hpp>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/MC/TargetRegistry.h>
@@ -26,12 +26,12 @@ public:
 	}
 
 	void generate(
-			Ptr<Package> package,
-			Ptr<Packages> allPackages,
+			zane::ref<Package> package,
+			zane::ref<Packages> allPackages,
 			const std::vector<std::shared_ptr<ir::PackageInfo>>& externalPackages = {}) {
 		LLVMVisitor visitor(context, builder, *module);
 		for (auto& [name, pkg] : *allPackages)
-			visitor.declareSignatures(pkg);
+			visitor.declareSignatures(*pkg);
 		for (const auto& packageInfo : externalPackages)
 			visitor.declareSignatures(packageInfo);
 		visitor.generateBodies(package);

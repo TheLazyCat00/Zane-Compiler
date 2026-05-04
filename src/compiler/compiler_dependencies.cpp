@@ -82,7 +82,7 @@ void Compiler::loadExternalPackageSymbols() {
 			continue;
 		}
 
-		Package externalPackage(symbolCollector);
+		Package externalPackage(*symbolCollector);
 		externalPackage.parse(sourceFiles);
 		externalPackage.collectSymbols();
 

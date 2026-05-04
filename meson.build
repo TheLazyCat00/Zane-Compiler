@@ -16,6 +16,9 @@ thread_dep = dependency('threads')
 coda_inc = include_directories('vendor/coda/include')
 coda_dep = declare_dependency(include_directories: coda_inc)
 
+zanecpp_inc = include_directories('vendor/zane-cpp/include')
+zanecpp_dep = declare_dependency(include_directories: zanecpp_inc)
+
 antlr4_root = meson.project_source_root() / '.cache' / 'tooling' / 'antlr4' / 'runtime' / '4.13.2'
 antlr4_incdir = '.cache/tooling/antlr4/runtime/4.13.2/include/antlr4-runtime'
 antlr4_static_lib = antlr4_root / 'lib' / 'libantlr4-runtime.a'
@@ -158,7 +161,7 @@ zane_exe = executable(
   meson.project_name(),
   sources + [embedded_data_header],
   include_directories: [src_dir, generated_dir],
-  dependencies: [nlohmann_dep, cereal_dep, antlr4_dep, llvm_dep, coda_dep],
+  dependencies: [nlohmann_dep, cereal_dep, antlr4_dep, llvm_dep, coda_dep, zanecpp_dep],
   link_with: [parser_lib],
   build_by_default: true,
   cpp_args: exe_cpp_args,

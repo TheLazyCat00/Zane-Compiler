@@ -4,9 +4,9 @@
 #include "ast/visitor.hpp"
 #include "package/parser_context.hpp"
 
-Package::Package(Ptr<SymbolCollector> symbolCollector)
+Package::Package(zane::ref<SymbolCollector> symbolCollector)
 	: symbolCollector(symbolCollector),
-	  visitor(Visitor(symbolCollector)) {}
+	  visitor(std::make_unique<Visitor>(symbolCollector)) {}
 
 Package::~Package() = default;
 

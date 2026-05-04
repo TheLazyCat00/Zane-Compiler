@@ -8,22 +8,24 @@
 #include <sstream>
 #include <utility>
 
-std::expected<std::unique_ptr<ParserContext>, std::string> Package::parseFile(const fs::path& path) {
+using ParseFileResult = zane::abortable<std::unique_ptr<ParserContext>, std::string>;
+
+ParseFileResult Package::parseFile(const fs::path& path) {
 	std::ifstream stream(path);
 	if (!stream) {
 		std::ostringstream oss;
 		oss << "Failed to open file: " << path << "\n";
-		return std::unexpected(oss.str());
+		return ParseFileResult::abort(oss.str());
 	}
 
 	std::stringstream ss;
 	ss << stream.rdbuf();
 	auto ctx = std::make_unique<ParserContext>(ss.str());
 	if (!ctx->getTree()) {
-		return std::unexpected("Failed to parse file: " + path.string());
+		return ParseFileResult::abort("Failed to parse file: " + path.string());
 	}
 
-	return ctx;
+	return ParseFileResult::success(std::move(ctx));
 }
 
 void Package::parse(const std::vector<fs::path>& files) {
@@ -33,12 +35,12 @@ void Package::parse(const std::vector<fs::path>& files) {
 
 	for (const auto& path : files) {
 		auto result = parseFile(path);
-		if (!result) {
+		if (!result.has_value()) {
 			DEBUG("Parse error: " << result.error());
 			continue;
 		}
 
-		contexts.push_back(std::move(*result));
+		contexts.push_back(std::move(result).value());
 	}
 }
 
