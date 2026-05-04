@@ -5,8 +5,8 @@
 #include "globals/targets.hpp"
 #include "package/package.hpp"
 #include "utils/aliases.hpp"
-#include "utils/zane_ptr.hpp"
 
+#include <zane-cpp.hpp>
 #include <map>
 #include <memory>
 #include <optional>
@@ -28,11 +28,11 @@ namespace llvm {
 
 class Compiler {
 private:
-	Ptr<Packages> packages;
-	Ptr<SymbolCollector> symbolCollector;
+	std::unique_ptr<Packages> packages;
+	std::unique_ptr<SymbolCollector> symbolCollector;
 	Modules modules;
 	manifest::Manifest manifest;
-	Ptr<llvm::LLVMContext> context;
+	std::unique_ptr<llvm::LLVMContext> context;
 	bool dependenciesPrepared = false;
 	std::vector<std::shared_ptr<ir::PackageInfo>> externalPackageInfos;
 
@@ -84,7 +84,7 @@ public:
 	~Compiler();
 
 	void compile();
-	Ptr<Packages> getPackages();
+	zane::ref<Packages> getPackages();
 	void generateCode(const std::string& targetTriple = "");
 	std::unique_ptr<llvm::Module> linkLlvmModules();
 	void compileToObjectFiles(

@@ -5,9 +5,8 @@
 #include "ir/nodes.hpp"
 #include "package/parser_context.hpp"
 #include "utils/aliases.hpp"
-#include "utils/zane_ptr.hpp"
 
-#include <expected>
+#include <zane-cpp.hpp>
 #include <filesystem>
 #include <memory>
 #include <string>
@@ -21,20 +20,20 @@ namespace llvm {
 }
 
 struct Package {
-	Ptr<SymbolCollector> symbolCollector;
-	Ptr<Visitor> visitor;
+	zane::ref<SymbolCollector> symbolCollector;
+	std::unique_ptr<Visitor> visitor;
 	std::shared_ptr<ir::PackageInfo> packageInfo;
 	std::shared_ptr<ir::GlobalScope> irProgram;
 
-	Package() = default;
-	Package(Ptr<SymbolCollector> symbolCollector);
+	Package() = delete;
+	Package(zane::ref<SymbolCollector> symbolCollector);
 	Package(const Package&) = delete;
 	Package& operator=(const Package&) = delete;
 	Package(Package&&) noexcept = default;
 	Package& operator=(Package&&) noexcept = default;
 	~Package();
 
-	std::expected<std::unique_ptr<ParserContext>, std::string> parseFile(const fs::path& path);
+	zane::abortable<std::unique_ptr<ParserContext>, std::string> parseFile(const fs::path& path);
 	void parse(const std::vector<fs::path>& files);
 	void collectSymbols();
 	void buildTree(const std::string& packageDir);
@@ -44,9 +43,9 @@ struct Package {
 		const std::string& packageDir
 	);
 	std::unique_ptr<llvm::Module> getLlvmModule(
-		Ptr<llvm::LLVMContext> context,
-		Ptr<Package> package,
-		Ptr<Packages> allPackages,
+		zane::ref<llvm::LLVMContext> context,
+		zane::ref<Package> package,
+		zane::ref<Packages> allPackages,
 		const std::vector<std::shared_ptr<ir::PackageInfo>>& externalPackages,
 		const std::string& triple);
 	std::shared_ptr<ir::PackageInfo> getPackageInfo() const;

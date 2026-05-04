@@ -43,7 +43,7 @@ public:
 	// 	return {};
 	// }
 
-	void declareSignatures(Ptr<Package> package) {
+	void declareSignatures(zane::ref<Package> package) {
 		declareSignatures(package->packageInfo);
 	}
 
@@ -52,7 +52,7 @@ public:
 		declarePackageSymbols(packageInfo->symbols);
 	}
 
-	void generateBodies(Ptr<Package> package) {
+	void generateBodies(zane::ref<Package> package) {
 		auto globalScope = package->getIRProgram();
 		for (auto& node : globalScope->body) {
 			visit(node.get());

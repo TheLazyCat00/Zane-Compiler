@@ -8,8 +8,8 @@
 #include "utils/aliases.hpp"
 #include "utils/types.hpp"
 #include "utils/console.hpp"
-#include "utils/zane_ptr.hpp"
 
+#include <zane-cpp.hpp>
 #include <antlr4-runtime.h>
 #include <memory>
 #include <stdexcept>
@@ -25,7 +25,7 @@ class Visitor : public CustomZaneVisitor {
 	std::shared_ptr<ir::GlobalScope> globalScope;
 	std::unordered_set<std::string> builtinSymbols;
 	Stack<std::map<std::string, std::shared_ptr<ir::ValueSymbol>>> scopeSymbols;
-	Ptr<SymbolCollector> symbolCollector;
+	zane::ref<SymbolCollector> symbolCollector;
 	std::string packageName;
 
 	std::any visitGlobalScope(ZaneParser::GlobalScopeContext *ctx) override {
@@ -450,7 +450,7 @@ class Visitor : public CustomZaneVisitor {
 	}
 
 public:
-	Visitor(Ptr<SymbolCollector> symbolCollector)
+	Visitor(zane::ref<SymbolCollector> symbolCollector)
 			: globalScope(std::make_shared<ir::GlobalScope>())
 			, symbolCollector(symbolCollector) {
 		builtinSymbols = utils::getBuiltinSymbols();

@@ -11,10 +11,10 @@
 #include <llvm/Support/raw_ostream.h>
 
 Compiler::Compiler(manifest::Manifest manifest)
-	: packages(Packages()),
-	  symbolCollector(SymbolCollector()),
+	: packages(std::make_unique<Packages>()),
+	  symbolCollector(std::make_unique<SymbolCollector>()),
 	  manifest(std::move(manifest)),
-	  context(makePtr<llvm::LLVMContext>()) {}
+	  context(std::make_unique<llvm::LLVMContext>()) {}
 
 Compiler::~Compiler() {
 	modules.clear();
@@ -92,7 +92,7 @@ bool Compiler::isCacheValid(const fs::path& packageDir) {
 void Compiler::compilePackage(
 		const std::string& pkgName,
 		const std::vector<fs::path>& files) {
-	(*packages)[pkgName] = Package(symbolCollector);
+	(*packages)[pkgName] = std::make_unique<Package>(*symbolCollector);
 	(*packages)[pkgName]->parse(files);
 }
 
@@ -141,16 +141,16 @@ void Compiler::compile() {
 	}
 }
 
-Ptr<Packages> Compiler::getPackages() {
-	return packages;
+zane::ref<Packages> Compiler::getPackages() {
+	return *packages;
 }
 
 void Compiler::generateCode(const std::string& targetTriple) {
 	for (auto& [pkgName, package] : *packages) {
 		modules[pkgName] = package->getLlvmModule(
-			context,
-			package,
-			packages,
+			*context,
+			*package,
+			*packages,
 			externalPackageInfos,
 			targetTriple
 		);
