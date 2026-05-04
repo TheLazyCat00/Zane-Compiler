@@ -22,12 +22,18 @@ public:
 		if (!triple.empty()) {
 			module->setTargetTriple(llvm::Triple(triple));
 		}
-		LOG("LLVMCodeGen triple: " << triple);
+		DEBUG("LLVMCodeGen triple: " << triple);
 	}
 
-	void generate(Ptr<Package> package, Ptr<Packages> allPackages) {
+	void generate(
+			Ptr<Package> package,
+			Ptr<Packages> allPackages,
+			const std::vector<std::shared_ptr<ir::PackageInfo>>& externalPackages = {}) {
 		LLVMVisitor visitor(context, builder, *module);
-		visitor.declareSignatures(package);
+		for (auto& [name, pkg] : *allPackages)
+			visitor.declareSignatures(pkg);
+		for (const auto& packageInfo : externalPackages)
+			visitor.declareSignatures(packageInfo);
 		visitor.generateBodies(package);
 	}
 

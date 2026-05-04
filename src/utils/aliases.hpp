@@ -1,7 +1,8 @@
+// aliases.hpp - no PackageInfoMap needed
 #pragma once
 
 #include "utils/zane_ptr.hpp"
-#include <llvm-21/llvm/IR/Module.h>
+#include <llvm/IR/Module.h>
 #include <map>
 #include <string>
 #include <filesystem>

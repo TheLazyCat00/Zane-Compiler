@@ -1,8 +1,17 @@
 build:
-	cmake --build build --clean-first
+	meson compile -C build
 
 init:
-	cmake --preset clang-ninja --fresh
+	git submodule update --init --recursive
+	python3 ./scripts/setup_antlr4.py
+	vcpkg install
+	CXX=clang++ meson setup build --buildtype=debug --reconfigure --cmake-prefix-path "$(realpath vcpkg_installed/x64-linux)"
+
+release:
+	git submodule update --init --recursive
+	python3 ./scripts/setup_antlr4.py
+	vcpkg install
+	CXX=clang++ meson setup build --buildtype=release --reconfigure --cmake-prefix-path "$(realpath vcpkg_installed/x64-linux)"
 
 [working-directory: "test"]
 test:
@@ -12,7 +21,7 @@ test:
 
 [working-directory: "test"]
 run:
-	../build/Zane run 2>&1 | python3 ../tools/prettify.py
+	../build/Zane run 2>&1 | python3 ../scripts/prettify.py
 
 parser:
 	bash ./parser/generate.sh

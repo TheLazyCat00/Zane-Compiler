@@ -14,6 +14,7 @@
 #include <string>
 #include <map>
 #include <filesystem>
+#include <set>
 #include <vector>
 #include <antlr4-runtime.h>
 #include <parser/ZaneLexer.h>
@@ -21,18 +22,56 @@
 
 namespace commands {
 
-inline void run(int argc, char* argv[], const manifest::Manifest& manifest) {
+inline bool fetchManifestDependencies(
+		const manifest::Manifest& manifest,
+		std::set<std::string>& visited) {
+	for (const auto& [alias, dep] : manifest.dependencies) {
+		const std::string cacheKey = dep.url + "@" + dep.tag;
+		if (!visited.insert(cacheKey).second) continue;
+
+		if (!dep.commitHash.empty()) {
+			std::string commitHash = constants::getCommitHashFromTag(dep.url, dep.tag);
+			if (commitHash != dep.commitHash) {
+				std::string warning =
+					"WARNING: The tag '" + dep.tag + "' for dependency '"
+					+ alias + "' has changed since it was added to the manifest.\n"
+					+ "This is a security risk, as the new tag may point to different code than what was originally reviewed and approved.\n"
+					+ "Aborting fetch. If this tag move is intentional, update the recorded commit hash in zane.coda with the appropriate dependency update flow.";
+				PRINT(warning);
+				return false;
+			}
+		}
+
+		constants::ensurePackageFetched(dep.url, dep.tag);
+
+		const fs::path dependencyManifestPath =
+			constants::getPackageSrcPath(dep.url, dep.tag) / constants::MANIFEST_PATH;
+		if (!fs::exists(dependencyManifestPath)) continue;
+
+		manifest::Manifest dependencyManifest(dependencyManifestPath.string().c_str());
+		if (!fetchManifestDependencies(dependencyManifest, visited)) return false;
+	}
+
+	return true;
+}
+
+inline bool fetchManifestDependencies(const manifest::Manifest& manifest) {
+	std::set<std::string> visited;
+	return fetchManifestDependencies(manifest, visited);
+}
+
+inline void run(int argc, char* argv[], manifest::Manifest& manifest) {
+	if (!fetchManifestDependencies(manifest)) return;
 	Compiler compiler(manifest);
 	compiler.compile();
-	compiler.generateCode();
 
 	if (!zig::ensure()) {
-		LOG("Could not acquire Zig toolchain. Aborting.");
+		DEBUG("Could not acquire Zig toolchain. Aborting.");
 		return;
 	}
 
 	auto hostTarget = constants::targets::getHostTarget();
-
+	compiler.generateCode(hostTarget.triple);
 	compiler.compileToObjectFiles(hostTarget, BuildMode::Dev, true);
 
 	namespace fs = std::filesystem;
@@ -47,14 +86,15 @@ inline void run(int argc, char* argv[], const manifest::Manifest& manifest) {
 	compiler.executeNative(outputPath.string());
 }
 
-inline void build(int argc, char* argv[], const manifest::Manifest& manifest) {
+inline void build(int argc, char* argv[], manifest::Manifest& manifest) {
+	if (!fetchManifestDependencies(manifest)) return;
 	Compiler compiler(manifest);
 	compiler.compile();
-	compiler.generateCode();
 	compiler.buildForAllTargets();
 }
 
-inline void debug(int argc, char* argv[], const manifest::Manifest& manifest) {
+inline void debug(int argc, char* argv[], manifest::Manifest& manifest) {
+	if (!fetchManifestDependencies(manifest)) return;
 	Compiler compiler(manifest);
 	compiler.compile();
 
@@ -64,18 +104,41 @@ inline void debug(int argc, char* argv[], const manifest::Manifest& manifest) {
 	}
 }
 
-inline void ir(int argc, char* argv[], const manifest::Manifest& manifest) {
+inline void ir(int argc, char* argv[], manifest::Manifest& manifest) {
+	if (!fetchManifestDependencies(manifest)) return;
 	Compiler compiler(manifest);
 	compiler.compile();
 	compiler.generateCode();
 
 	auto linkedModule = compiler.linkLlvmModules();
 	if (!linkedModule) {
-		LOG("Failed to link modules");
+		DEBUG("Failed to link modules");
 		return;
 	}
 
 	linkedModule->print(llvm::outs(), nullptr);
+}
+
+inline void add(int argc, char* argv[], manifest::Manifest& manifest) {
+	if (argc == 0) {
+		PRINT("need library url");
+		PRINT("usage: zane add [url] (tag)");
+		return;
+	}
+
+	auto repoUrl = argv[0];
+	std::string tag;
+	if (argc == 2) {
+		tag = argv[1];
+	}
+
+	constants::ensurePackageFetched(repoUrl, tag);
+	manifest.addDependency(repoUrl, tag);
+	manifest.save();
+}
+
+inline void fetch(int argc, char* argv[], manifest::Manifest& manifest) {
+	fetchManifestDependencies(manifest);
 }
 
 inline bool directoryIsEmpty(const std::filesystem::path& dir) {
@@ -140,11 +203,13 @@ inline void help(int argc, char* argv[]) {
 }
 
 // Commands that require an initialized project
-const std::map<std::string, void(*)(int, char*[], const manifest::Manifest&)> projectCommands = {
+const std::map<std::string, void(*)(int, char*[], manifest::Manifest&)> projectCommands = {
 	{ "run",   run   },
 	{ "build", build },
 	{ "debug", debug },
 	{ "ir",    ir    },
+	{ "add", add },
+	{ "fetch", fetch },
 };
 
 // Commands that don't require an initialized project
@@ -152,6 +217,15 @@ const std::map<std::string, void(*)(int, char*[])> standaloneCommands = {
 	{ "init", init },
 	{ "help", help },
 };
+
+inline void configureVersionPlaceholder(const manifest::Manifest& manifest) {
+	if (manifest.type == manifest::Type::Library) {
+		ir::setVersionPlaceholderPackage(manifest.name);
+	}
+	else {
+		ir::clearVersionPlaceholderPackage();
+	}
+}
 
 inline void dispatch(const std::string& cmd, int argc, char* argv[]) {
 	auto standaloneIt = standaloneCommands.find(cmd);
@@ -168,12 +242,20 @@ inline void dispatch(const std::string& cmd, int argc, char* argv[]) {
 
 	namespace fs = std::filesystem;
 	if (!fs::exists(constants::MANIFEST_PATH)) {
-		LOG("Project not initialized.");
+		DEBUG("Project not initialized.");
 		return;
 	}
 
 	manifest::Manifest manifest(constants::MANIFEST_PATH);
-	projectIt->second(argc, argv, manifest);
+	configureVersionPlaceholder(manifest);
+	try {
+		projectIt->second(argc, argv, manifest);
+	}
+	catch (...) {
+		ir::clearVersionPlaceholderPackage();
+		throw;
+	}
+	ir::clearVersionPlaceholderPackage();
 }
 
 } // namespace commands

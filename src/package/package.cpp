@@ -2,10 +2,9 @@
 #include "globals/constants.hpp"
 #include "codegen/llvm.hpp"
 
-Package::Package(Ptr<Packages> packages) 
-	: packages(packages) {
-	this->symbolCollector = SymbolCollector();
-	this->visitor = Visitor(packages, symbolCollector);
+Package::Package(Ptr<SymbolCollector> symbolCollector) 
+	: symbolCollector(symbolCollector) {
+	this->visitor = Visitor(symbolCollector);
 }
 
 std::expected<std::unique_ptr<ParserContext>, std::string> Package::parseFile(const fs::path& path) {
@@ -29,7 +28,7 @@ void Package::parse(const std::vector<fs::path>& files) {
 	contexts.reserve(files.size());
 	for (const auto& path : files) {
 		auto result = parseFile(path);
-		if (!result) { LOG("Parse error: " << result.error()); continue; }
+		if (!result) { DEBUG("Parse error: " << result.error()); continue; }
 		contexts.push_back(std::move(*result));
 	}
 }
@@ -43,6 +42,7 @@ void Package::collectSymbols() {
 
 void Package::buildTree(const std::string& packageDir) {
 	for (const auto& ctx : contexts) {
+		symbolCollector->setCurrentPackage(ctx->getTree()->pkgDef()->name->getText());
 		visitor->buildTree(ctx->getTree());
 	}
 	irProgram = visitor->getGlobalScope();
@@ -56,7 +56,7 @@ void Package::compile(const std::string& pkgName, const std::vector<fs::path>& f
 	for (const auto& path : files) {
 		auto parseResult = parseFile(path);
 		if (!parseResult) {
-			LOG("Parse error: " << parseResult.error());
+			DEBUG("Parse error: " << parseResult.error());
 			continue;
 		}
 		contexts.push_back(std::move(*parseResult));
@@ -93,10 +93,15 @@ void Package::writeSymbolsCache(
 	);
 }
 
-std::unique_ptr<llvm::Module> Package::getLlvmModule(Ptr<llvm::LLVMContext> context, Ptr<Package> package, const std::string& triple) {
+std::unique_ptr<llvm::Module> Package::getLlvmModule(
+		Ptr<llvm::LLVMContext> context,
+		Ptr<Package> package,
+		Ptr<Packages> allPackages,
+		const std::vector<std::shared_ptr<ir::PackageInfo>>& externalPackages,
+		const std::string& triple) {
 	LLVMCodeGen codegen(*context, triple);
 	codegen.setupBuiltins();
-	codegen.generate(package, packages);
+	codegen.generate(package, allPackages, externalPackages);
 	return std::move(codegen.extractModule());
 }
 

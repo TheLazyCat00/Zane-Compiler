@@ -11,6 +11,7 @@
 #include <vector>
 #include <string>
 #include <any>
+#include <unordered_map>
 #include <cereal/types/optional.hpp>
 #include <cereal/types/memory.hpp>
 #include <cereal/types/vector.hpp>
@@ -21,6 +22,35 @@
 using namespace parser;
 
 namespace ir {
+
+inline constexpr char VERSION_PLACEHOLDER_PREFIX = '!';
+// Compilation currently runs one project command per thread; keep the
+// active placeholder package isolated to that thread while a command runs.
+inline thread_local std::unordered_map<std::string, std::string> packageNameOverrides;
+
+inline void setVersionPlaceholderPackage(const std::string& packageName) {
+	packageNameOverrides[packageName] =
+		std::string{VERSION_PLACEHOLDER_PREFIX} + packageName;
+}
+
+inline void setVersionedPackageName(
+		const std::string& packageName,
+		const std::string& versionTag) {
+	packageNameOverrides[packageName] = versionTag + packageName;
+}
+
+inline void clearVersionPlaceholderPackage() {
+	packageNameOverrides.clear();
+}
+
+inline std::string getMangledPackageName(const std::string& packageName) {
+	auto it = packageNameOverrides.find(packageName);
+	if (it != packageNameOverrides.end()) {
+		return it->second;
+	}
+
+	return packageName;
+}
 
 struct ValueSymbol : public IRNode {
 	std::optional<std::string> packageName;
