@@ -1,8 +1,8 @@
 #pragma once
 
 #include "cli/manifest.hpp"
-#include "globals/constants.hpp"
-#include "utils/utils.hpp"
+#include "globals/project_templates.hpp"
+#include "utils/file_io.hpp"
 
 namespace templ {
 

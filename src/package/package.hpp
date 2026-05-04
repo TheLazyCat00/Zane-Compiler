@@ -2,43 +2,23 @@
 
 #include "ast/symbol_collector.hpp"
 #include "ast/visitor.hpp"
-#include "utils/zane_ptr.hpp"
-#include "utils/aliases.hpp"
 #include "ir/nodes.hpp"
-#include "parser/ZaneLexer.h"
+#include "package/parser_context.hpp"
+#include "utils/aliases.hpp"
+#include "utils/zane_ptr.hpp"
 
-#include <cereal/archives/binary.hpp>
 #include <expected>
+#include <filesystem>
 #include <memory>
 #include <string>
 #include <vector>
-#include <filesystem>
 
 namespace fs = std::filesystem;
 
-struct ParserContext {
-	std::string source;
-	antlr4::ANTLRInputStream input;
-	parser::ZaneLexer lexer;
-	antlr4::CommonTokenStream tokens;
-	parser::ZaneParser parser;
-	parser::ZaneParser::GlobalScopeContext* tree;
-
-	ParserContext(const std::string& src)
-		: source(src),
-		  input(source),
-		  lexer(&input),
-		  tokens(&lexer),
-		  parser(&tokens),
-		  tree(nullptr) {
-		tokens.fill();
-		tree = parser.globalScope();
-	}
-
-	parser::ZaneParser::GlobalScopeContext* getTree() const {
-		return tree;
-	}
-};
+namespace llvm {
+	class LLVMContext;
+	class Module;
+}
 
 struct Package {
 	Ptr<SymbolCollector> symbolCollector;
@@ -48,6 +28,11 @@ struct Package {
 
 	Package() = default;
 	Package(Ptr<SymbolCollector> symbolCollector);
+	Package(const Package&) = delete;
+	Package& operator=(const Package&) = delete;
+	Package(Package&&) noexcept = default;
+	Package& operator=(Package&&) noexcept = default;
+	~Package();
 
 	std::expected<std::unique_ptr<ParserContext>, std::string> parseFile(const fs::path& path);
 	void parse(const std::vector<fs::path>& files);
@@ -56,8 +41,7 @@ struct Package {
 	void compile(const std::string& pkgName, const std::vector<fs::path>& files, const std::string& packageDir);
 	void writeSymbolsCache(
 		std::shared_ptr<ir::PackageInfo> packageInfo,
-		const std::string& packageDir,
-		const std::vector<fs::path>& files
+		const std::string& packageDir
 	);
 	std::unique_ptr<llvm::Module> getLlvmModule(
 		Ptr<llvm::LLVMContext> context,

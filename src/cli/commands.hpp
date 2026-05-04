@@ -3,10 +3,13 @@
 #include "cli/manifest.hpp"
 #include "cli/repl.hpp"
 #include "cli/template.hpp"
-#include "globals/constants.hpp"
+#include "ir/nodes.hpp"
+#include "globals/package_cache.hpp"
+#include "globals/targets.hpp"
 #include "cli/help.hpp"
 #include "compiler/compiler.hpp"
 #include "compiler/zig_toolchain.hpp"
+#include "package/package.hpp"
 #include "utils/console.hpp"
 
 #include <cstdio>
