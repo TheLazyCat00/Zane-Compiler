@@ -89,10 +89,7 @@ bool Compiler::isCacheValid(const fs::path& packageDir) {
 
 void Compiler::compilePackage(
 		const std::string& pkgName,
-		const std::vector<fs::path>& files,
-		const std::string& packageDir) {
-	(void)packageDir;
-
+		const std::vector<fs::path>& files) {
 	(*packages)[pkgName] = Package(symbolCollector);
 	(*packages)[pkgName]->parse(files);
 }
@@ -129,7 +126,7 @@ void Compiler::compile() {
 
 	for (const auto& [pkgName, files] : packageFiles) {
 		if (!isCacheValid(packageDirs[pkgName])) {
-			compilePackage(pkgName, files, packageDirs[pkgName]);
+			compilePackage(pkgName, files);
 		}
 	}
 

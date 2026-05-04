@@ -71,8 +71,7 @@ private:
 	bool isCacheValid(const fs::path& packageDir);
 	void compilePackage(
 		const std::string& pkgName,
-		const std::vector<fs::path>& files,
-		const std::string& packageDir);
+		const std::vector<fs::path>& files);
 	void generateMainWrapper();
 	bool compileModuleWithZig(
 		llvm::Module& module,

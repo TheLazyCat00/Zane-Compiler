@@ -8,10 +8,7 @@
 
 void Package::writeSymbolsCache(
 		std::shared_ptr<ir::PackageInfo> packageInfo,
-		const std::string& packageDir,
-		const std::vector<fs::path>& files) {
-	(void)files;
-
+		const std::string& packageDir) {
 	fs::path symbolsPath = constants::getSymbolsPath(packageDir);
 	fs::create_directories(symbolsPath.parent_path());
 

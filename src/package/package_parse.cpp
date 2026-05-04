@@ -57,7 +57,7 @@ void Package::buildTree(const std::string& packageDir) {
 	}
 
 	irProgram = visitor->getGlobalScope();
-	writeSymbolsCache(packageInfo, packageDir, files);
+	writeSymbolsCache(packageInfo, packageDir);
 }
 
 void Package::compile(

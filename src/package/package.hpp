@@ -41,8 +41,7 @@ struct Package {
 	void compile(const std::string& pkgName, const std::vector<fs::path>& files, const std::string& packageDir);
 	void writeSymbolsCache(
 		std::shared_ptr<ir::PackageInfo> packageInfo,
-		const std::string& packageDir,
-		const std::vector<fs::path>& files
+		const std::string& packageDir
 	);
 	std::unique_ptr<llvm::Module> getLlvmModule(
 		Ptr<llvm::LLVMContext> context,
