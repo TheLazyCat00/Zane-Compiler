@@ -24,7 +24,7 @@ jobs:
       - name: Sanity check
         run: devbox list
 
-      - name: Init Meson 
+      - name: Init Meson
         run: devbox run -- just init
 
       - name: clang-check
