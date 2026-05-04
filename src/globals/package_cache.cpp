@@ -1,4 +1,4 @@
-#include "globals/constants.hpp"
+#include "globals/package_cache.hpp"
 
 #include "utils/console.hpp"
 #include "utils/shell.hpp"
@@ -12,7 +12,6 @@
 #include <stdexcept>
 #include <string_view>
 #include <thread>
-#include <llvm/TargetParser/Host.h>
 
 namespace {
 
@@ -43,49 +42,6 @@ void cloneTag(
 }
 
 namespace constants {
-
-namespace executable {
-
-std::string getEntryContent() {
-	return
-		"Void main() {\n"
-		"\tputs(\"Hello world!\")\n"
-		"}";
-}
-
-}
-
-namespace library {
-
-std::string getEntryContent(const std::string& libraryName) {
-	return
-		"package test\n"
-		"\n"
-		"import " + libraryName + "\n"
-		"\n"
-		"Void main() {\n"
-		"\t" + libraryName + "$greet()\n"
-		"}";
-}
-
-std::string getLibraryContent(const std::string& libraryName) {
-	return
-		"package " + libraryName + "\n"
-		"\n"
-		"Void greet() {\n"
-		"\tputs(\"Hello " + libraryName + "!\")\n"
-		"}";
-}
-
-}
-
-fs::path getSymbolsPath(const fs::path& packageDir) {
-	return fs::path(SYMBOLS_DIR) / packageDir / SYMBOLS_NAME;
-}
-
-std::string getMangledMain(const std::string& projectName) {
-	return projectName + "$main()";
-}
 
 std::string getRepoNameFromUrl(const std::string& repoUrl) {
 	auto lastSlash = repoUrl.find_last_of("/\\");
@@ -429,22 +385,6 @@ void ensurePackageFetched(const std::string& repoUrl, const std::string& tag) {
 	else {
 		PRINT("Package already cached: " + repoUrl + "@" + resolvedTag);
 	}
-}
-
-namespace targets {
-
-Target getHostTarget() {
-	const auto triple = llvm::sys::getDefaultTargetTriple();
-	for (const auto& target : ALL_TARGETS) {
-		if (triple.find(target.triple) != std::string::npos
-			|| std::string(target.triple).find(triple) != std::string::npos) {
-			return target;
-		}
-	}
-
-	return LINUX_X64;
-}
-
 }
 
 } // namespace constants

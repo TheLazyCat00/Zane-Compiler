@@ -1,6 +1,7 @@
 #include "compiler/compiler.hpp"
 
 #include "ast/symbol_collector.hpp"
+#include "globals/package_cache.hpp"
 #include "ir/nodes.hpp"
 #include "package/package.hpp"
 

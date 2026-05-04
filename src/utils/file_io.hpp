@@ -1,10 +1,10 @@
 #pragma once
 
-#include <iostream>
-#include <string>
-#include <fstream>
-#include <filesystem>
 #include "utils/console.hpp"
+
+#include <filesystem>
+#include <fstream>
+#include <string>
 
 inline void writeFile(const std::string& path, const std::string& content) {
 	std::filesystem::path filePath(path);

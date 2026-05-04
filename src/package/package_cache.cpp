@@ -1,6 +1,6 @@
 #include "package/package.hpp"
 
-#include "globals/constants.hpp"
+#include "globals/paths.hpp"
 #include "ir/nodes.hpp"
 
 #include <cereal/archives/binary.hpp>

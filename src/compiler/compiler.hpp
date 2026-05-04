@@ -2,7 +2,7 @@
 
 #include "ast/symbol_collector.hpp"
 #include "cli/manifest.hpp"
-#include "globals/constants.hpp"
+#include "globals/targets.hpp"
 #include "package/package.hpp"
 #include "utils/aliases.hpp"
 #include "utils/zane_ptr.hpp"

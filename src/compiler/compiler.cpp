@@ -1,5 +1,7 @@
 #include "compiler/compiler.hpp"
 
+#include "globals/package_cache.hpp"
+#include "globals/paths.hpp"
 #include "ast/symbol_collector.hpp"
 #include "package/package.hpp"
 #include "utils/console.hpp"

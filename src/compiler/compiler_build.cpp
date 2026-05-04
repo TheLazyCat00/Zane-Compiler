@@ -1,5 +1,6 @@
 #include "compiler/compiler.hpp"
 
+#include "globals/paths.hpp"
 #include "compiler/zig_toolchain.hpp"
 #include "utils/console.hpp"
 #include "utils/shell.hpp"
