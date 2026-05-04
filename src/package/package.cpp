@@ -1,109 +1,14 @@
 #include "package/package.hpp"
-#include "globals/constants.hpp"
-#include "codegen/llvm.hpp"
 
-Package::Package(Ptr<SymbolCollector> symbolCollector) 
-	: symbolCollector(symbolCollector) {
-	this->visitor = Visitor(symbolCollector);
-}
+#include "ast/symbol_collector.hpp"
+#include "ast/visitor.hpp"
+#include "package/parser_context.hpp"
 
-std::expected<std::unique_ptr<ParserContext>, std::string> Package::parseFile(const fs::path& path) {
-	std::ifstream stream(path);
-	if (!stream) {
-		std::ostringstream oss;
-		oss << "Failed to open file: " << path << "\n";
-		return std::unexpected(oss.str());
-	}
-	std::stringstream ss;
-	ss << stream.rdbuf();
-	auto ctx = std::make_unique<ParserContext>(ss.str());
-	if (!ctx->getTree()) {
-		return std::unexpected("Failed to parse file: " + path.string());
-	}
-	return ctx;
-}
+Package::Package(Ptr<SymbolCollector> symbolCollector)
+	: symbolCollector(symbolCollector),
+	  visitor(Visitor(symbolCollector)) {}
 
-void Package::parse(const std::vector<fs::path>& files) {
-	this->files = files;
-	contexts.reserve(files.size());
-	for (const auto& path : files) {
-		auto result = parseFile(path);
-		if (!result) { DEBUG("Parse error: " << result.error()); continue; }
-		contexts.push_back(std::move(*result));
-	}
-}
-
-void Package::collectSymbols() {
-	for (const auto& ctx : contexts) {
-		symbolCollector->collectSymbols(ctx->getTree());
-	}
-	packageInfo = symbolCollector->getPackageInfo();
-}
-
-void Package::buildTree(const std::string& packageDir) {
-	for (const auto& ctx : contexts) {
-		symbolCollector->setCurrentPackage(ctx->getTree()->pkgDef()->name->getText());
-		visitor->buildTree(ctx->getTree());
-	}
-	irProgram = visitor->getGlobalScope();
-	writeSymbolsCache(packageInfo, packageDir, files);
-}
-
-void Package::compile(const std::string& pkgName, const std::vector<fs::path>& files, const std::string& packageDir) {
-	std::vector<std::unique_ptr<ParserContext>> contexts;
-	contexts.reserve(files.size());
-
-	for (const auto& path : files) {
-		auto parseResult = parseFile(path);
-		if (!parseResult) {
-			DEBUG("Parse error: " << parseResult.error());
-			continue;
-		}
-		contexts.push_back(std::move(*parseResult));
-	}
-
-	for (const auto& ctx : contexts) {
-		symbolCollector->collectSymbols(ctx->getTree());
-	}
-
-	packageInfo = symbolCollector->getPackageInfo();
-
-	for (const auto& ctx : contexts) {
-		visitor->buildTree(ctx->getTree());
-	}
-
-	irProgram = visitor->getGlobalScope();
-
-	writeSymbolsCache(packageInfo, packageDir, files);
-}
-
-void Package::writeSymbolsCache(
-		std::shared_ptr<ir::PackageInfo> packageInfo,
-		const std::string& packageDir,
-		const std::vector<fs::path>& files) {
-	fs::path symbolsPath = constants::getSymbolsPath(packageDir);
-	fs::create_directories(symbolsPath.parent_path());
-
-	std::ofstream os(symbolsPath, std::ios::binary);
-	cereal::BinaryOutputArchive archive(os);
-
-	archive(
-		packageInfo->packageName,
-		packageInfo->importedPackages
-	);
-}
-
-std::unique_ptr<llvm::Module> Package::getLlvmModule(
-		Ptr<llvm::LLVMContext> context,
-		Ptr<Package> package,
-		Ptr<Packages> allPackages,
-		const std::vector<std::shared_ptr<ir::PackageInfo>>& externalPackages,
-		const std::string& triple) {
-	LLVMCodeGen codegen(*context, triple);
-	codegen.setupBuiltins();
-	codegen.generate(package, allPackages, externalPackages);
-	return std::move(codegen.extractModule());
-}
+Package::~Package() = default;
 
 std::shared_ptr<ir::PackageInfo> Package::getPackageInfo() const {
 	return packageInfo;
