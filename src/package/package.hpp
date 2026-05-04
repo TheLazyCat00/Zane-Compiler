@@ -20,7 +20,9 @@ namespace llvm {
 }
 
 struct Package {
+	// Compiler-owned collector shared into package/visitor as an explicit non-owning reference.
 	zane::ref<SymbolCollector> symbolCollector;
+	// Package owns its visitor outright; the visitor in turn borrows the collector.
 	std::unique_ptr<Visitor> visitor;
 	std::shared_ptr<ir::PackageInfo> packageInfo;
 	std::shared_ptr<ir::GlobalScope> irProgram;

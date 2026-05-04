@@ -8,22 +8,24 @@
 #include <sstream>
 #include <utility>
 
-zane::abortable<std::unique_ptr<ParserContext>, std::string> Package::parseFile(const fs::path& path) {
+using ParseFileResult = zane::abortable<std::unique_ptr<ParserContext>, std::string>;
+
+ParseFileResult Package::parseFile(const fs::path& path) {
 	std::ifstream stream(path);
 	if (!stream) {
 		std::ostringstream oss;
 		oss << "Failed to open file: " << path << "\n";
-		return zane::abortable<std::unique_ptr<ParserContext>, std::string>::abort(oss.str());
+		return ParseFileResult::abort(oss.str());
 	}
 
 	std::stringstream ss;
 	ss << stream.rdbuf();
 	auto ctx = std::make_unique<ParserContext>(ss.str());
 	if (!ctx->getTree()) {
-		return zane::abortable<std::unique_ptr<ParserContext>, std::string>::abort("Failed to parse file: " + path.string());
+		return ParseFileResult::abort("Failed to parse file: " + path.string());
 	}
 
-	return zane::abortable<std::unique_ptr<ParserContext>, std::string>::success(std::move(ctx));
+	return ParseFileResult::success(std::move(ctx));
 }
 
 void Package::parse(const std::vector<fs::path>& files) {

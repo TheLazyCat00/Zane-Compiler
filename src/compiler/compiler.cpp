@@ -92,6 +92,7 @@ bool Compiler::isCacheValid(const fs::path& packageDir) {
 void Compiler::compilePackage(
 		const std::string& pkgName,
 		const std::vector<fs::path>& files) {
+	// Package stores a zane::ref back to the compiler-owned SymbolCollector.
 	(*packages)[pkgName] = std::make_unique<Package>(*symbolCollector);
 	(*packages)[pkgName]->parse(files);
 }
