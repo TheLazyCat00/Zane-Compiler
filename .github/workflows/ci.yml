@@ -11,8 +11,6 @@ permissions:
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
-    with:
-      submodules: recursive
 
     steps:
       - name: Checkout code
