@@ -21,7 +21,7 @@ test:
 
 [working-directory: "test"]
 run:
-	../build/Zane run 2>&1 | python3 ../tools/prettify.py
+	../build/Zane run 2>&1 | python3 ../scripts/prettify.py
 
 parser:
 	bash ./parser/generate.sh
