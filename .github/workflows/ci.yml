@@ -15,7 +15,10 @@ jobs:
       submodules: recursive
 
     steps:
-      - uses: actions/checkout@v6
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
 
       - name: Install devbox + Nix + devbox.json packages
         uses: jetify-com/devbox-install-action@v0.12.0
