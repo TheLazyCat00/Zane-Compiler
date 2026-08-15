@@ -15,7 +15,10 @@ settles, in one pass rather than section by section. Until then:
 - Each entry cites the spec section it departs from and states both rules, so
   the claim can be rechecked rather than taken on trust.
 
-Entries below were checked against spec commit `6ad694c`. Where a claim is
+Entries below were checked against spec commit `6ad694c`, and the links
+point at that commit so a later spec edit cannot silently make a quotation
+here disagree with what it links to. Re-pin them when the entries are
+rechecked. Where a claim is
 about what the parser accepts, it was measured with
 `ambiguity search --check-tokens`, which reports how many parses a token
 sequence has: `0` is a syntax error, `1` is accepted.
@@ -24,7 +27,7 @@ sequence has: `0` is a syntax error, `1` is accepted.
 
 ## 1. Statements are terminated, not separated
 
-**Spec** — [`lexical.md`](https://github.com/zane-lang/spec/blob/main/spec/lexical.md)
+**Spec** — [`lexical.md`](https://github.com/zane-lang/spec/blob/6ad694c/spec/lexical.md)
 §6.3: "A newline separates statements in a function body or a control-flow
 block. Zane has no statement separator, so two statements cannot share a line.
 This is the one place a newline is structural."
@@ -41,11 +44,11 @@ change before it is a grammatical one.
 
 ## 2. A match arm's terminator follows its body
 
-**Spec** — [`adt.md`](https://github.com/zane-lang/spec/blob/main/spec/adt.md)
-§5.1 and [`syntax.md`](https://github.com/zane-lang/spec/blob/main/spec/syntax.md)
+**Spec** — [`adt.md`](https://github.com/zane-lang/spec/blob/6ad694c/spec/adt.md)
+§5.1 and [`syntax.md`](https://github.com/zane-lang/spec/blob/6ad694c/spec/syntax.md)
 §4.8: the scrutinee is followed by "a `{ }` block of `;`-terminated arms", with
 the arm given as `[binder] selector => body ;`.
-[`lexical.md`](https://github.com/zane-lang/spec/blob/main/spec/lexical.md)
+[`lexical.md`](https://github.com/zane-lang/spec/blob/6ad694c/spec/lexical.md)
 §7 repeats it: `;` terminates "every arm of a `match` block".
 
 **Compiler** — an arm whose body is `=> expr` is terminated by `;`; an arm whose
@@ -62,7 +65,7 @@ it uniformly is what makes an arm body and a function body interchangeable.
 
 ## 3. `and` and `or` have a grouping the spec does not give
 
-**Spec** — [`operators.md`](https://github.com/zane-lang/spec/blob/main/spec/operators.md)
+**Spec** — [`operators.md`](https://github.com/zane-lang/spec/blob/6ad694c/spec/operators.md)
 defines them as short-circuiting **keywords** rather than overloadable
 operators, and its precedence and associativity table therefore does not list
 them: the table covers operators only.
