@@ -2,10 +2,17 @@ let rec expr_shape (expr : Cst.Nodes.Expr.t) =
   match expr with
   | Cst.Nodes.Expr.BoolLit _ -> "bool"
   | Cst.Nodes.Expr.NameExpr _ -> "name"
+  | Cst.Nodes.Expr.TypeMember _ -> "type_member"
   | Cst.Nodes.Expr.DotAccess { target; _ } -> "dot(" ^ expr_shape target ^ ")"
   | Cst.Nodes.Expr.Parenthized inner -> "paren(" ^ expr_shape inner ^ ")"
   | Cst.Nodes.Expr.VerbCall (Cst.Nodes.Verb_call.Func { callee; _ }) ->
       "call(" ^ expr_shape callee ^ ")"
+  | Cst.Nodes.Expr.VerbCall
+      (Cst.Nodes.Verb_call.Constructor { name = { member = Some _; _ }; _ }) ->
+      "named_ctor"
+  | Cst.Nodes.Expr.VerbCall
+      (Cst.Nodes.Verb_call.Constructor { name = { member = None; _ }; _ }) ->
+      "ctor"
   | Cst.Nodes.Expr.VerbCall (Cst.Nodes.Verb_call.Flip { value; _ }) ->
       "flip(" ^ expr_shape value ^ ")"
   | Cst.Nodes.Expr.FuncLambda {

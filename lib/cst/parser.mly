@@ -11,9 +11,9 @@ let attach_abort_handle expr abort_handle =
           abort_handle = Some abort_handle;
           is_mut;
         }
-    | Nodes.Verb_call.Constructor { name_type; args; abort_handle = None } ->
+    | Nodes.Verb_call.Constructor { name; args; abort_handle = None } ->
         Nodes.Verb_call.Constructor {
-          name_type;
+          name;
           args;
           abort_handle = Some abort_handle;
         }
@@ -32,6 +32,11 @@ let attach_abort_handle expr abort_handle =
   in
   let rec loop = function
     | Nodes.Expr.VerbCall call -> Nodes.Expr.VerbCall (attach call)
+    | Nodes.Expr.Spawn call -> Nodes.Expr.Spawn (attach call)
+    | Nodes.Expr.Match ({ abort_handle = None; _ } as match_) ->
+        Nodes.Expr.Match { match_ with abort_handle = Some abort_handle }
+    | Nodes.Expr.Pipe ({ abort_handle = None; _ } as pipe) ->
+        Nodes.Expr.Pipe { pipe with abort_handle = Some abort_handle }
     | Nodes.Expr.Parenthized value -> Nodes.Expr.Parenthized (loop value)
     | _ ->
         raise
@@ -39,6 +44,10 @@ let attach_abort_handle expr abort_handle =
              "an abort handler must follow an abortable operation")
   in
   loop expr
+
+let constructor_expr name args =
+  Nodes.Expr.VerbCall
+    (Nodes.Verb_call.Constructor { name; args; abort_handle = None })
 %}
 
 (*****************************)
@@ -65,6 +74,7 @@ let attach_abort_handle expr abort_handle =
 %token MINUS       "-"
 %token STAR        "*"
 %token SLASH       "/"
+%token PIPE        "|"
 %token DOLLAR      "$"
 %token HASH        "#"
 %token AND         "&"
@@ -75,6 +85,7 @@ let attach_abort_handle expr abort_handle =
 %token TILDE       "~"
 %token THICK_ARROW "=>"
 %token EQEQ        "=="
+%token NOTEQ       "~="
 %token LESSEQ      "<="
 %token MOREEQ      ">="
 %token LESS        "<"
@@ -87,9 +98,16 @@ let attach_abort_handle expr abort_handle =
 %token VARIANT     "variant"
 %token TUPLE       "tuple"
 %token ENUM        "enum"
+%token PACKAGE     "package"
+%token IMPORT      "import"
+%token IMPLICIT    "implicit"
+%token INIT        "init"
 %token IF          "if"
 %token ELIF        "elif"
 %token ELSE        "else"
+%token GUARD       "guard"
+%token MATCH       "match"
+%token SPAWN       "spawn"
 %token TRUE        "true"
 %token LOOP        "loop"
 %token FROM        "from"
@@ -102,16 +120,19 @@ let attach_abort_handle expr abort_handle =
 %token RESOLVE     "resolve"
 %token EOF          "<eof>"
 
-(* Shorthand bodies consume the entire expression to their right. Abort
-   handlers bind above binary operators but below field and prefix operators. *)
+(* Keep the compiler's statement-terminator grammar and existing grouping
+   decisions. New syntax is inserted around those decisions rather than
+   respelling existing programs to match the prose spec. *)
 %right THICK_ARROW
-%nonassoc EQEQ LESSEQ MOREEQ LESS MORE   /* comparisons */
+%nonassoc EQEQ NOTEQ LESSEQ MOREEQ LESS MORE   /* comparisons */
 %left PLUS MINUS
 %left STAR SLASH
-%nonassoc QSTNMARK QSTNQSTN             /* abort handling */
-%nonassoc TILDE AND                      /* prefix ~ and & */
-%left DOT                                /* field access */
-%left LPAREN                             /* function application */
+%left PIPE                                      /* pipe */
+%nonassoc QSTNMARK QSTNQSTN                    /* abort handling */
+%nonassoc TILDE AND                             /* prefix ~ and & */
+%left DOT                                       /* field access */
+%left LBRACKET                                  /* subscript */
+%left LPAREN                                    /* function application */
 
 %start <Nodes.Package.t> package
 
@@ -150,6 +171,9 @@ package:
   | number=INT {
       Nodes.Generic_arg.Number number
     }
+  | name=LIDENT {
+      Nodes.Generic_arg.NumberRef name
+    }
   | param=param {
       Nodes.Generic_arg.Inferred param
     }
@@ -159,12 +183,25 @@ package:
       generics
     }
 
-%inline type_atom:
+%inline named_type_expr:
   | name=name_type generics=loption(generics) {
       Nodes.Type_expr.Path { name; generics }
     }
+
+%inline type_base:
+  | type_=named_type_expr {
+      type_
+    }
   | "(" type_=type_expr ")" {
       Nodes.Type_expr.Parenthesized type_
+    }
+
+%inline type_atom:
+  | type_=type_base {
+      type_
+    }
+  | "&" type_=type_base {
+      Nodes.Type_expr.Guest type_
     }
 
 %inline verb_type_suffix:
@@ -209,38 +246,118 @@ type_expr:
       ({ Nodes.Generic_param.name; type_ = Nodes.Concept.Number } : Nodes.Generic_param.t)
     }
 
+%inline constructor_name:
+  | type_=name_type member=ioption(preceded(".", LIDENT)) {
+      ({ Nodes.Constructor_name.type_; member } : Nodes.Constructor_name.t)
+    }
+
+%inline field_arg:
+  | name=LIDENT value=ioption(preceded("=", expr)) {
+      ({ Nodes.Field_arg.name; value } : Nodes.Field_arg.t)
+    }
+
+%inline constructor_args:
+  | "(" args=separated_list(",", expr) ")" {
+      Nodes.Constructor_args.Positional args
+    }
+  | "{" args=separated_list(",", field_arg) "}" {
+      Nodes.Constructor_args.Fields args
+    }
+
+%inline constructor_field:
+  | name=LIDENT type_=type_expr {
+      ({
+        Nodes.Constructor_field.name;
+        type_ = Nodes.Param_type.Concrete type_;
+        default = None;
+      } : Nodes.Constructor_field.t)
+    }
+  | name=LIDENT type_name=UIDENT "Type" {
+      ({
+        Nodes.Constructor_field.name;
+        type_ = Nodes.Param_type.InferredType {
+          name = type_name;
+          concept = Nodes.Concept.Type;
+        };
+        default = None;
+      } : Nodes.Constructor_field.t)
+    }
+  | name=LIDENT type_=type_expr "=" default=expr {
+      ({
+        Nodes.Constructor_field.name;
+        type_ = Nodes.Param_type.Concrete type_;
+        default = Some default;
+      } : Nodes.Constructor_field.t)
+    }
+  | name=LIDENT type_name=UIDENT "Type" "=" default=expr {
+      ({
+        Nodes.Constructor_field.name;
+        type_ = Nodes.Param_type.InferredType {
+          name = type_name;
+          concept = Nodes.Concept.Type;
+        };
+        default = Some default;
+      } : Nodes.Constructor_field.t)
+    }
+  | name=LIDENT constructor=constructor_name args=constructor_args {
+      let type_ = Nodes.Type_expr.Path { name = constructor.type_; generics = [] } in
+      let default = constructor_expr constructor args in
+      ({
+        Nodes.Constructor_field.name;
+        type_ = Nodes.Param_type.Concrete type_;
+        default = Some default;
+      } : Nodes.Constructor_field.t)
+    }
+
+%inline constructor_params:
+  | "(" params=separated_list(",", param) ")" {
+      Nodes.Constructor_params.Positional params
+    }
+  | "{" fields=separated_list(",", constructor_field) "}" {
+      Nodes.Constructor_params.Fields fields
+    }
+
+%inline constructor_decl_name:
+  | type_=named_type_expr member=ioption(preceded(".", LIDENT)) {
+      (type_, member)
+    }
+
+%inline enum_map_entry:
+  | member=LIDENT "=" value=expr {
+      (member, value)
+    }
+
 decl:
+  | PACKAGE name=LIDENT {
+      Nodes.Decl.Package name
+    }
+  | IMPORT name=LIDENT {
+      Nodes.Decl.Import name
+    }
   | name=LIDENT type_=type_expr "=" value=expr {
       Nodes.Decl.Var { name; type_; value }
     }
-  | name=LIDENT constructor=name_type "(" args=separated_list(COMMA, expr) ")" {
+  | name=LIDENT constructor=constructor_name args=constructor_args {
       Nodes.Decl.VarShorthand { name; constructor; args }
     }
   | name=LIDENT func_lambda=func_lambda {
       Nodes.Decl.Var {
         name;
         type_ = Nodes.func_type_of_lambda func_lambda;
-        value = Nodes.Expr.FuncLambda func_lambda
+        value = Nodes.Expr.FuncLambda func_lambda;
       }
     }
   | name=LIDENT meth_lambda=meth_lambda {
       Nodes.Decl.Var {
         name;
         type_ = Nodes.meth_type_of_lambda meth_lambda;
-        value = Nodes.Expr.MethLambda meth_lambda
+        value = Nodes.Expr.MethLambda meth_lambda;
       }
     }
-  | ret_type=ret_type name=LIDENT
-    "(" params=separated_list(COMMA, param) ")" body=body {
-      Nodes.Decl.Verb (Nodes.Verb_decl.Func {
-        name;
-        params;
-        ret_type;
-        body;
-      })
+  | ret_type=ret_type name=LIDENT "(" params=separated_list(",", param) ")" body=body {
+      Nodes.Decl.Verb (Nodes.Verb_decl.Func { name; params; ret_type; body })
     }
-  | ret_type=ret_type name=LIDENT
-    "(" THIS this_type=type_expr
+  | ret_type=ret_type name=LIDENT "(" THIS this_type=type_expr
     params=loption(preceded(",", separated_nonempty_list(",", param)))
     ")" is_mut=boption(MUT) body=body {
       Nodes.Decl.Verb (Nodes.Verb_decl.Meth {
@@ -252,58 +369,150 @@ decl:
         body;
       })
     }
-  | type_=name_type
-    "(" params=separated_list(COMMA, param) ")" body=body {
+  | enum=named_type_expr "." property=LIDENT map_type=type_expr
+    "[" entries=separated_list(",", enum_map_entry) "]" {
+      Nodes.Decl.EnumMap { enum; property; type_ = map_type; entries }
+    }
+  | type_=constructor_decl_name params=constructor_params body=body {
+      let type_, member = type_ in
       Nodes.Decl.Verb (Nodes.Verb_decl.Constructor {
         type_;
+        member;
         params;
         body;
+        is_implicit = false;
       })
     }
-  | ret_type=ret_type op=operator "(" params=separated_list(COMMA, param) ")" body=body {
-      Nodes.Decl.Verb (Nodes.Verb_decl.Op {
-        op;
-        params;
-        ret_type;
+  | IMPLICIT type_=named_type_expr "(" param=param ")" body=body {
+      Nodes.Decl.Verb (Nodes.Verb_decl.Constructor {
+        type_;
+        member = None;
+        params = Nodes.Constructor_params.Positional [param];
         body;
+        is_implicit = true;
       })
     }
-  | ret_type=ret_type "~" "(" params=separated_list(COMMA, param) ")" body=body {
-      Nodes.Decl.Verb (Nodes.Verb_decl.Flip {
-        params;
-        ret_type;
-        body;
-      })
+  | "(" THIS this_type=type_expr ")"
+    "[" params=separated_list(",", param) "]" "=>" value=expr {
+      Nodes.Decl.Verb (Nodes.Verb_decl.Subscript { this_type; params; value })
     }
-  | "type" name=UIDENT params=loption(delimited("<", separated_nonempty_list(",", generic_param), ">")) "=" value=type_or_moulded {
-      Nodes.Decl.Type {
-        name;
-        params;
-        value;
-      }
+  | ret_type=ret_type op=operator "(" params=separated_list(",", param) ")" body=body {
+      Nodes.Decl.Verb (Nodes.Verb_decl.Op { op; params; ret_type; body })
     }
-  | "alias" name=UIDENT params=loption(delimited("<", separated_nonempty_list(",", generic_param), ">")) "=" value=type_expr {
-      Nodes.Decl.Alias {
-        name;
-        params;
-        value;
-      }
+  | ret_type=ret_type "~" "(" params=separated_list(",", param) ")" body=body {
+      Nodes.Decl.Verb (Nodes.Verb_decl.Flip { params; ret_type; body })
+    }
+  | "type" name=UIDENT params=loption(delimited("<", separated_nonempty_list(",", generic_param), ">"))
+    "=" value=type_or_moulded {
+      Nodes.Decl.Type { name; params; value }
+    }
+  | "alias" name=UIDENT params=loption(delimited("<", separated_nonempty_list(",", generic_param), ">"))
+    "=" value=type_or_moulded {
+      Nodes.Decl.Alias { name; params; value }
     }
 
-(* value-identifier counterpart to name_type — both segments lowercase
-   since Name_expr lives in the value namespace (LIDENT), unlike
-   Name_type's qualified form which ends in a UIDENT type name. *)
-%inline name_expr:
-  | name=LIDENT { Nodes.Name_expr.Ident name }
-  | pkg=LIDENT "$" name=LIDENT { Nodes.Name_expr.Qualified { package = pkg; ident = name } }
-  | "@" pkg=LIDENT "$" name=LIDENT { Nodes.Name_expr.Intrinsic { package = pkg; ident = name } }
+%inline type_or_moulded:
+  | value=type_expr {
+      Nodes.Type_or_moulded.Raw value
+    }
+  | value=moulded {
+      Nodes.Type_or_moulded.Moulded value
+    }
 
-%inline comparison_op:
+%inline mould:
+  | STRUCT "{" fields=list(body_field) "}" {
+      Nodes.Mould.Struct fields
+    }
+  | VARIANT "{" fields=list(body_field) "}" {
+      Nodes.Mould.Variant fields
+    }
+  | ENUM "[" members=separated_nonempty_list(",", LIDENT) "]" {
+      Nodes.Mould.Enum members
+    }
+  | TUPLE "[" members=separated_nonempty_list(",", type_expr) "]" {
+      Nodes.Mould.Tuple members
+    }
+
+%inline moulded:
+  | mould=mould {
+      { Nodes.Moulded.mould; axis = Nodes.Type_axis.Value }
+    }
+  | "#" mould=mould {
+      { Nodes.Moulded.mould; axis = Nodes.Type_axis.Reference }
+    }
+
+%inline body_field:
+  | name=LIDENT type_=type_expr ";" {
+      ({ Nodes.Body_field.name; type_ } : Nodes.Body_field.t)
+    }
+
+body:
+  | "{" stats=list(stat) "}" {
+      Nodes.Body.Longhand stats
+    }
+  | "=>" value=expr {
+      Nodes.Body.Shorthand value
+    }
+
+ret_type:
+  | value=type_expr {
+      Nodes.Ret_type.Safe value
+    }
+  | value=abort_ret_type {
+      value
+    }
+
+abort_ret_type:
+  | ok=type_expr "?" abort=type_expr {
+      Nodes.Ret_type.Abort { ok; abort }
+    }
+
+%inline meth_part:
+  | is_mut=mut_marker name=primary {
+      (is_mut, name)
+    }
+
+%inline mut_marker:
+  | ":" { false }
+  | "!" { true }
+
+verb_call:
+  | receiver=func_callee "(" args=separated_list(",", expr) ")" {
+      fun abort_handle -> Nodes.Verb_call.Func {
+        callee = receiver;
+        args;
+        abort_handle;
+      }
+    }
+  | receiver=app part=meth_part "(" args=separated_list(",", expr) ")" {
+      let is_mut, callee = part in
+      fun abort_handle -> Nodes.Verb_call.Meth {
+        callee;
+        this = receiver;
+        args;
+        abort_handle;
+        is_mut;
+      }
+    }
+  | name=constructor_name args=constructor_args {
+      fun abort_handle -> Nodes.Verb_call.Constructor { name; args; abort_handle }
+    }
+
+%inline operator:
+  | op=comparison_decl_op { op }
+  | op=additive_op        { op }
+  | op=multiplicative_op  { op }
+
+%inline comparison_decl_op:
   | "==" { Nodes.Operator.Eq }
   | "<=" { Nodes.Operator.LessEq }
   | ">=" { Nodes.Operator.MoreEq }
   | "<"  { Nodes.Operator.Less }
   | ">"  { Nodes.Operator.More }
+
+%inline comparison_op:
+  | op=comparison_decl_op { op }
+  | "~=" { Nodes.Operator.NotEq }
 
 %inline additive_op:
   | "+" { Nodes.Operator.Add }
@@ -313,36 +522,79 @@ decl:
   | "*" { Nodes.Operator.Mul }
   | "/" { Nodes.Operator.Div }
 
-(* used by decl's operator-overload form, e.g. `Int +(other Int) { ... }` —
-   a single bare operator token, no left/right operands involved there *)
-%inline operator:
-  | op=comparison_op     { op }
-  | op=additive_op       { op }
-  | op=multiplicative_op { op }
+%inline match_selector:
+  | case=LIDENT {
+      [case]
+    }
+  | "[" cases=separated_nonempty_list(",", LIDENT) "]" {
+      cases
+    }
 
-(* Postfix bases are deliberately limited to literals, names, and parenthesised
-   expressions. Bare lambdas remain expressions, but a following postfix belongs
-   to the smallest expression in their shorthand body. Parenthesize the lambda
-   when the postfix should apply to the lambda itself. *)
+%inline match_pattern:
+  | cases=match_selector {
+      ({ Nodes.Match_pattern.binder = None; cases } : Nodes.Match_pattern.t)
+    }
+  | binder=LIDENT cases=match_selector {
+      ({ Nodes.Match_pattern.binder = Some binder; cases } : Nodes.Match_pattern.t)
+    }
+
+%inline match_arm:
+  | patterns=separated_nonempty_list(",", match_pattern) body=body ";" {
+      ({ Nodes.Match_arm.patterns; body } : Nodes.Match_arm.t)
+    }
+
+%inline match_expr:
+  | MATCH scrutinees=separated_nonempty_list(",", expr)
+    "{" arms=list(match_arm) "}" {
+      Nodes.Expr.Match { scrutinees; arms; abort_handle = None }
+    }
+
+%inline spawn_expr:
+  | SPAWN call=verb_call {
+      Nodes.Expr.Spawn (call None)
+    }
+
+(* Postfix bases are deliberately limited so that an uppercase `Type.member`
+   has exactly one reading. Bare `Type.member` is a type-member value; when it
+   is immediately followed by constructor arguments it is a named constructor
+   or variant-case call, never a generic function call. *)
 primary:
   | i=INT    { Nodes.Expr.IntLit i }
   | f=FLOAT  { Nodes.Expr.FloatLit f }
   | s=STRING { Nodes.Expr.StrLit s }
   | TRUE     { Nodes.Expr.BoolLit true }
   | FALSE    { Nodes.Expr.BoolLit false }
+  | "[" items=separated_list(",", expr) "]" { Nodes.Expr.CollectionLit items }
+  | THIS     { Nodes.Expr.NameExpr (Nodes.Name_expr.Ident "this") }
   | name_expr=name_expr { Nodes.Expr.NameExpr name_expr }
   | "(" e=expr ")" { Nodes.Expr.Parenthized e }
+  | INIT "{" fields=separated_list(",", field_arg) "}" {
+      Nodes.Expr.Init fields
+    }
+  | value=match_expr { value }
+  | value=spawn_expr { value }
 
-(* Calls and field access are postfix operators. They chain left-to-right on the
-   nearest preceding postfix base and bind above prefix operators. Thus
-   `~value().field` is `~(value().field)`. Abort handlers bind below postfix and
-   prefix operators but above binary operators. *)
-app:
+%inline type_member:
+  | type_=name_type "." member=LIDENT {
+      Nodes.Expr.TypeMember { type_; member }
+    }
+
+(* `func_callee` excludes a bare type member. This is what keeps
+   `Vector2.zeros()` out of the ordinary computed-call production while still
+   allowing postfixes on the value produced by `Colors.red`.) *)
+func_callee:
   | primary=primary { primary }
   | call=verb_call { Nodes.Expr.VerbCall (call None) }
   | target=app "." field=LIDENT {
       Nodes.Expr.DotAccess { target; field }
     }
+  | target=app "[" args=separated_list(",", expr) "]" {
+      Nodes.Expr.Subscript { target; args }
+    }
+
+app:
+  | value=func_callee { value }
+  | value=type_member { value }
 
 expr:
   | app=app { app }
@@ -372,6 +624,14 @@ expr:
         abort_handle = None;
       })
     }
+  | receiver=app part=meth_part "|" value=expr %prec PIPE {
+      let is_mut, callee = part in
+      let callee = Nodes.Expr.MethodTarget { callee; this = receiver; is_mut } in
+      Nodes.Expr.Pipe { callee; value; abort_handle = None }
+    }
+  | callee=expr "|" value=expr %prec PIPE {
+      Nodes.Expr.Pipe { callee; value; abort_handle = None }
+    }
   | "~" value=expr %prec TILDE {
       Nodes.Expr.VerbCall (Nodes.Verb_call.Flip {
         value;
@@ -385,62 +645,6 @@ expr:
       attach_abort_handle value abort_handle
     }
 
-%inline body_field:
-  | name=LIDENT type_=type_expr ";" {
-      { Nodes.Body_field.name; type_ }
-    }
-
-%inline mould:
-  | STRUCT "{" fields=list(body_field) "}" {
-      Nodes.Mould.Struct fields
-    }
-  | VARIANT "{" fields=list(body_field) "}" {
-      Nodes.Mould.Variant fields
-    }
-  | ENUM "[" members=separated_nonempty_list(",", LIDENT) "]" {
-      Nodes.Mould.Enum members
-    }
-  | TUPLE "[" members=separated_nonempty_list(",", type_expr) "]" {
-      Nodes.Mould.Tuple members
-    }
-
-%inline moulded:
-  | mould=mould {
-      { Nodes.Moulded.mould; axis = Nodes.Type_axis.Value }
-    }
-  | "#" mould=mould {
-      { Nodes.Moulded.mould; axis = Nodes.Type_axis.Reference }
-    }
-
-%inline type_or_moulded:
-  | type_expr=type_expr {
-      Nodes.Type_or_moulded.Raw type_expr
-    }
-  | moulded=moulded {
-      Nodes.Type_or_moulded.Moulded moulded
-    }
-
-ret_type:
-  | ret_type=type_expr {
-      Nodes.Ret_type.Safe ret_type
-    }
-  | ret_type=abort_ret_type {
-      ret_type
-    }
-
-abort_ret_type:
-  | ok=type_expr "?" abort=type_expr {
-      Nodes.Ret_type.Abort { ok; abort }
-    }
-
-body:
-  | "{" statements=list(stat) "}" {
-      Nodes.Body.Longhand statements
-    }
-  | "=>" value=expr {
-      Nodes.Body.Shorthand value
-    }
-
 abort_handle:
   | "?" binder=ioption(LIDENT) body=body %prec THICK_ARROW {
       Nodes.Abort_handle.Longhand { binder; body }
@@ -449,34 +653,41 @@ abort_handle:
       Nodes.Abort_handle.Shorthand value
     }
 
-(* mutable (!) and immutable (:) method calls are structurally identical, so
-   they share one production; the marker only decides the is_mut payload. *)
-%inline meth_marker:
-  | "!" { true }
-  | ":" { false }
-
-%inline meth_part:
-  | is_mut=meth_marker name=primary { (is_mut, name) }
-
-(* A call is built without deciding its abort handler. Expression and statement
-   contexts attach the handler at their own precedence level. *)
-verb_call:
-  | receiver=app part=ioption(meth_part) "(" args=separated_list(COMMA, expr) ")" %prec LPAREN {
-      fun abort_handle ->
-        match part with
-        | None -> Nodes.Verb_call.Func { callee = receiver; args; abort_handle }
-        | Some (is_mut, name) ->
-            Nodes.Verb_call.Meth {
-              this = receiver;
-              callee = name;
-              args;
-              abort_handle;
-              is_mut;
-            }
+(* Semicolons terminate simple statements. Block statements remain delimited by
+   their braces and do not need an additional terminator. *)
+stat:
+  | target=app "=" value=expr ";" {
+      Nodes.Stat.Assign { target; value }
     }
-  | name_type=name_type "(" args=separated_list(COMMA, expr) ")" %prec LPAREN {
-      fun abort_handle ->
-        Nodes.Verb_call.Constructor { name_type; args; abort_handle }
+  | decl=decl ";" {
+      Nodes.Stat.Decl decl
+    }
+  | call=verb_call abort_handle=ioption(abort_handle) ";" {
+      Nodes.Stat.VerbCall (call abort_handle)
+    }
+  | SPAWN call=verb_call abort_handle=ioption(abort_handle) ";" {
+      Nodes.Stat.Spawn (call abort_handle)
+    }
+  | ABORT value=expr ";" {
+      Nodes.Stat.Abort value
+    }
+  | RETURN value=expr ";" {
+      Nodes.Stat.Ret value
+    }
+  | RESOLVE value=expr ";" {
+      Nodes.Stat.Resolve value
+    }
+  | GUARD cond=expr ";" {
+      Nodes.Stat.Guard { cond; body = None }
+    }
+  | GUARD cond=expr "{" body=list(stat) "}" {
+      Nodes.Stat.Guard { cond; body = Some body }
+    }
+  | if_=if_ elifs_=list(elif_) else_=ioption(else_) {
+      Nodes.Stat.CondSeq Nodes.Cond_seq.{ if_; elifs_; else_ }
+    }
+  | loop=loop {
+      Nodes.Stat.Loop loop
     }
 
 %inline if_:
@@ -499,29 +710,6 @@ verb_call:
       ({ Nodes.Loop.start; end_; binder; body = statements } : Nodes.Loop.t)
     }
 
-(* Semicolons terminate simple statements. Block statements remain delimited by
-   their braces and do not need an additional terminator. *)
-stat:
-  | decl=decl ";" { Nodes.Stat.Decl decl }
-  | call=verb_call abort_handle=ioption(abort_handle) ";" {
-      Nodes.Stat.VerbCall (call abort_handle)
-    }
-  | ABORT value=expr ";" {
-      Nodes.Stat.Abort value
-    }
-  | RETURN value=expr ";" {
-      Nodes.Stat.Ret value
-    }
-  | RESOLVE value=expr ";" {
-      Nodes.Stat.Resolve value
-    }
-  | if_=if_ elifs_=list(elif_) else_=ioption(else_) {
-      Nodes.Stat.CondSeq Nodes.Cond_seq.{ if_; elifs_; else_ }
-    }
-  | loop=loop {
-      Nodes.Stat.Loop loop
-    }
-
 %inline param_type:
   | type_=type_expr {
       Nodes.Param_type.Concrete type_
@@ -534,12 +722,26 @@ stat:
   | name=LIDENT type_=type_expr {
       ({ Nodes.Param.name; type_ = Nodes.Param_type.Concrete type_ } : Nodes.Param.t)
     }
+  | name=LIDENT type_name=UIDENT "Type" {
+      ({
+        Nodes.Param.name;
+        type_ = Nodes.Param_type.InferredType {
+          name = type_name;
+          concept = Nodes.Concept.Type;
+        };
+      } : Nodes.Param.t)
+    }
   | name=UIDENT "Type" {
       ({ Nodes.Param.name; type_ = Nodes.Param_type.Concept Nodes.Concept.Type } : Nodes.Param.t)
     }
   | name=LIDENT "Number" {
       ({ Nodes.Param.name; type_ = Nodes.Param_type.Concept Nodes.Concept.Number } : Nodes.Param.t)
     }
+
+%inline name_expr:
+  | name=LIDENT { Nodes.Name_expr.Ident name }
+  | pkg=LIDENT "$" name=LIDENT { Nodes.Name_expr.Qualified { package = pkg; ident = name } }
+  | "@" pkg=LIDENT "$" name=LIDENT { Nodes.Name_expr.Intrinsic { package = pkg; ident = name } }
 
 %inline name_type:
   | name=UIDENT { Nodes.Name_type.Ident name }

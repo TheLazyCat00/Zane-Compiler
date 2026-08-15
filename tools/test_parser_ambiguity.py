@@ -110,6 +110,22 @@ class ParserGrammarAmbiguityTests(unittest.TestCase):
             "lambda(flip(dot(call(name))))",
         )
 
+    def test_dot_constructor_has_one_constructor_reading(self) -> None:
+        self.assert_grouping(
+            "UIDENT LIDENT LPAREN RPAREN LCURLY ABORT "
+            "UIDENT DOT LIDENT LPAREN RPAREN SEMICOLON RCURLY EOF",
+            "Int length() { abort Vector2.zeros(); }",
+            "named_ctor",
+        )
+
+    def test_bare_type_member_has_one_value_reading(self) -> None:
+        self.assert_grouping(
+            "UIDENT LIDENT LPAREN RPAREN LCURLY ABORT "
+            "UIDENT DOT LIDENT SEMICOLON RCURLY EOF",
+            "Int length() { abort Colors.red; }",
+            "type_member",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

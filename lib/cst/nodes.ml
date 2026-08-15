@@ -12,6 +12,7 @@ module Operator = struct
     | Mul
     | Div
     | Eq
+    | NotEq
     | LessEq
     | MoreEq
     | Less
@@ -28,6 +29,13 @@ module Name_type = struct
     | Qualified of { package : string; ident : string }
     (* intrinsic namespace, spelled @package$Ident, e.g. @primitives$I32 *)
     | Intrinsic of { package : string; ident : string }
+end
+
+module Constructor_name = struct
+  type t = {
+    type_ : Name_type.t;
+    member : string option;
+  }
 end
 
 module Concept = struct
@@ -63,10 +71,22 @@ module rec Expr : sig
     | FloatLit of string
     | StrLit of string
     | BoolLit of bool
+    | CollectionLit of t list
     | NameExpr of Name_expr.t
+    | TypeMember of { type_ : Name_type.t; member : string }
     | DotAccess of { target : t; field : string }
+    | Subscript of { target : t; args : t list }
     | Ref of t
     | Parenthized of t
+    | Init of Field_arg.t list
+    | MethodTarget of { callee : t; this : t; is_mut : bool }
+    | Pipe of {
+        callee : t;
+        value : t;
+        abort_handle : Abort_handle.t option;
+      }
+    | Spawn of Verb_call.t
+    | Match of Match_expr.t
     | VerbCall of Verb_call.t
     | FuncLambda of Func_lambda.t
     | MethLambda of Meth_lambda.t
@@ -78,12 +98,25 @@ and Abort_handle : sig
     | Longhand of { binder: string option; body: Body.t }
 end = Abort_handle
 
+and Field_arg : sig
+  type t = {
+    name : string;
+    value : Expr.t option;
+  }
+end = Field_arg
+
+and Constructor_args : sig
+  type t =
+    | Positional of Expr.t list
+    | Fields of Field_arg.t list
+end = Constructor_args
+
 (* needs grouping because then we can unify the abort handling *)
 and Verb_call : sig
   type t =
     | Func        of { callee: Expr.t; args: Expr.t list; abort_handle: Abort_handle.t option; }
     | Meth        of { callee: Expr.t; this: Expr.t; args: Expr.t list; abort_handle: Abort_handle.t option; is_mut: bool; }
-    | Constructor of { name_type: Name_type.t; args: Expr.t list; abort_handle: Abort_handle.t option; }
+    | Constructor of { name: Constructor_name.t; args: Constructor_args.t; abort_handle: Abort_handle.t option; }
     | Op          of { op: Operator.t; left: Expr.t; right: Expr.t; abort_handle: Abort_handle.t option; }
     | Flip        of { value: Expr.t; abort_handle: Abort_handle.t option; }
 end = Verb_call
@@ -114,6 +147,7 @@ and Generic_arg : sig
   type t =
     | Type of Type_expr.t
     | Number of string
+    | NumberRef of string
     | Inferred of Param.t
 end = Generic_arg
 
@@ -134,6 +168,7 @@ end = Verb_type
 and Type_expr : sig
   type t =
     | Path of { name : Name_type.t; generics : Generic_arg.t list }
+    | Guest of t
     | Verb of Verb_type.t
     | Parenthesized of t
 end = Type_expr
@@ -142,6 +177,7 @@ and Param_type : sig
   type t =
     | Concrete of Type_expr.t
     | Concept of Concept.t
+    | InferredType of { name : string; concept : Concept.t }
 end = Param_type
 
 and Param : sig
@@ -150,6 +186,20 @@ and Param : sig
     type_ : Param_type.t;
   }
 end = Param
+
+and Constructor_field : sig
+  type t = {
+    name : string;
+    type_ : Param_type.t;
+    default : Expr.t option;
+  }
+end = Constructor_field
+
+and Constructor_params : sig
+  type t =
+    | Positional of Param.t list
+    | Fields of Constructor_field.t list
+end = Constructor_params
 
 and Cond_block : sig
   type t = {
@@ -175,13 +225,45 @@ and Loop : sig
   }
 end = Loop
 
+and Guard : sig
+  type t = {
+    cond : Expr.t;
+    body : Stat.t list option;
+  }
+end = Guard
+
+and Match_pattern : sig
+  type t = {
+    binder : string option;
+    cases : string list;
+  }
+end = Match_pattern
+
+and Match_arm : sig
+  type t = {
+    patterns : Match_pattern.t list;
+    body : Body.t;
+  }
+end = Match_arm
+
+and Match_expr : sig
+  type t = {
+    scrutinees : Expr.t list;
+    arms : Match_arm.t list;
+    abort_handle : Abort_handle.t option;
+  }
+end = Match_expr
+
 and Stat : sig
   type t =
     | VerbCall of Verb_call.t
+    | Spawn of Verb_call.t
     | Decl of Decl.t
+    | Assign of { target : Expr.t; value : Expr.t }
     | Abort of Expr.t
     | Ret of Expr.t
     | Resolve of Expr.t
+    | Guard of Guard.t
     | CondSeq of Cond_seq.t
     | Loop of Loop.t
 end = Stat
@@ -246,9 +328,16 @@ and Verb_decl : sig
         body : Body.t;
       }
     | Constructor of {
-        type_ : Name_type.t;
-        params : Param.t list;
+        type_ : Type_expr.t;
+        member : string option;
+        params : Constructor_params.t;
         body : Body.t;
+        is_implicit : bool;
+      }
+    | Subscript of {
+        this_type : Type_expr.t;
+        params : Param.t list;
+        value : Expr.t;
       }
     | Flip of {
         params : Param.t list;
@@ -259,8 +348,10 @@ end = Verb_decl
 
 and Decl : sig
   type t =
+    | Package of string
+    | Import of string
     | Var of { name : string; type_ : Type_expr.t; value : Expr.t }
-    | VarShorthand of { name : string; constructor : Name_type.t; args : Expr.t list }
+    | VarShorthand of { name : string; constructor : Constructor_name.t; args : Constructor_args.t }
     | Type of {
         name : string;
         params : Generic_param.t list;
@@ -269,7 +360,13 @@ and Decl : sig
     | Alias of {
         name : string;
         params : Generic_param.t list;
-        value : Type_expr.t;
+        value : Type_or_moulded.t;
+      }
+    | EnumMap of {
+        enum : Type_expr.t;
+        property : string;
+        type_ : Type_expr.t;
+        entries : (string * Expr.t) list;
       }
     | Verb of Verb_decl.t
 end = Decl

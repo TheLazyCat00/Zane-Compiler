@@ -10,6 +10,7 @@ let digits     = [%sedlex.regexp? Plus digit]
 let int_lit    = [%sedlex.regexp? digits, Star ('\'', digits)]
 let float_lit  = [%sedlex.regexp? int_lit, '.', digits]
 let str_char   = [%sedlex.regexp? Compl ('"' | '\\') | '\\', any]
+let line_char  = [%sedlex.regexp? Compl ('\n' | '\r')]
 
 (* Any character valid inside an identifier (after the first) *)
 let ident_char = [%sedlex.regexp? alphabetic | '0'..'9' | '_']
@@ -22,8 +23,11 @@ let upper_ident = [%sedlex.regexp? (uppercase | '_', uppercase), Star ident_char
 let rec token buf =
   match%sedlex buf with
   | Plus (' ' | '\t' | '\r' | '\n') -> token buf
+  | "///", Star line_char            -> token buf
+  | "//", Star line_char             -> token buf
   | "=>"                        -> THICK_ARROW
   | "=="                        -> EQEQ
+  | "~="                        -> NOTEQ
   | "<="                        -> LESSEQ
   | ">="                        -> MOREEQ
   | '<'                         -> LESS
@@ -47,6 +51,7 @@ let rec token buf =
   | '-'                         -> MINUS
   | '*'                         -> STAR
   | '/'                         -> SLASH
+  | '|'                         -> PIPE
   | '$'                         -> DOLLAR
   | '#'                         -> HASH
   | '&'                         -> AND
@@ -64,9 +69,16 @@ let rec token buf =
   | "variant"                   -> VARIANT
   | "tuple"                     -> TUPLE
   | "enum"                      -> ENUM
+  | "package"                   -> PACKAGE
+  | "import"                    -> IMPORT
+  | "implicit"                  -> IMPLICIT
+  | "init"                      -> INIT
   | "if"                        -> IF
   | "elif"                      -> ELIF
   | "else"                      -> ELSE
+  | "guard"                     -> GUARD
+  | "match"                     -> MATCH
+  | "spawn"                     -> SPAWN
   | "loop"                      -> LOOP
   | "from"                      -> FROM
   | "to"                        -> TO
@@ -77,7 +89,7 @@ let rec token buf =
   | "abort"                     -> ABORT
   | "return"                    -> RETURN
   | "resolve"                   -> RESOLVE
-  | lower_ident                 -> LIDENT (Utf8.lexeme buf)
-  | upper_ident                 -> UIDENT (Utf8.lexeme buf)
-  | eof                         -> EOF
-  | _                           -> raise Lexing_error
+  | lower_ident                  -> LIDENT (Utf8.lexeme buf)
+  | upper_ident                  -> UIDENT (Utf8.lexeme buf)
+  | eof                          -> EOF
+  | _                            -> raise Lexing_error
