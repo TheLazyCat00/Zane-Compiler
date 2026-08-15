@@ -145,7 +145,10 @@ let constructor_expr name args =
    always ends with `;`. A declaration that defines a verb ends with `;` only
    when its body is `=> expr`; a `{ }` body closes the construct itself. The
    rule reads the same at the top level and inside a body, so moving a
-   declaration between them does not change how it is spelled. *)
+   declaration between them does not change how it is spelled.
+
+   The spec separates statements by newline instead; see
+   docs/spec-divergences.md. *)
 package:
   | decls=list(top_decl) EOF { { Nodes.Package.decls = decls } }
 
@@ -542,7 +545,8 @@ verb_call:
     }
 
 (* An arm follows the same rule as a declaration body: `=> expr` needs the
-   terminator, a `{ }` block closes itself. *)
+   terminator, a `{ }` block closes itself. The spec terminates every arm; see
+   docs/spec-divergences.md. *)
 %inline match_arm:
   | patterns=separated_nonempty_list(",", match_pattern) body=block_body {
       ({ Nodes.Match_arm.patterns; body } : Nodes.Match_arm.t)
