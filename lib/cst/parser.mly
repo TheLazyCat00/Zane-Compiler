@@ -143,11 +143,18 @@ let constructor_expr name args =
 (*************************)
 %%
 
-(* The terminator marks a declaration that binds a value. A declaration that
-   binds one — a variable, either lambda spelling, a shorthand constructor —
-   always ends with `;`. A declaration that defines a verb ends with `;` only
-   when its body is `=> expr`; a `{ }` body closes the construct itself. The
-   rule reads the same at the top level and inside a body, so moving a
+(* A declaration ends with `;` unless something already closes it.
+
+   A declaration that binds a value — a variable, either lambda spelling, a
+   shorthand constructor — always ends with `;`. A verb declaration ends with
+   `;` only when its body is `=> expr`, since a `{ }` body closes it. A type
+   declaration ends with `;` only when it is cast from a bare type expression,
+   since a mould closes it with its own delimiter: `{ }` where the contents are
+   named typed members, `[ ]` where they are a flat list of names. Which
+   delimiter a mould uses is decided by its contents and says nothing about the
+   terminator, so `enum` reads like every other mould.
+
+   The rule is the same at the top level and inside a body, so moving a
    declaration between them does not change how it is spelled.
 
    The spec separates statements by newline instead; see
@@ -365,20 +372,24 @@ body_decl(body_form):
     }
 
 (* Ends in a `{ }` block, which closes the construct on its own. *)
-block_decl:
-  | value=body_decl(block_body) { value }
+type_decl(value_form):
   | "type" name=UIDENT params=loption(delimited("<", separated_nonempty_list(",", generic_param), ">"))
-    "=" value=type_or_moulded {
+    "=" value=value_form {
       Nodes.Decl.Type { name; params; value }
     }
   | "alias" name=UIDENT params=loption(delimited("<", separated_nonempty_list(",", generic_param), ">"))
-    "=" value=type_or_moulded {
+    "=" value=value_form {
       Nodes.Decl.Alias { name; params; value }
     }
+
+block_decl:
+  | value=body_decl(block_body) { value }
+  | value=type_decl(moulded_value) { value }
 
 (* Ends in an expression, so it needs the terminator. *)
 simple_decl:
   | value=body_decl(shorthand_body) { value }
+  | value=type_decl(raw_value) { value }
   | PACKAGE name=LIDENT {
       Nodes.Decl.Package name
     }
@@ -414,12 +425,14 @@ simple_decl:
       Nodes.Decl.Verb (Nodes.Verb_decl.Subscript { this_type; params; value })
     }
 
-%inline type_or_moulded:
-  | value=type_expr {
-      Nodes.Type_or_moulded.Raw value
-    }
+%inline moulded_value:
   | value=moulded {
       Nodes.Type_or_moulded.Moulded value
+    }
+
+%inline raw_value:
+  | value=type_expr {
+      Nodes.Type_or_moulded.Raw value
     }
 
 %inline mould:

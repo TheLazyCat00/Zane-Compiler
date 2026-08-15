@@ -99,6 +99,20 @@ class ParserSyntaxTests(unittest.TestCase):
             '''
         )
 
+    def test_a_mould_closes_its_declaration_and_a_raw_type_does_not(self) -> None:
+        self.assert_parses(
+            '''
+            type Shaped = struct { x Int; }
+            type Marked = #struct { next &Marked; }
+            type Cased = variant { some Int; }
+            type Listed = enum [ red, green ]
+
+            type Meters = Int;
+            type Mapper<T Type> = T;
+            alias Metres = Meters;
+            '''
+        )
+
     def test_comparison_chains_and_short_circuit_keywords(self) -> None:
         self.assert_parses(
             '''
