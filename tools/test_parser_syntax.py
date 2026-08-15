@@ -28,14 +28,14 @@ class ParserSyntaxTests(unittest.TestCase):
             type Vector2 = struct { x Float; y Float; }
 
             Vector2.zeros() => init{x = Float(0), y = Float(0)}
-            Vector2.from{x Float, y Float = Float(0)} => init{x, y}
+            Vector2.fromPair{x Float, y Float = Float(0)} => init{x, y}
             Vector2<T>{x T Type, y T} => init{x, y}
             implicit Vector2(v Float) => init{x = v, y = v}
 
             Unit use() {
                 a Vector2.zeros();
                 b Vector2{x = Float(1), y = Float(2)};
-                c Vector2.from{x = Float(3)};
+                c Vector2.fromPair{x = Float(3)};
                 return Unit();
             }
             '''
