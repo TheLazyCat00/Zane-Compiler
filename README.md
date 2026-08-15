@@ -59,7 +59,7 @@ ambiguity prove 3
 syntax-experiment --max-tokens 12 --timeout 15 --max-witnesses 10
 syntax-experiment --variant semicolon-separated --max-tokens 12 --timeout 15 --max-witnesses 10
 grammar-stat
-grammar-conflict
+grammar-sentence
 ```
 
 The `justfile` is reserved for parameterless project actions such as rebuilding,

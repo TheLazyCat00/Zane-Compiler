@@ -52,7 +52,7 @@ jobs:
       # the search engine's own tests. The recipe fails loudly when Menhir is
       # missing rather than reporting a green run that skipped them.
       - name: Parser and ambiguity tests
-        run: devbox run -- just ambiguity-test
+        run: devbox run -- just test
 
       # `just syntax-experiment-test` is deliberately absent. Its transforms
       # anchor on grammar text that has since moved, so it fails on `main`
