@@ -50,7 +50,8 @@ dune build
 Common tools are available directly inside the development shell:
 
 ```sh
-compiler
+compiler                     # print the CST for test-parser/main.zn
+compiler path/to/source.zn   # ... or for a named file, `-` for standard input
 ambiguity profiles
 ambiguity search
 ambiguity search deep-function-body --timeout 1h --output deep-search.txt

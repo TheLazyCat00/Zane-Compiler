@@ -2,5 +2,18 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+
+# Dune runs from the project root, so a relative source path would otherwise be
+# resolved against the root rather than the directory the caller is in. Expand
+# the arguments that name an existing file before changing directory.
+arguments=()
+for argument in "$@"; do
+	if [[ "$argument" != "-" && -e "$argument" ]]; then
+		arguments+=("$(cd "$(dirname "$argument")" && pwd)/$(basename "$argument")")
+	else
+		arguments+=("$argument")
+	fi
+done
+
 cd "$ROOT"
-exec dune exec bin/compiler/main.exe -- "$@"
+exec dune exec bin/compiler/main.exe -- ${arguments[@]+"${arguments[@]}"}
