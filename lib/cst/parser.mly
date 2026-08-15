@@ -120,9 +120,8 @@ let constructor_expr name args =
 %token RESOLVE     "resolve"
 %token EOF          "<eof>"
 
-(* Keep the compiler's statement-terminator grammar and existing grouping
-   decisions. New syntax is inserted around those decisions rather than
-   respelling existing programs to match the prose spec. *)
+(* Keep the existing grouping decisions. New syntax is inserted around them
+   rather than respelling existing programs to match the prose spec. *)
 %right THICK_ARROW
 %nonassoc EQEQ NOTEQ LESSEQ MOREEQ LESS MORE   /* comparisons */
 %left PLUS MINUS
@@ -141,18 +140,28 @@ let constructor_expr name args =
 (*************************)
 %%
 
+(* The terminator marks a declaration that binds a value. A declaration that
+   binds one — a variable, either lambda spelling, a shorthand constructor —
+   always ends with `;`. A declaration that defines a verb ends with `;` only
+   when its body is `=> expr`; a `{ }` body closes the construct itself. The
+   rule reads the same at the top level and inside a body, so moving a
+   declaration between them does not change how it is spelled. *)
 package:
-  | decls=list(decl) EOF { { Nodes.Package.decls = decls } }
+  | decls=list(top_decl) EOF { { Nodes.Package.decls = decls } }
 
-%inline func_lambda:
-  | ret_type=ret_type "(" params=separated_list(COMMA, param) ")" body=body {
+top_decl:
+  | value=block_decl { value }
+  | value=simple_decl ";" { value }
+
+%inline func_lambda(body_form):
+  | ret_type=ret_type "(" params=separated_list(COMMA, param) ")" body=body_form {
       { Nodes.Func_lambda.params; ret_type; body }
     }
 
-%inline meth_lambda:
+%inline meth_lambda(body_form):
   | ret_type=ret_type "(" THIS this_type=type_expr
     params=loption(preceded(",", separated_nonempty_list(",", param)))
-    ")" is_mut=boption(MUT) body=body {
+    ")" is_mut=boption(MUT) body=body_form {
       { Nodes.Meth_lambda.this_type; params; ret_type; is_mut; body }
     }
 
@@ -307,7 +316,63 @@ type_expr:
       (member, value)
     }
 
-decl:
+body_decl(body_form):
+  | ret_type=ret_type name=LIDENT "(" params=separated_list(",", param) ")" body=body_form {
+      Nodes.Decl.Verb (Nodes.Verb_decl.Func { name; params; ret_type; body })
+    }
+  | ret_type=ret_type name=LIDENT "(" THIS this_type=type_expr
+    params=loption(preceded(",", separated_nonempty_list(",", param)))
+    ")" is_mut=boption(MUT) body=body_form {
+      Nodes.Decl.Verb (Nodes.Verb_decl.Meth {
+        name;
+        this_type;
+        params;
+        ret_type;
+        is_mut;
+        body;
+      })
+    }
+  | type_=constructor_decl_name params=constructor_params body=body_form {
+      let type_, member = type_ in
+      Nodes.Decl.Verb (Nodes.Verb_decl.Constructor {
+        type_;
+        member;
+        params;
+        body;
+        is_implicit = false;
+      })
+    }
+  | IMPLICIT type_=named_type_expr "(" param=param ")" body=body_form {
+      Nodes.Decl.Verb (Nodes.Verb_decl.Constructor {
+        type_;
+        member = None;
+        params = Nodes.Constructor_params.Positional [param];
+        body;
+        is_implicit = true;
+      })
+    }
+  | ret_type=ret_type op=operator "(" params=separated_list(",", param) ")" body=body_form {
+      Nodes.Decl.Verb (Nodes.Verb_decl.Op { op; params; ret_type; body })
+    }
+  | ret_type=ret_type "~" "(" params=separated_list(",", param) ")" body=body_form {
+      Nodes.Decl.Verb (Nodes.Verb_decl.Flip { params; ret_type; body })
+    }
+
+(* Ends in a `{ }` block, which closes the construct on its own. *)
+block_decl:
+  | value=body_decl(block_body) { value }
+  | "type" name=UIDENT params=loption(delimited("<", separated_nonempty_list(",", generic_param), ">"))
+    "=" value=type_or_moulded {
+      Nodes.Decl.Type { name; params; value }
+    }
+  | "alias" name=UIDENT params=loption(delimited("<", separated_nonempty_list(",", generic_param), ">"))
+    "=" value=type_or_moulded {
+      Nodes.Decl.Alias { name; params; value }
+    }
+
+(* Ends in an expression, so it needs the terminator. *)
+simple_decl:
+  | value=body_decl(shorthand_body) { value }
   | PACKAGE name=LIDENT {
       Nodes.Decl.Package name
     }
@@ -320,75 +385,27 @@ decl:
   | name=LIDENT constructor=constructor_name args=constructor_args {
       Nodes.Decl.VarShorthand { name; constructor; args }
     }
-  | name=LIDENT func_lambda=func_lambda {
+  | name=LIDENT func_lambda=func_lambda(body) {
       Nodes.Decl.Var {
         name;
         type_ = Nodes.func_type_of_lambda func_lambda;
         value = Nodes.Expr.FuncLambda func_lambda;
       }
     }
-  | name=LIDENT meth_lambda=meth_lambda {
+  | name=LIDENT meth_lambda=meth_lambda(body) {
       Nodes.Decl.Var {
         name;
         type_ = Nodes.meth_type_of_lambda meth_lambda;
         value = Nodes.Expr.MethLambda meth_lambda;
       }
     }
-  | ret_type=ret_type name=LIDENT "(" params=separated_list(",", param) ")" body=body {
-      Nodes.Decl.Verb (Nodes.Verb_decl.Func { name; params; ret_type; body })
-    }
-  | ret_type=ret_type name=LIDENT "(" THIS this_type=type_expr
-    params=loption(preceded(",", separated_nonempty_list(",", param)))
-    ")" is_mut=boption(MUT) body=body {
-      Nodes.Decl.Verb (Nodes.Verb_decl.Meth {
-        name;
-        this_type;
-        params;
-        ret_type;
-        is_mut;
-        body;
-      })
-    }
   | enum=named_type_expr "." property=LIDENT map_type=type_expr
     "[" entries=separated_list(",", enum_map_entry) "]" {
       Nodes.Decl.EnumMap { enum; property; type_ = map_type; entries }
     }
-  | type_=constructor_decl_name params=constructor_params body=body {
-      let type_, member = type_ in
-      Nodes.Decl.Verb (Nodes.Verb_decl.Constructor {
-        type_;
-        member;
-        params;
-        body;
-        is_implicit = false;
-      })
-    }
-  | IMPLICIT type_=named_type_expr "(" param=param ")" body=body {
-      Nodes.Decl.Verb (Nodes.Verb_decl.Constructor {
-        type_;
-        member = None;
-        params = Nodes.Constructor_params.Positional [param];
-        body;
-        is_implicit = true;
-      })
-    }
   | "(" THIS this_type=type_expr ")"
     "[" params=separated_list(",", param) "]" "=>" value=expr {
       Nodes.Decl.Verb (Nodes.Verb_decl.Subscript { this_type; params; value })
-    }
-  | ret_type=ret_type op=operator "(" params=separated_list(",", param) ")" body=body {
-      Nodes.Decl.Verb (Nodes.Verb_decl.Op { op; params; ret_type; body })
-    }
-  | ret_type=ret_type "~" "(" params=separated_list(",", param) ")" body=body {
-      Nodes.Decl.Verb (Nodes.Verb_decl.Flip { params; ret_type; body })
-    }
-  | "type" name=UIDENT params=loption(delimited("<", separated_nonempty_list(",", generic_param), ">"))
-    "=" value=type_or_moulded {
-      Nodes.Decl.Type { name; params; value }
-    }
-  | "alias" name=UIDENT params=loption(delimited("<", separated_nonempty_list(",", generic_param), ">"))
-    "=" value=type_or_moulded {
-      Nodes.Decl.Alias { name; params; value }
     }
 
 %inline type_or_moulded:
@@ -426,13 +443,19 @@ decl:
       ({ Nodes.Body_field.name; type_ } : Nodes.Body_field.t)
     }
 
-body:
+block_body:
   | "{" stats=list(stat) "}" {
       Nodes.Body.Longhand stats
     }
+
+shorthand_body:
   | "=>" value=expr {
       Nodes.Body.Shorthand value
     }
+
+body:
+  | value=block_body { value }
+  | value=shorthand_body { value }
 
 ret_type:
   | value=type_expr {
@@ -518,13 +541,13 @@ verb_call:
       ({ Nodes.Match_pattern.binder = Some binder; cases } : Nodes.Match_pattern.t)
     }
 
-(* Every arm carries the terminator, a `{ }` block body included, so a longhand
-   arm reads `pattern { ... };`. The arms are a `;`-separated entry list like a
-   `struct` body, and the terminator belongs to the entry rather than to the body
-   that precedes it. The same holds for a longhand abort handler in statement
-   position: `call() ? { ... };`. *)
+(* An arm follows the same rule as a declaration body: `=> expr` needs the
+   terminator, a `{ }` block closes itself. *)
 %inline match_arm:
-  | patterns=separated_nonempty_list(",", match_pattern) body=body ";" {
+  | patterns=separated_nonempty_list(",", match_pattern) body=block_body {
+      ({ Nodes.Match_arm.patterns; body } : Nodes.Match_arm.t)
+    }
+  | patterns=separated_nonempty_list(",", match_pattern) body=shorthand_body ";" {
       ({ Nodes.Match_arm.patterns; body } : Nodes.Match_arm.t)
     }
 
@@ -587,8 +610,8 @@ app:
 expr:
   | app=app { app }
   | value=spawn_expr { value }
-  | func_lambda=func_lambda { Nodes.Expr.FuncLambda func_lambda }
-  | meth_lambda=meth_lambda { Nodes.Expr.MethLambda meth_lambda }
+  | func_lambda=func_lambda(body) { Nodes.Expr.FuncLambda func_lambda }
+  | meth_lambda=meth_lambda(body) { Nodes.Expr.MethLambda meth_lambda }
   | left=expr op=comparison_op right=expr %prec EQEQ {
       Nodes.Expr.VerbCall (Nodes.Verb_call.Op {
         op;
@@ -664,7 +687,10 @@ stat:
   | target=app "=" value=expr ";" {
       Nodes.Stat.Assign { target; value }
     }
-  | decl=decl ";" {
+  | decl=block_decl {
+      Nodes.Stat.Decl decl
+    }
+  | decl=simple_decl ";" {
       Nodes.Stat.Decl decl
     }
   | call=verb_call abort_handle=ioption(abort_handle) ";" {

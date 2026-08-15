@@ -27,10 +27,10 @@ class ParserSyntaxTests(unittest.TestCase):
             '''
             type Vector2 = struct { x Float; y Float; }
 
-            Vector2.zeros() => init{x = Float(0), y = Float(0)}
-            Vector2.fromPair{x Float, y Float = Float(0)} => init{x, y}
-            Vector2<T>{x T Type, y T} => init{x, y}
-            implicit Vector2(v Float) => init{x = v, y = v}
+            Vector2.zeros() => init{x = Float(0), y = Float(0)};
+            Vector2.fromPair{x Float, y Float = Float(0)} => init{x, y};
+            Vector2<T>{x T Type, y T} => init{x, y};
+            implicit Vector2(v Float) => init{x = v, y = v};
 
             Unit use() {
                 a Vector2.zeros();
@@ -46,7 +46,7 @@ class ParserSyntaxTests(unittest.TestCase):
             '''
             type Node = #struct { next &Node; }
 
-            (this Node)[index Int] => this
+            (this Node)[index Int] => this;
 
             Unit work(this Node) mut {
                 this.next = &this;
@@ -61,16 +61,16 @@ class ParserSyntaxTests(unittest.TestCase):
     def test_match_enum_map_type_members_pipe_and_inequality(self) -> None:
         self.assert_parses(
             '''
-            package demo
-            import std
+            package demo;
+            import std;
 
             type Color = enum [ red, green ]
-            Color.label String [ red = "Red", green = "Green" ]
+            Color.label String [ red = "Red", green = "Green" ];
 
             String show(c Color) => match c {
                 red => Color.red.label;
                 green => "Green";
-            }
+            };
 
             Unit use() {
                 different Bool = true ~= false;
@@ -82,7 +82,7 @@ class ParserSyntaxTests(unittest.TestCase):
             '''
         )
 
-    def test_longhand_match_arm_carries_the_arm_terminator(self) -> None:
+    def test_match_arm_terminator_follows_the_body_shape(self) -> None:
         self.assert_parses(
             '''
             type Color = enum [ red, green ]
@@ -91,7 +91,7 @@ class ParserSyntaxTests(unittest.TestCase):
                 label String = match c {
                     red {
                         return "Red";
-                    };
+                    }
                     green => "Green";
                 };
                 return label;
@@ -116,7 +116,7 @@ class ParserSyntaxTests(unittest.TestCase):
                 data Array<T, n>;
             }
 
-            T first(values Array<T Type, n Number>) => values[0]
+            T first(values Array<T Type, n Number>) => values[0];
 
             Unit literals() {
                 values Array<Int, 3> = Array([Int(1), Int(2), Int(3)]);
