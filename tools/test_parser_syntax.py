@@ -82,6 +82,23 @@ class ParserSyntaxTests(unittest.TestCase):
             '''
         )
 
+    def test_longhand_match_arm_carries_the_arm_terminator(self) -> None:
+        self.assert_parses(
+            '''
+            type Color = enum [ red, green ]
+
+            String show(c Color) {
+                label String = match c {
+                    red {
+                        return "Red";
+                    };
+                    green => "Green";
+                };
+                return label;
+            }
+            '''
+        )
+
     def test_alias_moulds_and_line_comments(self) -> None:
         self.assert_parses(
             '''

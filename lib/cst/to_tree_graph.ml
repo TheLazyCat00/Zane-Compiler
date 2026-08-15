@@ -427,16 +427,16 @@ and verb_decl_to_node (x: Nodes.Verb_decl.t) = match x with
         ("is_mut",    Leaf (string_of_bool x.is_mut));
       ])
   | Constructor x ->
-      let type_ = match x.type_ with
-        | Nodes.Type_expr.Path { name; generics = [] } -> name_type_to_node name
-        | type_ -> type_to_node type_
-      in
+      (* A constructor declaration carries a full type expression because it may
+         introduce generics, so its "type" renders like every other Type_expr
+         field. A constructor call names a plain Name_type and renders as a leaf;
+         the two shapes differ because the nodes differ. *)
       let params = match x.params with
         | Nodes.Constructor_params.Positional params -> params_to_node params
         | Nodes.Constructor_params.Fields fields_ ->
             group "fields" (map_seq constructor_field_to_node fields_)
       in
-      let fs = [("type", type_)] in
+      let fs = [("type", type_to_node x.type_)] in
       let fs = match x.member with
         | Some member -> fs @ [("member", Leaf member)]
         | None -> fs
@@ -444,8 +444,8 @@ and verb_decl_to_node (x: Nodes.Verb_decl.t) = match x with
       let fs = fs @ [
         ("param", params);
         ("body", body_to_node x.body);
+        ("is_implicit", Leaf (string_of_bool x.is_implicit));
       ] in
-      let fs = if x.is_implicit then fs @ [("is_implicit", Leaf "true")] else fs in
       group "ctor_decl" (fields fs)
   | Subscript x ->
       group "subscript_decl" (fields [

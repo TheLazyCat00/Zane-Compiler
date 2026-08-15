@@ -264,40 +264,20 @@ type_expr:
       Nodes.Constructor_args.Fields args
     }
 
+(* A named type after the binder either is the field's own type or introduces an
+   inferred type parameter. Constructor fields and parameters spell that pair the
+   same way, so both take it from here. *)
+%inline field_type:
+  | type_=type_expr {
+      Nodes.Param_type.Concrete type_
+    }
+  | name=UIDENT "Type" {
+      Nodes.Param_type.InferredType { name; concept = Nodes.Concept.Type }
+    }
+
 %inline constructor_field:
-  | name=LIDENT type_=type_expr {
-      ({
-        Nodes.Constructor_field.name;
-        type_ = Nodes.Param_type.Concrete type_;
-        default = None;
-      } : Nodes.Constructor_field.t)
-    }
-  | name=LIDENT type_name=UIDENT "Type" {
-      ({
-        Nodes.Constructor_field.name;
-        type_ = Nodes.Param_type.InferredType {
-          name = type_name;
-          concept = Nodes.Concept.Type;
-        };
-        default = None;
-      } : Nodes.Constructor_field.t)
-    }
-  | name=LIDENT type_=type_expr "=" default=expr {
-      ({
-        Nodes.Constructor_field.name;
-        type_ = Nodes.Param_type.Concrete type_;
-        default = Some default;
-      } : Nodes.Constructor_field.t)
-    }
-  | name=LIDENT type_name=UIDENT "Type" "=" default=expr {
-      ({
-        Nodes.Constructor_field.name;
-        type_ = Nodes.Param_type.InferredType {
-          name = type_name;
-          concept = Nodes.Concept.Type;
-        };
-        default = Some default;
-      } : Nodes.Constructor_field.t)
+  | name=LIDENT type_=field_type default=ioption(preceded("=", expr)) {
+      ({ Nodes.Constructor_field.name; type_; default } : Nodes.Constructor_field.t)
     }
   | name=LIDENT constructor=constructor_name args=constructor_args {
       let type_ = Nodes.Type_expr.Path { name = constructor.type_; generics = [] } in
@@ -538,6 +518,11 @@ verb_call:
       ({ Nodes.Match_pattern.binder = Some binder; cases } : Nodes.Match_pattern.t)
     }
 
+(* Every arm carries the terminator, a `{ }` block body included, so a longhand
+   arm reads `pattern { ... };`. The arms are a `;`-separated entry list like a
+   `struct` body, and the terminator belongs to the entry rather than to the body
+   that precedes it. The same holds for a longhand abort handler in statement
+   position: `call() ? { ... };`. *)
 %inline match_arm:
   | patterns=separated_nonempty_list(",", match_pattern) body=body ";" {
       ({ Nodes.Match_arm.patterns; body } : Nodes.Match_arm.t)
@@ -719,17 +704,8 @@ stat:
     }
 
 %inline param:
-  | name=LIDENT type_=type_expr {
-      ({ Nodes.Param.name; type_ = Nodes.Param_type.Concrete type_ } : Nodes.Param.t)
-    }
-  | name=LIDENT type_name=UIDENT "Type" {
-      ({
-        Nodes.Param.name;
-        type_ = Nodes.Param_type.InferredType {
-          name = type_name;
-          concept = Nodes.Concept.Type;
-        };
-      } : Nodes.Param.t)
+  | name=LIDENT type_=field_type {
+      ({ Nodes.Param.name; type_ } : Nodes.Param.t)
     }
   | name=UIDENT "Type" {
       ({ Nodes.Param.name; type_ = Nodes.Param_type.Concept Nodes.Concept.Type } : Nodes.Param.t)
