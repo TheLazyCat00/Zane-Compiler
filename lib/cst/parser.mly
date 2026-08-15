@@ -534,6 +534,10 @@ verb_call:
       Nodes.Expr.Match { scrutinees; arms; abort_handle = None }
     }
 
+(* `spawn` takes the whole call, so it is an expression rather than a postfix
+   base: `spawn false()()` spawns the outer call. Were it a `primary`, a
+   trailing `(` could attach outside it as well as inside, giving the same
+   tokens two readings. Parenthesize to call what a spawn produces. *)
 %inline spawn_expr:
   | SPAWN call=verb_call {
       Nodes.Expr.Spawn (call None)
@@ -557,7 +561,6 @@ primary:
       Nodes.Expr.Init fields
     }
   | value=match_expr { value }
-  | value=spawn_expr { value }
 
 %inline type_member:
   | type_=name_type "." member=LIDENT {
@@ -583,6 +586,7 @@ app:
 
 expr:
   | app=app { app }
+  | value=spawn_expr { value }
   | func_lambda=func_lambda { Nodes.Expr.FuncLambda func_lambda }
   | meth_lambda=meth_lambda { Nodes.Expr.MethLambda meth_lambda }
   | left=expr op=comparison_op right=expr %prec EQEQ {
@@ -623,11 +627,27 @@ expr:
         abort_handle = None;
       })
     }
-  | "&" value=expr %prec AND {
+  | "&" value=ref_target %prec AND {
       Nodes.Expr.Ref value
     }
   | value=expr abort_handle=abort_handle %prec QSTNQSTN {
       attach_abort_handle value abort_handle
+    }
+
+(* What a reference may be taken of: a postfix chain, optionally under further
+   prefixes. A bare lambda is excluded, so the leading `&` in `&Int () { }`
+   belongs to the return type and the whole reads as a lambda returning `&Int`.
+   Parenthesize the lambda to take a reference to it. *)
+ref_target:
+  | value=app { value }
+  | "&" value=ref_target %prec AND {
+      Nodes.Expr.Ref value
+    }
+  | "~" value=ref_target %prec TILDE {
+      Nodes.Expr.VerbCall (Nodes.Verb_call.Flip {
+        value;
+        abort_handle = None;
+      })
     }
 
 abort_handle:

@@ -20,6 +20,9 @@ let rec expr_shape (expr : Cst.Nodes.Expr.t) =
       _;
     } ->
       "lambda(" ^ expr_shape body ^ ")"
+  | Cst.Nodes.Expr.Spawn call ->
+      "spawn(" ^ expr_shape (Cst.Nodes.Expr.VerbCall call) ^ ")"
+  | Cst.Nodes.Expr.Ref value -> "ref(" ^ expr_shape value ^ ")"
   | _ -> "other"
 
 let abort_expr (package : Cst.Nodes.Package.t) =
