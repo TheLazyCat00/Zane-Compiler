@@ -1,14 +1,26 @@
 name: CI
 
+# A pull request is where these checks are wanted, so they run there as well as
+# in the merge queue. `workflow_dispatch` allows a re-run against any branch
+# without opening a pull request.
 on:
+  pull_request:
   merge_group:
+  workflow_dispatch:
 
 permissions:
   contents: read
 
+# Superseded pull request runs are cancelled; a merge queue run is not, since
+# the queue is waiting on its result.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
       - name: Checkout code
@@ -18,12 +30,31 @@ jobs:
 
       - name: Install devbox + Nix + devbox.json packages
         uses: jetify-com/devbox-install-action@v0.15.0
+        with:
+          enable-cache: true
 
       - name: Sanity check
         run: devbox list
 
-      - name: Init Meson
-        run: devbox run -- just init
+      # The init hook bootstraps the opam switch, but doing it as its own step
+      # keeps a toolchain failure from being reported as a build failure.
+      #
+      # Every command below is a single word followed by plain arguments:
+      # `devbox run` quotes each argument and `eval`s the result, so a shell
+      # snippet passed this way would be mangled rather than run.
+      - name: Install OCaml dependencies
+        run: devbox run -- dev/bin/bootstrap-toolchain
 
-      - name: clang-check
-        run: devbox run -- just check
+      - name: Build
+        run: devbox run -- just rebuild
+
+      # Covers the parser acceptance tests, the grammar ambiguity checks, and
+      # the search engine's own tests. The recipe fails loudly when Menhir is
+      # missing rather than reporting a green run that skipped them.
+      - name: Parser and ambiguity tests
+        run: devbox run -- just test
+
+      # `just syntax-experiment-test` is deliberately absent. Its transforms
+      # anchor on grammar text that has since moved, so it fails on `main`
+      # today (one failure, three errors) independently of any pull request.
+      # Add the step back once the anchors track the grammar again.

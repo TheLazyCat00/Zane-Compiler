@@ -110,6 +110,54 @@ class ParserGrammarAmbiguityTests(unittest.TestCase):
             "lambda(flip(dot(call(name))))",
         )
 
+    def test_dot_constructor_has_one_constructor_reading(self) -> None:
+        self.assert_grouping(
+            "UIDENT LIDENT LPAREN RPAREN LCURLY ABORT "
+            "UIDENT DOT LIDENT LPAREN RPAREN SEMICOLON RCURLY EOF",
+            "Int length() { abort Vector2.zeros(); }",
+            "named_ctor",
+        )
+
+    def test_spawn_takes_the_outer_call(self) -> None:
+        self.assert_grouping(
+            "UIDENT LIDENT LPAREN RPAREN LCURLY ABORT "
+            "SPAWN FALSE LPAREN RPAREN LPAREN RPAREN SEMICOLON RCURLY EOF",
+            "Int length() { abort spawn false()(); }",
+            "spawn(call(call(bool)))",
+        )
+
+    def test_parentheses_allow_calling_what_a_spawn_produces(self) -> None:
+        self.assert_grouping(
+            "UIDENT LIDENT LPAREN RPAREN LCURLY ABORT LPAREN "
+            "SPAWN FALSE LPAREN RPAREN RPAREN LPAREN RPAREN SEMICOLON RCURLY EOF",
+            "Int length() { abort (spawn false())(); }",
+            "call(paren(spawn(call(bool))))",
+        )
+
+    def test_leading_reference_binds_the_lambda_return_type(self) -> None:
+        self.assert_grouping(
+            "UIDENT LIDENT LPAREN RPAREN LCURLY ABORT "
+            "AMPERSAND UIDENT LPAREN RPAREN THICK_ARROW FALSE SEMICOLON RCURLY EOF",
+            "Int length() { abort &Int () => false; }",
+            "lambda(bool)",
+        )
+
+    def test_parentheses_allow_referencing_the_lambda(self) -> None:
+        self.assert_grouping(
+            "UIDENT LIDENT LPAREN RPAREN LCURLY ABORT AMPERSAND LPAREN "
+            "UIDENT LPAREN RPAREN THICK_ARROW FALSE RPAREN SEMICOLON RCURLY EOF",
+            "Int length() { abort &(Int () => false); }",
+            "ref(paren(lambda(bool)))",
+        )
+
+    def test_bare_type_member_has_one_value_reading(self) -> None:
+        self.assert_grouping(
+            "UIDENT LIDENT LPAREN RPAREN LCURLY ABORT "
+            "UIDENT DOT LIDENT SEMICOLON RCURLY EOF",
+            "Int length() { abort Colors.red; }",
+            "type_member",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

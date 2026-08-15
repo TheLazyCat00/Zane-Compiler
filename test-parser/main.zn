@@ -29,4 +29,4 @@ Void?String main (this Int, a Bool) mut {
 	}
 }
 
-square Int (x Int, y Int) => x * y
+square Int (x Int, y Int) => x * y;

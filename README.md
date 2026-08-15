@@ -50,7 +50,8 @@ dune build
 Common tools are available directly inside the development shell:
 
 ```sh
-compiler
+compiler                     # print the CST for test-parser/main.zn
+compiler path/to/source.zn   # ... or for a named file, `-` for standard input
 ambiguity profiles
 ambiguity search
 ambiguity search deep-function-body --timeout 1h --output deep-search.txt
@@ -59,7 +60,7 @@ ambiguity prove 3
 syntax-experiment --max-tokens 12 --timeout 15 --max-witnesses 10
 syntax-experiment --variant semicolon-separated --max-tokens 12 --timeout 15 --max-witnesses 10
 grammar-stat
-grammar-conflict
+grammar-sentence
 ```
 
 The `justfile` is reserved for parameterless project actions such as rebuilding,

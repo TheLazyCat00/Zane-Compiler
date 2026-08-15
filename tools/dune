@@ -5,3 +5,7 @@
 (executable
  (name parser_shape)
  (libraries cst))
+
+(executable
+ (name parser_accept)
+ (libraries cst))

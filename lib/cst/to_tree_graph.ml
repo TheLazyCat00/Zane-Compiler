@@ -40,6 +40,11 @@ let rec concept_to_node (x: Nodes.Concept.t) = match x with
 and param_type_to_node (x: Nodes.Param_type.t) = match x with
   | Concrete x -> type_to_node x
   | Concept x -> concept_to_node x
+  | InferredType { name; concept } ->
+      fields [
+        ("name", Leaf name);
+        ("concept", concept_to_node concept);
+      ]
 
 and verb_type_to_node (x: Nodes.Verb_type.t) = match x with
   | Func { params; ret_type } ->
@@ -65,15 +70,16 @@ and mould_to_node (x: Nodes.Mould.t) = match x with
   | Struct x -> group "struct" (map_seq body_field_to_node x)
   | Variant x -> group "variant" (map_seq body_field_to_node x)
   | Enum x -> group "enum" (map_seq (fun x -> Leaf x) x)
-  | Tuple x -> group "tuple" (map_seq type_to_node x)
 
 and generic_arg_to_node (x: Nodes.Generic_arg.t) = match x with
   | Type x -> type_to_node x
   | Number x -> group "number" (Leaf x)
+  | NumberRef x -> group "number_ref" (Leaf x)
   | Inferred x -> group "param" (param_to_node x)
 
 and type_to_node (x: Nodes.Type_expr.t) = match x with
   | Verb x -> verb_type_to_node x
+  | Guest x -> group "guest" (type_to_node x)
   | Parenthesized x -> group "parenthesized" (type_to_node x)
   | Path { name; generics } ->
       fields [
@@ -83,6 +89,14 @@ and type_to_node (x: Nodes.Type_expr.t) = match x with
 
 and abort_field abort_handle =
   ("abort", Option.fold ~none:(Leaf "none") ~some:abort_handle_to_node abort_handle)
+
+and field_arg_to_node (x: Nodes.Field_arg.t) =
+  let fs = [("name", Leaf x.name)] in
+  let fs = match x.value with
+    | Some value -> fs @ [("value", expr_to_node value)]
+    | None -> fs
+  in
+  fields fs
 
 and verb_call_to_node (x: Nodes.Verb_call.t) = match x with
   | Func { callee; args; abort_handle } ->
@@ -99,12 +113,20 @@ and verb_call_to_node (x: Nodes.Verb_call.t) = match x with
         ("is_mut", Leaf (string_of_bool is_mut));
         abort_field abort_handle;
       ])
-  | Constructor { name_type; args; abort_handle } ->
-      group "ctor_call" (fields [
-        ("type", name_type_to_node name_type);
-        ("args", map_seq expr_to_node args);
+  | Constructor { name; args; abort_handle } ->
+      let fs = [("type", name_type_to_node name.type_)] in
+      let fs = match name.member with
+        | Some member -> fs @ [("member", Leaf member)]
+        | None -> fs
+      in
+      let args = match args with
+        | Nodes.Constructor_args.Positional args -> map_seq expr_to_node args
+        | Nodes.Constructor_args.Fields args -> group "fields" (map_seq field_arg_to_node args)
+      in
+      group "ctor_call" (fields (fs @ [
+        ("args", args);
         abort_field abort_handle;
-      ])
+      ]))
   | Op { op; left; right; abort_handle } ->
       group "op_call" (fields [
         ("op", Leaf (op_to_name op));
@@ -118,21 +140,77 @@ and verb_call_to_node (x: Nodes.Verb_call.t) = match x with
         abort_field abort_handle;
       ])
 
+and match_pattern_to_node (x: Nodes.Match_pattern.t) =
+  let fs = [("cases", map_seq (fun case -> Leaf case) x.cases)] in
+  let fs = match x.binder with
+    | Some binder -> ("binder", Leaf binder) :: fs
+    | None -> fs
+  in
+  fields fs
+
+and match_arm_to_node (x: Nodes.Match_arm.t) =
+  fields [
+    ("patterns", map_seq match_pattern_to_node x.patterns);
+    ("body", body_to_node x.body);
+  ]
+
+and match_expr_to_node (x: Nodes.Match_expr.t) =
+  fields [
+    ("scrutinees", map_seq expr_to_node x.scrutinees);
+    ("arms", map_seq match_arm_to_node x.arms);
+    abort_field x.abort_handle;
+  ]
+
 and expr_to_node (x: Nodes.Expr.t) = match x with
   | IntLit x   -> Leaf x
   | FloatLit x -> Leaf x
   | StrLit x   -> Leaf x
   | BoolLit x  -> Leaf (string_of_bool x)
+  | CollectionLit x -> group "collection" (map_seq expr_to_node x)
   | NameExpr x -> name_expr_to_node x
+  | TypeMember { type_; member } ->
+      group "type_member" (fields [
+        ("type", name_type_to_node type_);
+        ("member", Leaf member);
+      ])
   | DotAccess { target; field } ->
       group "dot_access" (fields [
         ("target", expr_to_node target);
         ("field", Leaf field);
       ])
+  | Subscript { target; args } ->
+      group "subscript" (fields [
+        ("target", expr_to_node target);
+        ("args", map_seq expr_to_node args);
+      ])
   | Ref x ->
       group "ref" (expr_to_node x)
   | Parenthized x ->
       group "parenthized" (expr_to_node x)
+  | Init fields_ ->
+      group "init" (map_seq field_arg_to_node fields_)
+  | MethodTarget { callee; this; is_mut } ->
+      group "method_target" (fields [
+        ("callee", expr_to_node callee);
+        ("this", expr_to_node this);
+        ("is_mut", Leaf (string_of_bool is_mut));
+      ])
+  | Pipe { callee; value; abort_handle } ->
+      group "pipe" (fields [
+        ("callee", expr_to_node callee);
+        ("value", expr_to_node value);
+        abort_field abort_handle;
+      ])
+  | Spawn call ->
+      group "spawn" (verb_call_to_node call)
+  | Logic { op; left; right } ->
+      group "logic" (fields [
+        ("op", Leaf (match op with Nodes.Logic_op.And -> "and" | Or -> "or"));
+        ("left", expr_to_node left);
+        ("right", expr_to_node right);
+      ])
+  | Match match_ ->
+      group "match" (match_expr_to_node match_)
   | FuncLambda x ->
       group "func_lambda" (func_lambda_to_node x)
   | MethLambda x ->
@@ -146,6 +224,7 @@ and op_to_name (x: Nodes.Operator.t) = match x with
   | Mul     -> "*"
   | Div     -> "/"
   | Eq      -> "=="
+  | NotEq   -> "~="
   | LessEq  -> "<="
   | MoreEq  -> ">="
   | Less    -> "<"
@@ -169,6 +248,17 @@ and param_to_node (x: Nodes.Param.t) =
 
 and params_to_node (x: Nodes.Param.t list) =
   map_seq param_to_node x
+
+and constructor_field_to_node (x: Nodes.Constructor_field.t) =
+  let fs = [
+    ("name", Leaf x.name);
+    ("type", param_type_to_node x.type_);
+  ] in
+  let fs = match x.default with
+    | Some default -> fs @ [("default", expr_to_node default)]
+    | None -> fs
+  in
+  fields fs
 
 and elif_to_fields (x: Nodes.Cond_block.t) =
   fields [
@@ -203,12 +293,27 @@ and loop_to_node (x: Nodes.Loop.t) =
   ] in
   fields fs
 
+and guard_to_node (x: Nodes.Guard.t) =
+  let fs = [("cond", expr_to_node x.cond)] in
+  let fs = match x.body with
+    | Some body -> fs @ [("body", map_seq stat_to_node body)]
+    | None -> fs
+  in
+  fields fs
+
 and stat_to_node (x: Nodes.Stat.t) = match x with
   | VerbCall x -> verb_call_to_node x
+  | Spawn x    -> group "spawn_stat" (verb_call_to_node x)
   | Decl x     -> decl_to_node x
+  | Assign { target; value } ->
+      group "assign_stat" (fields [
+        ("target", expr_to_node target);
+        ("value", expr_to_node value);
+      ])
   | Abort x    -> group "abort_stat"   (expr_to_node x)
   | Ret x      -> group "ret_stat"     (expr_to_node x)
   | Resolve x  -> group "resolve_stat" (expr_to_node x)
+  | Guard x    -> group "guard" (guard_to_node x)
   | CondSeq x  -> cond_seq_to_node x
   | Loop x     -> group "loop" (loop_to_node x)
 
@@ -259,7 +364,15 @@ and type_or_moulded_to_node (x: Nodes.Type_or_moulded.t) = match x with
   | Raw x -> type_to_node x
   | Moulded x -> moulded_to_node x
 
+and enum_map_entry_to_node (member, value) =
+  fields [
+    ("member", Leaf member);
+    ("value", expr_to_node value);
+  ]
+
 and decl_to_node (x: Nodes.Decl.t) = match x with
+  | Package name -> group "package_decl" (Leaf name)
+  | Import name -> group "import_decl" (Leaf name)
   | Var { name; type_; value } ->
       group "var_decl" (fields [
         ("name",  Leaf name);
@@ -267,11 +380,19 @@ and decl_to_node (x: Nodes.Decl.t) = match x with
         ("value", expr_to_node value);
       ])
   | VarShorthand { name; constructor; args } ->
-      group "var_decl_shorthand" (fields [
+      let fs = [
         ("name", Leaf name);
-        ("type", name_type_to_node constructor);
-        ("args", map_seq expr_to_node args);
-      ])
+        ("type", name_type_to_node constructor.type_);
+      ] in
+      let fs = match constructor.member with
+        | Some member -> fs @ [("member", Leaf member)]
+        | None -> fs
+      in
+      let args = match args with
+        | Nodes.Constructor_args.Positional args -> map_seq expr_to_node args
+        | Nodes.Constructor_args.Fields args -> group "fields" (map_seq field_arg_to_node args)
+      in
+      group "var_decl_shorthand" (fields (fs @ [("args", args)]))
   | Type x ->
       group "type_decl" (fields [
         ("name",   Leaf x.name);
@@ -282,7 +403,14 @@ and decl_to_node (x: Nodes.Decl.t) = match x with
       group "alias_decl" (fields [
         ("name",   Leaf x.name);
         ("params", map_seq generic_param_to_node x.params);
-        ("value",  type_to_node x.value);
+        ("value",  type_or_moulded_to_node x.value);
+      ])
+  | EnumMap x ->
+      group "enum_map_decl" (fields [
+        ("enum", type_to_node x.enum);
+        ("property", Leaf x.property);
+        ("type", type_to_node x.type_);
+        ("entries", map_seq enum_map_entry_to_node x.entries);
       ])
   | Verb x -> verb_decl_to_node x
 
@@ -304,10 +432,31 @@ and verb_decl_to_node (x: Nodes.Verb_decl.t) = match x with
         ("is_mut",    Leaf (string_of_bool x.is_mut));
       ])
   | Constructor x ->
-      group "ctor_decl" (fields [
-        ("type",  name_type_to_node x.type_);
+      (* A constructor declaration carries a full type expression because it may
+         introduce generics, so its "type" renders like every other Type_expr
+         field. A constructor call names a plain Name_type and renders as a leaf;
+         the two shapes differ because the nodes differ. *)
+      let params = match x.params with
+        | Nodes.Constructor_params.Positional params -> params_to_node params
+        | Nodes.Constructor_params.Fields fields_ ->
+            group "fields" (map_seq constructor_field_to_node fields_)
+      in
+      let fs = [("type", type_to_node x.type_)] in
+      let fs = match x.member with
+        | Some member -> fs @ [("member", Leaf member)]
+        | None -> fs
+      in
+      let fs = fs @ [
+        ("param", params);
+        ("body", body_to_node x.body);
+        ("is_implicit", Leaf (string_of_bool x.is_implicit));
+      ] in
+      group "ctor_decl" (fields fs)
+  | Subscript x ->
+      group "subscript_decl" (fields [
+        ("this_type", type_to_node x.this_type);
         ("param", params_to_node x.params);
-        ("body",  body_to_node x.body);
+        ("value", expr_to_node x.value);
       ])
   | Op x ->
       group "op_decl" (fields [

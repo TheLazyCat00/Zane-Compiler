@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Find a concrete sentence that reaches a grammar conflict.
+# Print a random concrete sentence the grammar accepts, as a starting point for
+# a hand-written parser case.
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=../lib/ambiguity-config.sh
 . "$ROOT/dev/lib/ambiguity-config.sh"

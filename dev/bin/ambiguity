@@ -3,6 +3,9 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
+# `__engine` is the private entry point tools/ambiguity.py re-enters to reach
+# the engine with the machine configuration loaded and the executable built. It
+# is not part of the command-line interface; use the subcommands instead.
 if [[ "${1:-}" == "__engine" ]]; then
 	shift
 	# shellcheck source=../lib/ambiguity-config.sh
@@ -12,15 +15,5 @@ if [[ "${1:-}" == "__engine" ]]; then
 		"$ROOT/lib/cst/parser.mly" \
 		"$@"
 fi
-
-# Keep existing scripts working while the profile interface becomes the
-# preferred entry point.
-case "${1:-}" in
-	--max-tokens | --min-tokens | --prefix-tokens | --nodes-per-depth | \
-		--timeout | --max-witnesses | --check-tokens | --prove | \
-		--dump-terminal-classes)
-		exec "$0" __engine "$@"
-		;;
-esac
 
 exec python3 "$ROOT/tools/ambiguity.py" "$@"
