@@ -99,6 +99,20 @@ class ParserSyntaxTests(unittest.TestCase):
             '''
         )
 
+    def test_comparison_chains_and_short_circuit_keywords(self) -> None:
+        self.assert_parses(
+            '''
+            Unit use() {
+                chained Bool = a < b < c;
+                equality Bool = a == b == c;
+                both Bool = a < b and c < d;
+                either Bool = a and b or c;
+                associative Bool = a and b and c;
+                return Unit();
+            }
+            '''
+        )
+
     def test_alias_moulds_and_line_comments(self) -> None:
         self.assert_parses(
             '''

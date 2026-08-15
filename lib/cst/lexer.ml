@@ -54,7 +54,7 @@ let rec token buf =
   | '|'                         -> PIPE
   | '$'                         -> DOLLAR
   | '#'                         -> HASH
-  | '&'                         -> AND
+  | '&'                         -> AMPERSAND
   | '@'                         -> AT
   | float_lit                   -> FLOAT (Utf8.lexeme buf)
   | int_lit                     -> INT (Utf8.lexeme buf)
@@ -67,7 +67,6 @@ let rec token buf =
   | "Number"                    -> NUMBER
   | "struct"                    -> STRUCT
   | "variant"                   -> VARIANT
-  | "tuple"                     -> TUPLE
   | "enum"                      -> ENUM
   | "package"                   -> PACKAGE
   | "import"                    -> IMPORT
@@ -78,6 +77,8 @@ let rec token buf =
   | "else"                      -> ELSE
   | "guard"                     -> GUARD
   | "match"                     -> MATCH
+  | "and"                       -> AND
+  | "or"                        -> OR
   | "spawn"                     -> SPAWN
   | "loop"                      -> LOOP
   | "from"                      -> FROM

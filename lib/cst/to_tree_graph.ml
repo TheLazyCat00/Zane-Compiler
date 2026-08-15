@@ -70,7 +70,6 @@ and mould_to_node (x: Nodes.Mould.t) = match x with
   | Struct x -> group "struct" (map_seq body_field_to_node x)
   | Variant x -> group "variant" (map_seq body_field_to_node x)
   | Enum x -> group "enum" (map_seq (fun x -> Leaf x) x)
-  | Tuple x -> group "tuple" (map_seq type_to_node x)
 
 and generic_arg_to_node (x: Nodes.Generic_arg.t) = match x with
   | Type x -> type_to_node x
@@ -204,6 +203,12 @@ and expr_to_node (x: Nodes.Expr.t) = match x with
       ])
   | Spawn call ->
       group "spawn" (verb_call_to_node call)
+  | Logic { op; left; right } ->
+      group "logic" (fields [
+        ("op", Leaf (match op with Nodes.Logic_op.And -> "and" | Or -> "or"));
+        ("left", expr_to_node left);
+        ("right", expr_to_node right);
+      ])
   | Match match_ ->
       group "match" (match_expr_to_node match_)
   | FuncLambda x ->

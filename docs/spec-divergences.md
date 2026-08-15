@@ -60,47 +60,17 @@ This follows the rule the parser applies to declarations, where the terminator
 marks a construct that would otherwise trail off into an expression. Applying
 it uniformly is what makes an arm body and a function body interchangeable.
 
-## 3. Comparisons do not chain
-
-**Spec** — [`operators.md`](https://github.com/zane-lang/spec/blob/main/spec/operators.md)
-places `<` `>` `<=` `>=` `==` `~=` at precedence level 5 with **left**
-associativity, the same associativity given to `+` and `*`.
-
-**Compiler** — the comparison level is **non-associative**, so a chain must be
-grouped explicitly.
-
-```zane
-x Bool = a < b < c;       // 0 parses
-x Bool = (a < b) < c;     // 1 parse
-```
-
-Precedence itself agrees with the spec: `~`, then pipe, then `*` `/`, then
-`+` `-`, then comparisons, high to low.
-
-## 4. `and` and `or` are not implemented
+## 3. `and` and `or` have a grouping the spec does not give
 
 **Spec** — [`operators.md`](https://github.com/zane-lang/spec/blob/main/spec/operators.md)
 defines them as short-circuiting **keywords** rather than overloadable
-operators, with `or` given as the law `a or b = ~(~a and ~b)`.
+operators, and its precedence and associativity table therefore does not list
+them: the table covers operators only.
 
-**Compiler** — neither is a token, so `a and b` does not parse.
+**Compiler** — `or` binds loosest, then `and`, then the comparison level, all
+left-associative. So `a and b or c` groups as `(a and b) or c`, and
+`a < b and c < d` as `(a < b) and (c < d)`.
 
-The spec defines their semantics but does not place them in the precedence and
-associativity table, which lists operators only. Adding them needs a grouping
-rule chosen first; guessing one would be a language decision made by
-implementation accident.
-
-## 5. `tuple` has no normative section
-
-**Spec** — `spec/` has no section defining `tuple`. It appears in
-[`adt.md`](https://github.com/zane-lang/spec/blob/main/spec/adt.md) §5.6 only as
-a contrast ("a bare comma list of scrutinees … never a tuple"), and in
-`stories/types.md` as one of "four constructs that give a type its shape —
-`struct`, `variant`, `enum`, and `tuple`". The stories are design history, not
-normative text.
-
-**Compiler** — `tuple [ T, U ]` is accepted as a mould alongside `struct`,
-`variant`, and `enum`.
-
-The construct is not in dispute; the spec has not caught up with it. This entry
-should close by the spec gaining a section, not by the parser dropping support.
+This is the conventional grouping rather than one the spec chose, so it is the
+compiler's decision until the spec states one. The entry closes when the spec
+places them, whether or not it agrees with what is implemented here.

@@ -137,14 +137,14 @@ class ParserGrammarAmbiguityTests(unittest.TestCase):
     def test_leading_reference_binds_the_lambda_return_type(self) -> None:
         self.assert_grouping(
             "UIDENT LIDENT LPAREN RPAREN LCURLY ABORT "
-            "AND UIDENT LPAREN RPAREN THICK_ARROW FALSE SEMICOLON RCURLY EOF",
+            "AMPERSAND UIDENT LPAREN RPAREN THICK_ARROW FALSE SEMICOLON RCURLY EOF",
             "Int length() { abort &Int () => false; }",
             "lambda(bool)",
         )
 
     def test_parentheses_allow_referencing_the_lambda(self) -> None:
         self.assert_grouping(
-            "UIDENT LIDENT LPAREN RPAREN LCURLY ABORT AND LPAREN "
+            "UIDENT LIDENT LPAREN RPAREN LCURLY ABORT AMPERSAND LPAREN "
             "UIDENT LPAREN RPAREN THICK_ARROW FALSE RPAREN SEMICOLON RCURLY EOF",
             "Int length() { abort &(Int () => false); }",
             "ref(paren(lambda(bool)))",

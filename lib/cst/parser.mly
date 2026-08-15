@@ -77,7 +77,7 @@ let constructor_expr name args =
 %token PIPE        "|"
 %token DOLLAR      "$"
 %token HASH        "#"
-%token AND         "&"
+%token AMPERSAND   "&"
 %token AT          "@"
 %token EXCL        "!"
 %token QSTNMARK    "?"
@@ -96,7 +96,6 @@ let constructor_expr name args =
 %token NUMBER      "Number"
 %token STRUCT      "struct"
 %token VARIANT     "variant"
-%token TUPLE       "tuple"
 %token ENUM        "enum"
 %token PACKAGE     "package"
 %token IMPORT      "import"
@@ -107,6 +106,8 @@ let constructor_expr name args =
 %token ELSE        "else"
 %token GUARD       "guard"
 %token MATCH       "match"
+%token AND         "and"
+%token OR          "or"
 %token SPAWN       "spawn"
 %token TRUE        "true"
 %token LOOP        "loop"
@@ -123,12 +124,14 @@ let constructor_expr name args =
 (* Keep the existing grouping decisions. New syntax is inserted around them
    rather than respelling existing programs to match the prose spec. *)
 %right THICK_ARROW
-%nonassoc EQEQ NOTEQ LESSEQ MOREEQ LESS MORE   /* comparisons */
+%left OR                                        /* short-circuit or */
+%left AND                                       /* short-circuit and */
+%left EQEQ NOTEQ LESSEQ MOREEQ LESS MORE       /* comparisons */
 %left PLUS MINUS
 %left STAR SLASH
 %left PIPE                                      /* pipe */
 %nonassoc QSTNMARK QSTNQSTN                    /* abort handling */
-%nonassoc TILDE AND                             /* prefix ~ and & */
+%nonassoc TILDE AMPERSAND                       /* prefix ~ and & */
 %left DOT                                       /* field access */
 %left LBRACKET                                  /* subscript */
 %left LPAREN                                    /* function application */
@@ -429,9 +432,6 @@ simple_decl:
   | ENUM "[" members=separated_nonempty_list(",", LIDENT) "]" {
       Nodes.Mould.Enum members
     }
-  | TUPLE "[" members=separated_nonempty_list(",", type_expr) "]" {
-      Nodes.Mould.Tuple members
-    }
 
 %inline moulded:
   | mould=mould {
@@ -648,13 +648,19 @@ expr:
   | callee=expr "|" value=expr %prec PIPE {
       Nodes.Expr.Pipe { callee; value; abort_handle = None }
     }
+  | left=expr "and" right=expr %prec AND {
+      Nodes.Expr.Logic { op = Nodes.Logic_op.And; left; right }
+    }
+  | left=expr "or" right=expr %prec OR {
+      Nodes.Expr.Logic { op = Nodes.Logic_op.Or; left; right }
+    }
   | "~" value=expr %prec TILDE {
       Nodes.Expr.VerbCall (Nodes.Verb_call.Flip {
         value;
         abort_handle = None;
       })
     }
-  | "&" value=ref_target %prec AND {
+  | "&" value=ref_target %prec AMPERSAND {
       Nodes.Expr.Ref value
     }
   | value=expr abort_handle=abort_handle %prec QSTNQSTN {
@@ -667,7 +673,7 @@ expr:
    Parenthesize the lambda to take a reference to it. *)
 ref_target:
   | value=app { value }
-  | "&" value=ref_target %prec AND {
+  | "&" value=ref_target %prec AMPERSAND {
       Nodes.Expr.Ref value
     }
   | "~" value=ref_target %prec TILDE {
