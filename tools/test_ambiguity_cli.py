@@ -479,7 +479,9 @@ class TerminalClassEngineTests(unittest.TestCase):
             "--timeout", "30",
             "--max-witnesses", "5",
         )
-        self.assertEqual(result.returncode, 0, result.stdout)
+        # TINY_GRAMMAR is ambiguous, so proof mode settles on the ambiguous
+        # verdict and reports it in its status.
+        self.assertEqual(result.returncode, 1, result.stdout)
         self.assertIn("complete ambiguity", result.stdout)
         # The witness must be spelled with the class representative A, never the
         # non-representative B, confirming concretization stays on representatives.

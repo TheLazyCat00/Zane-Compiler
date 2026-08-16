@@ -131,11 +131,18 @@ the state is triaged into one of these categories.
   into the ambiguity search. It abstracts GLR stacks to their top-K states and
   exhaustively explores pairs of abstract parses of the same input, comparing
   reduction chains in lockstep. It does not depend on an external constraint
-  solver. Three verdicts: exit 0 "PROVEN UNAMBIGUOUS" is a genuine proof with
-  no sentence-length bound; exit 1 means a concrete ambiguous sentence was
-  found; exit 3 means not proven — the abstraction reported a candidate the
-  bounded search could not concretize, so raise the proof level or override the
-  concretization profile.
+  solver. Three verdicts, each reported in the exit status so a script can act
+  on it without reading the report: exit 0 "PROVEN UNAMBIGUOUS" is a genuine
+  proof with no sentence-length bound; exit 1 means a concrete ambiguous
+  sentence was found, which is a bug in the grammar rather than a limit of the
+  abstraction; exit 3 means not proven — either the abstraction reported a
+  candidate the bounded search could not concretize, so raise the proof level
+  or override the concretization profile, or the abstract pair limit was
+  reached, so raise the memory budget. Exit 2 keeps its usual meaning
+  everywhere in this tool — the run itself failed — so a caller can tell a
+  verdict from a broken invocation. Only proof mode reports a verdict: a plain
+  `ambiguity search` exits 0 whether or not it found witnesses, since a bounded
+  finding is not one.
   Because unambiguity is undecidable in general, the "not proven" verdict can
   never be eliminated entirely; the prover is validated against known-ambiguous
   grammars, LR(1) grammars, precedence-resolved expression grammars, and

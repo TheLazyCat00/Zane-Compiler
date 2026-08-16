@@ -921,6 +921,15 @@ type prove_result =
   | Abstract_candidate of string list * int
   | Pair_overflow of int
 
+(* Proof-mode exit statuses. A proof is a verdict rather than a success or a
+   failure, so `ambiguity prove` reports which of the three it reached in its
+   status: 0 proven, 1 a concrete ambiguous sentence, 3 neither. Status 2 stays
+   what it is everywhere else in this tool - the run itself went wrong - so a
+   caller can tell a verdict from a broken invocation. A plain search reports no
+   verdict and keeps exiting 0 whether or not it found witnesses. *)
+let ambiguous_status = 1
+let not_proven_status = 3
+
 let prove engine limit pair_limit =
   let automaton = engine.automaton in
   let gotos = goto_edges automaton in
@@ -2070,7 +2079,7 @@ let main () =
                abstraction level %d. Raise AMBIGUITY_MEMORY_MB or \
                AMBIGUITY_MAX_FRONTIER_RATIO, or lower --prove.\n"
               pairs !prove_level;
-            exit 0
+            exit not_proven_status
         | Abstract_candidate (tokens, pairs) ->
             Printf.printf
               "Abstract ambiguity candidate at level %d after %d pairs \
@@ -2114,7 +2123,7 @@ let main () =
                within the search bounds; the grammar is neither proven \
                unambiguous nor shown ambiguous. Raising --prove may remove \
                the spurious candidate.\n";
-            exit 0
+            exit not_proven_status
           end;
           Printf.printf "This is a bounded result, not a proof of unambiguity.\n";
           exit 0
@@ -2140,7 +2149,11 @@ let main () =
             (fun reason ->
               Printf.printf "Search stopped because %s.\n" reason)
             outcome.stopped;
-          exit 0)
+          (* Concretizing the abstract candidate settles the proof: the
+             witnesses above are the ambiguity the level-K abstraction
+             suspected. A plain search reports the same witnesses as a bounded
+             finding, not as a verdict, so it keeps its own status. *)
+          exit (if !prove_level > 0 then ambiguous_status else 0))
 
 let () =
   try main ()
