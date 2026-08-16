@@ -7,9 +7,9 @@ Vector2<T> +(left Vector2<T>, right Vector2<T>) {
 	return Vector2(left.x + right.x, left.y + right.y);
 }
 
-Void?String main (this Int, a Bool) mut {
+Unit?String main (this Int, a Bool) mut {
 	x Void[this Int] = "hello";
-	y String = "world";
+	y String("world");
 	content String = read("wordlist.txt") ?? "";
 	x Int(3);
 	
@@ -27,6 +27,16 @@ Void?String main (this Int, a Bool) mut {
 	loop i to 3 {
 		std$print(i);
 	}
+	return Unit();
 }
 
 square Int (x Int, y Int) => x * y;
+
+Unit main() {
+	print("hello");
+	std$print(1 + 1 + 3 + 4);
+	@intrinsics$print("hello");
+	print(res.value);
+	print(res:getValue());
+	return Unit();
+}
