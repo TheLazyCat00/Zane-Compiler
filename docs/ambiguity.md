@@ -139,7 +139,28 @@ the state is triaged into one of these categories.
   Because unambiguity is undecidable in general, the "not proven" verdict can
   never be eliminated entirely; the prover is validated against known-ambiguous
   grammars, LR(1) grammars, precedence-resolved expression grammars, and
-  unambiguous non-LR grammars such as palindromes.
+  unambiguous non-LR grammars such as palindromes. That corpus lives in
+  `tools/test_prover.py`, which pins both directions of soundness — an
+  ambiguous grammar is never proven, and an unambiguous one never yields a
+  witness — so a change that sharpens the abstraction cannot quietly start
+  proving false theorems. A conflict-free automaton offers one action per state
+  and lookahead, so it is proven at every level; that is a property of the
+  automaton rather than of how sharp the abstraction currently is.
+
+  Two things bound the abstraction's reach, and they are independent. **Its
+  precision** is the proof level: below the top K states the stack is unknown,
+  and a reduction popping into the unknown re-enters through every goto edge on
+  the reduced nonterminal, which is where spurious candidates come from. When a
+  reduction pops exactly the known suffix, the state it exposes must be one that
+  can sit directly below the suffix's deepest entry, so only that entry's
+  predecessors are admitted; popping further reaches a state the suffix
+  constrains in no way, and every goto edge stays admissible. **Its budget** is
+  the abstract pair limit, derived from `AMBIGUITY_MEMORY_MB` and
+  `AMBIGUITY_MAX_FRONTIER_RATIO`. The abstract phase is a single sequential
+  search, so the budget is derived for one worker and `AMBIGUITY_JOBS` does not
+  divide it; the concretization search that may follow still uses every worker.
+  The profile's token bound feeds the same estimate, so a narrower
+  concretization profile also buys a larger pair budget.
 - `ambiguity classes` — lists the terminal equivalence classes the search
   collapses, so a grammar change that unexpectedly splits or merges a class is
   visible. The same classes bound the prover's terminal alphabet.

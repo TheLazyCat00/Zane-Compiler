@@ -4,6 +4,7 @@
 
 module StringSet = Set.Make (String)
 module IntMap = Map.Make (Int)
+module IntSet = Set.Make (Int)
 module ConflictSet = Set.Make (struct
   type t = int * string
   let compare = compare
@@ -739,6 +740,27 @@ let goto_edges automaton =
     automaton.states;
   table
 
+(* The states that can sit directly below a given state on a parser stack:
+   [p] is a predecessor of [s] exactly when some grammar symbol takes [p] to
+   [s]. Every abstract suffix is a chain of adjacent states — each one is
+   pushed onto the one below it by a shift or a goto, and truncation only
+   drops entries from the bottom — so the state a suffix hides beneath its
+   deepest entry is always one of that entry's predecessors. *)
+let predecessors automaton =
+  let table = Array.make (Array.length automaton.states) IntSet.empty in
+  Array.iteri
+    (fun source state ->
+      Hashtbl.iter
+        (fun _ target -> table.(target) <- IntSet.add source table.(target))
+        state.transitions)
+    automaton.states;
+  table
+
+let rec last_state = function
+  | [] -> invalid_arg "last_state: empty suffix"
+  | [ state ] -> state
+  | _ :: tail -> last_state tail
+
 (* One micro-step of a single run while consuming a token: apply one
    reduction, or terminate the chain by shifting the token (accepting, when
    the token is "#"). *)
@@ -746,11 +768,12 @@ type side_move =
   | Reduce of int * int list (* production id, suffix afterwards *)
   | Terminate of int list (* suffix after the shift, or at acceptance *)
 
-let side_moves automaton gotos limit cache suffix token =
+let side_moves automaton gotos preds limit cache suffix token =
   match Hashtbl.find_opt cache (suffix, token) with
   | Some moves -> moves
   | None ->
       let moves = ref [] in
+      let depth = List.length suffix in
       (match suffix with
       | [] -> ()
       | top :: _ ->
@@ -767,7 +790,7 @@ let side_moves automaton gotos limit cache suffix token =
               (Hashtbl.find_opt state.transitions token);
           List.iter
             (fun reduction ->
-              if reduction.width < List.length suffix then
+              if reduction.width < depth then
                 match drop_states reduction.width suffix with
                 | [] -> assert false
                 | base :: _ as remaining ->
@@ -782,13 +805,25 @@ let side_moves automaton gotos limit cache suffix token =
                          automaton.states.(base).transitions reduction.lhs)
               else
                 (* The reduction pops into the unknown part of the stack; the
-                   goto source is the state left on top afterwards. *)
+                   goto source is the state left on top afterwards.
+
+                   Popping exactly the known suffix exposes whatever sits
+                   directly below its deepest entry, so only that entry's
+                   predecessors are possible goto sources. Popping further
+                   reaches a state the suffix constrains in no way, and every
+                   goto edge on the reduced nonterminal stays admissible. *)
+                let deepest = last_state suffix in
                 List.iter
                   (fun (source, target) ->
-                    moves :=
-                      Reduce
-                        (reduction.prod, truncate_suffix limit [ target; source ])
-                      :: !moves)
+                    if
+                      reduction.width > depth
+                      || IntSet.mem source preds.(deepest)
+                    then
+                      moves :=
+                        Reduce
+                          ( reduction.prod,
+                            truncate_suffix limit [ target; source ] )
+                        :: !moves)
                   (Option.value
                      (Hashtbl.find_opt gotos reduction.lhs)
                      ~default:[]))
@@ -889,14 +924,26 @@ type prove_result =
 let prove engine limit pair_limit =
   let automaton = engine.automaton in
   let gotos = goto_edges automaton in
+  let preds = predecessors automaton in
+  (* Keyed by a single suffix rather than a pair, so this stays small and is
+     read by every pair that reaches the same stack: worth keeping whole. *)
   let moves_cache = Hashtbl.create 100_003 in
-  let moves = side_moves automaton gotos limit moves_cache in
+  let moves = side_moves automaton gotos preds limit moves_cache in
+  (* The pair cache is the opposite. Each node is dequeued once and asks for
+     every terminal class exactly once, so the only repeat key is the twin
+     node that shares a stack pair and differs in its divergence flag. Left
+     unbounded it would hold one entry per explored pair per terminal class,
+     dwarfing the pair table that the memory budget actually caps, so it is
+     emptied whenever it outgrows its share. *)
+  let joint_capacity = max 1024 (pair_limit / 8) in
   let joint_cache = Hashtbl.create 100_003 in
   let joint pair token =
     match Hashtbl.find_opt joint_cache (pair, token) with
     | Some outcomes -> outcomes
     | None ->
         let outcomes = joint_outcomes moves pair token in
+        if Hashtbl.length joint_cache >= joint_capacity then
+          Hashtbl.reset joint_cache;
         Hashtbl.add joint_cache (pair, token) outcomes;
         outcomes
   in
@@ -1995,7 +2042,21 @@ let main () =
       if !prefix_tokens <> [] then
         Printf.printf "Prefix tokens: %s\n" (String.concat " " !prefix_tokens);
       if !prove_level > 0 then begin
-        match prove engine !prove_level memory_limits.max_frontiers with
+        (* The abstract phase is one sequential search, not a pool of workers,
+           so dividing the budget by AMBIGUITY_JOBS would hand most of it to
+           workers that never start. It is derived here for a single worker;
+           the concretization search below still splits the budget its own
+           way. Note that the profile's token bound feeds the entry-size
+           estimate, so a narrower profile also buys a larger pair budget. *)
+        let prove_limits =
+          derive_memory_limits ~memory_mb ~max_frontier_ratio ~jobs:1
+            ~max_tokens
+        in
+        Printf.printf
+          "Proof budget: %d abstract pairs (single-threaded; the %d-worker \
+           split does not apply).\n"
+          prove_limits.max_frontiers jobs;
+        match prove engine !prove_level prove_limits.max_frontiers with
         | Proven pairs ->
             Printf.printf
               "PROVEN UNAMBIGUOUS: no diverging pair of accepting parses \
