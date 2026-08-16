@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # Turn a proof report into a job result.
 #
-# `ambiguity prove` distinguishes its outcomes in the report text, not in its
-# exit status: the engine returns 0 for "proven", for both flavours of "not
-# proven", and for a concretized ambiguity alike, reserving a non-zero status
-# for configuration and I/O errors. A workflow therefore cannot branch on the
-# exit code, so the verdict is read from the report here.
+# The verdict is read from the report text rather than from the exit status.
+# Proof mode does report its verdict in its status, but reading the report
+# keeps this correct against an engine that predates that and returns 0 for
+# every outcome: with a status-only check, such an engine would report a
+# grammar with a found ambiguity as proven. Text is the one signal that has
+# always distinguished the outcomes.
 #
 # Unrecognized output is an error rather than a pass: a report whose verdict
 # line has been reworded must stop the job loudly instead of being reported as
