@@ -15,6 +15,7 @@ sharpness.
 """
 
 import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -32,6 +33,14 @@ PROVEN = 0
 AMBIGUOUS = 1
 NOT_PROVEN = 3
 VERDICT_STATUSES = (PROVEN, AMBIGUOUS, NOT_PROVEN)
+
+# Witnesses are announced by "Found N complete ambiguity families." The search
+# also reports "No complete ambiguity ... was found" when there are none, so
+# these have to be anchored: a bare "complete ambiguity" substring matches the
+# announcement and its denial alike, and would read every empty search as a
+# witness.
+WITNESS_LINE = re.compile(r"^Found \d+ complete ambiguity", re.MULTILINE)
+PROVEN_LINE = re.compile(r"^PROVEN UNAMBIGUOUS:", re.MULTILINE)
 
 
 # Ambiguous: `a + a + a` groups two ways with nothing to choose between them.
@@ -201,7 +210,7 @@ class ProverSoundnessTests(ProverTestCase):
             for level in (1, 2, 3):
                 with self.subTest(grammar=name, level=level):
                     status, output = self.prove(grammar, level)
-                    self.assertNotIn("PROVEN UNAMBIGUOUS", output)
+                    self.assertNotRegex(output, PROVEN_LINE)
                     self.assertNotEqual(status, PROVEN, output)
 
     def test_an_unambiguous_grammar_yields_no_witness(self) -> None:
@@ -211,7 +220,7 @@ class ProverSoundnessTests(ProverTestCase):
             for level in (1, 2, 3):
                 with self.subTest(grammar=name, level=level):
                     status, output = self.prove(grammar, level)
-                    self.assertNotIn("complete ambiguity", output)
+                    self.assertNotRegex(output, WITNESS_LINE)
                     self.assertNotEqual(status, AMBIGUOUS, output)
 
     def test_an_ambiguous_grammar_is_still_concretized(self) -> None:
@@ -219,7 +228,7 @@ class ProverSoundnessTests(ProverTestCase):
         # leads to a real witness, so the prover keeps naming the sentence
         # rather than retreating to "not proven".
         status, output = self.prove(AMBIGUOUS_EXPRESSION, 2)
-        self.assertIn("complete ambiguity", output)
+        self.assertRegex(output, WITNESS_LINE)
         self.assertEqual(status, AMBIGUOUS, output)
 
 
@@ -249,13 +258,13 @@ class ProofStatusTests(ProverTestCase):
 
     def test_each_verdict_reports_its_documented_status(self) -> None:
         for grammar, expected, marker in (
-            (LR1_LIST, PROVEN, "PROVEN UNAMBIGUOUS"),
-            (AMBIGUOUS_EXPRESSION, AMBIGUOUS, "complete ambiguity"),
+            (LR1_LIST, PROVEN, PROVEN_LINE),
+            (AMBIGUOUS_EXPRESSION, AMBIGUOUS, WITNESS_LINE),
         ):
             with self.subTest(status=expected):
                 status, output = self.prove(grammar, 2)
                 self.assertEqual(status, expected, output)
-                self.assertIn(marker, output)
+                self.assertRegex(output, marker)
 
     def test_a_plain_search_reports_no_verdict(self) -> None:
         # Only proof mode returns a verdict. A bounded search that finds
@@ -280,7 +289,7 @@ class ProofStatusTests(ProverTestCase):
             timeout=180,
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertIn("complete ambiguity", result.stdout)
+        self.assertRegex(result.stdout, WITNESS_LINE)
 
 
 class ProofBudgetTests(ProverTestCase):
