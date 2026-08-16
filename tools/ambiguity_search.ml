@@ -1892,7 +1892,8 @@ let options =
     ( "--prove",
       Arg.Set_int prove_level,
       "K attempt an unambiguity proof with a top-K stack abstraction; \
-       all completed outcomes exit 0 \
+       exits 0 proven, 1 a concrete ambiguous sentence, 3 neither, \
+       2 a failed run \
        (the derived dedup-frontier limit also bounds the abstract pair count)" );
     ( "--dump-terminal-classes",
       Arg.Set dump_classes,
@@ -2035,16 +2036,6 @@ let main () =
           branched = derivations initial_frontier >= 2;
         }
       in
-      let memory_limits =
-        derive_memory_limits ~memory_mb ~max_frontier_ratio ~jobs ~max_tokens
-      in
-      Printf.printf
-        "Memory budget: %d MiB total across %d worker(s); workers compact at %.0f MiB and stop admitting frontiers at %.0f MiB each (10%% reserved); per-worker limits are %d queued frontiers and %d retained dedup frontiers (ratio %g).\n"
-        memory_mb jobs
-        (memory_limits.soft_heap_bytes /. 1024. /. 1024.)
-        (memory_limits.hard_heap_bytes /. 1024. /. 1024.)
-        memory_limits.max_queue memory_limits.max_frontiers
-        max_frontier_ratio;
       Printf.printf
         "Search constraints: %d..%d total tokens; %d-token prefix; %s.\n"
         !min_tokens max_tokens prefix_depth
@@ -2093,6 +2084,22 @@ let main () =
             Printf.printf
               "Attempting to concretize with the bounded search...\n\n"
       end;
+      (* Only the concretization search runs workers, and only the code below
+         reaches it: a proof that finished on its own never needs the
+         worker-divided limits, and deriving them here keeps a proof-only
+         verdict from depending on AMBIGUITY_JOBS at all - including through
+         the error this derivation raises when the per-worker share is too
+         small to hold a single queue entry. *)
+      let memory_limits =
+        derive_memory_limits ~memory_mb ~max_frontier_ratio ~jobs ~max_tokens
+      in
+      Printf.printf
+        "Memory budget: %d MiB total across %d worker(s); workers compact at %.0f MiB and stop admitting frontiers at %.0f MiB each (10%% reserved); per-worker limits are %d queued frontiers and %d retained dedup frontiers (ratio %g).\n"
+        memory_mb jobs
+        (memory_limits.soft_heap_bytes /. 1024. /. 1024.)
+        (memory_limits.hard_heap_bytes /. 1024. /. 1024.)
+        memory_limits.max_queue memory_limits.max_frontiers
+        max_frontier_ratio;
       let conflicts = conflict_states automaton in
       let conflict_distance = reverse_distances automaton conflicts in
       let accept_targets =

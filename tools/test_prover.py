@@ -41,6 +41,7 @@ VERDICT_STATUSES = (PROVEN, AMBIGUOUS, NOT_PROVEN)
 # witness.
 WITNESS_LINE = re.compile(r"^Found \d+ complete ambiguity", re.MULTILINE)
 PROVEN_LINE = re.compile(r"^PROVEN UNAMBIGUOUS:", re.MULTILINE)
+NOT_PROVEN_LINE = re.compile(r"^NOT PROVEN:", re.MULTILINE)
 
 
 # Ambiguous: `a + a + a` groups two ways with nothing to choose between them.
@@ -265,6 +266,26 @@ class ProofStatusTests(ProverTestCase):
                 status, output = self.prove(grammar, 2)
                 self.assertEqual(status, expected, output)
                 self.assertRegex(output, marker)
+
+    def test_an_exhausted_pair_budget_reports_not_proven(self) -> None:
+        # The third status needs its own case. A conflict-free grammar proves
+        # and an ambiguous one concretizes, so neither reaches it, and pinning
+        # it to a grammar the abstraction merely cannot handle would make the
+        # test a hostage to precision work. Starving the budget reaches it
+        # from the other side: a ratio this small floors the pair limit at one,
+        # so the search overflows on the first pair it adds, whatever the
+        # grammar.
+        status, output = self.prove(
+            LR1_LIST,
+            2,
+            environment={
+                **self.environment,
+                "AMBIGUITY_MAX_FRONTIER_RATIO": "0.00001",
+            },
+        )
+        self.assertEqual(status, NOT_PROVEN, output)
+        self.assertRegex(output, NOT_PROVEN_LINE)
+        self.assertNotRegex(output, PROVEN_LINE)
 
     def test_a_plain_search_reports_no_verdict(self) -> None:
         # Only proof mode returns a verdict. A bounded search that finds
