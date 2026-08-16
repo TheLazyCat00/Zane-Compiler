@@ -944,8 +944,12 @@ let prove engine limit pair_limit =
      unbounded it would hold one entry per explored pair per terminal class,
      dwarfing the pair table that the memory budget actually caps, so it is
      emptied whenever it outgrows its share. *)
-  let joint_capacity = max 1024 (pair_limit / 8) in
-  let joint_cache = Hashtbl.create 100_003 in
+  let joint_capacity = max 1 (pair_limit / 8) in
+  (* Sized to start where the other tables do, but never larger than the cap it
+     will be held to: a small budget must not pre-allocate a table it can never
+     fill, and a large one should still grow on demand rather than reserve its
+     ceiling up front. *)
+  let joint_cache = Hashtbl.create (min 100_003 joint_capacity) in
   let joint pair token =
     match Hashtbl.find_opt joint_cache (pair, token) with
     | Some outcomes -> outcomes

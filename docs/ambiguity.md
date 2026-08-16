@@ -151,8 +151,11 @@ the state is triaged into one of these categories.
   ambiguous grammar is never proven, and an unambiguous one never yields a
   witness — so a change that sharpens the abstraction cannot quietly start
   proving false theorems. A conflict-free automaton offers one action per state
-  and lookahead, so it is proven at every level; that is a property of the
-  automaton rather than of how sharp the abstraction currently is.
+  and lookahead, so no pair of abstract runs can ever diverge and it is proven
+  at every level, given a pair budget large enough to finish: that is a
+  property of the automaton rather than of how sharp the abstraction currently
+  is, but exhausting the budget still reports "not proven", since a search that
+  stopped early has proved nothing.
 
   Two things bound the abstraction's reach, and they are independent. **Its
   precision** is the proof level: below the top K states the stack is unknown,

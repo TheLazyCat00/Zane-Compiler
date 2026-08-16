@@ -124,7 +124,8 @@ UNAMBIGUOUS_GRAMMARS = {
 # Conflict-free automata offer exactly one action per state and lookahead, so
 # no pair of abstract runs can ever take differing moves. That makes the proof
 # a property of the automaton rather than of the abstraction's sharpness, and
-# it must hold at every level.
+# it must hold at every level — given a pair budget large enough to finish,
+# which the environment below leaves ample for grammars this size.
 CONFLICT_FREE_GRAMMARS = {
     "lr(1) list": LR1_LIST,
     "precedence-resolved expression": PRECEDENCE_EXPRESSION,
