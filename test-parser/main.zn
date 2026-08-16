@@ -64,6 +64,8 @@ Severity.exitCode Int [
 // ---------------------------------------------------------------------------
 
 /// A raw type declaration names a distinct type; an alias names the same one.
+/// A `Column` is its own type and does not stand in for an `Int`, while an
+/// `Offset` is another spelling of one.
 type Column = Int;
 alias Offset = Int;
 
@@ -75,14 +77,14 @@ type Span = struct {
 
 /// A named constructor: declared and called as `Span.point(...)`, and yielding
 /// the base type either way.
-Span.point(start Offset) => init{ start, length = 1 };
+Span.point(start Offset) => init{ start, length = Int(1) };
 
 /// A field constructor names its inputs and may default them.
-Span{ start Offset, length Int = 1 } => init{ start, length };
+Span{ start Offset, length Int = Int(1) } => init{ start, length };
 
 /// An implicit constructor is positional and takes exactly one parameter; it
 /// lets a bare offset stand in wherever a `Span` is wanted.
-implicit Span(start Offset) => init{ start, length = 1 };
+implicit Span(start Offset) => init{ start, length = Int(1) };
 
 /// A value subject is a mutable borrow when the method is `mut`, so this
 /// writes to the caller's own span.
@@ -149,7 +151,7 @@ type Environment = #struct {
 Environment.of(names Array<String, 4>, values Array<Float, 4>) => init{
 	names,
 	values,
-	_count = 3
+	_count = Int(3)
 };
 
 /// A subscript projects a place inside the subject and writes no return type.
@@ -183,13 +185,14 @@ Unit bind(this Environment, wanted String, value Float) mut {
 }
 
 /// A cursor borrows the environment it walks: `&` marks a guest field, which
-/// hosts nothing and must outlive nothing.
+/// hosts nothing and must outlive nothing. The position is what the subscript
+/// above is indexed by, so it carries that declaration's `Int`.
 type Cursor = #struct {
 	env &Environment;
-	position Column;
+	position Int;
 }
 
-Cursor(env &Environment) => init{ env, position = 0 };
+Cursor(env &Environment) => init{ env, position = Int(0) };
 
 /// Reading through a guest is ordinary access; the subscript above resolves
 /// the same way it does on a host.
@@ -368,7 +371,7 @@ Unit main() {
 	settled Bool = Float(0) < middle and middle < Float(100) or answer == Float(42);
 
 	// An implicit constructor covers the `span` field from a bare offset.
-	summary Report{ severity = Severity.note, message = "read four slots", span = 3 };
+	summary Report{ severity = Severity.note, message = "read four slots", span = Int(3) };
 	loudest Severity = worst(summary.severity, Severity.warning);
 	announce(summary);
 
