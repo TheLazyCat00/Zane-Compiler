@@ -143,6 +143,9 @@ type Environment = #struct {
 	_count Int;
 }
 
+/// Three of the four pairs start live. The last slot is left empty on
+/// purpose: it is the room `bind` fills in below, so the arrays are handed
+/// over with a placeholder in it.
 Environment.of(names Array<String, 4>, values Array<Float, 4>) => init{
 	names,
 	values,
