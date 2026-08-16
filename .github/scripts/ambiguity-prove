@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# Run one unambiguity proof attempt from the parameters in the environment.
+#
+# `devbox run` shell-quotes each argument it is given and then `eval`s the
+# reassembled command line, so every argument is re-parsed by a shell before
+# the command sees it. Workflow inputs therefore must not be passed as
+# arguments: this script reads them from the environment, and the workflow
+# invokes it with no arguments at all.
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+
+: "${LEVEL:?must be set}"
+: "${PROFILE:?must be set}"
+: "${SEARCH_TIMEOUT:?must be set}"
+: "${WITNESSES:?must be set}"
+: "${REPORT:?must be set}"
+
+# The proof level is the top-K stack abstraction depth, not a search bound: the
+# abstract pair space grows exponentially in it, so the level is chosen per run
+# rather than derived from the profile.
+args=(
+	prove "$LEVEL" "$PROFILE"
+	--timeout "$SEARCH_TIMEOUT"
+	--witnesses "$WITNESSES"
+	--output "$REPORT"
+)
+
+# An empty token range means "keep the profile's own range". The range bounds
+# only the concretization search that runs after an abstract candidate; the
+# proof itself is unbounded in sentence length.
+if [[ -n "${TOKENS:-}" ]]; then
+	args+=(--tokens "$TOKENS")
+fi
+
+# The report directory is created here as well as by --output, so the artifact
+# upload finds a directory even when the run dies before its first write.
+mkdir -p "$(dirname "$REPORT")"
+
+exec "$ROOT/dev/bin/ambiguity" "${args[@]}"
