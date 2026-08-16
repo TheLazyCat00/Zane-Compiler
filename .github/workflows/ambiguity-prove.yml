@@ -17,7 +17,7 @@ on:
       ref:
         description: Branch, tag, or commit to prove
         required: true
-        default: essential/parser
+        default: main
         type: string
       level:
         # Stacks are abstracted to their top LEVEL states, and the search runs
