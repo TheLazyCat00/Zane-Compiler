@@ -1,42 +1,403 @@
-type Vector2<T Type> = struct {
-	x T;
-	y T;
+/// A pocket calculator.
+///
+/// It builds a small expression tree, evaluates it against an environment of
+/// named values, and reports what went wrong when it cannot. The program is
+/// also the parser's fixture, so it reaches on purpose for most of the shapes
+/// the grammar accepts: enums and the maps hung off them, variants and `match`,
+/// value and reference types, the constructor forms, methods, operators,
+/// subscripts, lambdas, generics, abort handlers, `spawn`, and the loops.
+package main;
+
+import std;
+
+// ---------------------------------------------------------------------------
+// Peers, and the tables hung off them
+// ---------------------------------------------------------------------------
+
+/// The operators the calculator understands. Peers carry no payload, so
+/// everything an operator knows about itself is attached from the outside.
+type Operator = enum [ add, sub, mul, div ]
+
+/// An enum map attaches uniform external data to every member of an enum. It
+/// is package-scope, exhaustive, and read field-style off the member.
+Operator.symbol String [
+	add = "+",
+	sub = "-",
+	mul = "*",
+	div = "/"
+];
+
+/// A second map over the same peers: the tables are independent of each other.
+Operator.precedence Int [
+	add = 1,
+	sub = 1,
+	mul = 2,
+	div = 2
+];
+
+/// The value an operator leaves its operand untouched by, used when a fold
+/// runs out of arguments.
+Operator.identity Float [
+	add = Float(0),
+	sub = Float(0),
+	mul = Float(1),
+	div = Float(1)
+];
+
+/// How loud a diagnostic is.
+type Severity = enum [ note, warning, failure ]
+
+Severity.label String [
+	note = "note",
+	warning = "warning",
+	failure = "failure"
+];
+
+Severity.exitCode Int [
+	note = 0,
+	warning = 0,
+	failure = 1
+];
+
+// ---------------------------------------------------------------------------
+// Spans and reports: value types, and the constructor forms
+// ---------------------------------------------------------------------------
+
+/// A raw type declaration names a distinct type; an alias names the same one.
+type Column = Int;
+alias Offset = Int;
+
+/// Where in the source something was written.
+type Span = struct {
+	start Offset;
+	length Int;
 }
 
-Vector2<T> +(left Vector2<T>, right Vector2<T>) {
-	return Vector2(left.x + right.x, left.y + right.y);
-}
+/// A named constructor: declared and called as `Span.point(...)`, and yielding
+/// the base type either way.
+Span.point(start Offset) => init{ start, length = 1 };
 
-Unit?String main (this Int, a Bool) mut {
-	x Void[this Int] = "hello";
-	y String("world");
-	content String = read("wordlist.txt") ?? "";
-	x Int(3);
-	
-	if random() {
-		results List = crawl(content) ? error {
-			std$print(error);
-			abort error;
-		};
-	}
-	else {
-		rifle Weapon("rifle", 20);
-		value Bool = ~true + 3;
-	}
+/// A field constructor names its inputs and may default them.
+Span{ start Offset, length Int = 1 } => init{ start, length };
 
-	loop i to 3 {
-		std$print(i);
-	}
+/// An implicit constructor is positional and takes exactly one parameter; it
+/// lets a bare offset stand in wherever a `Span` is wanted.
+implicit Span(start Offset) => init{ start, length = 1 };
+
+/// A value subject is a mutable borrow when the method is `mut`, so this
+/// writes to the caller's own span.
+Unit widen(this Span, extra Int) mut {
+	this.length = this.length + extra;
 	return Unit();
 }
 
-square Int (x Int, y Int) => x * y;
+/// A diagnostic, ready to be printed.
+type Report = struct {
+	severity Severity;
+	message String;
+	span Span;
+}
+
+/// A field-constructor entry may default through a constructor call.
+Report{
+	severity Severity,
+	message String,
+	span Span.point(0)
+} => init{ severity, message, span };
+
+/// Reading `.label` off `this.severity` is an enum-map access through a value
+/// rather than through the member name.
+String render(this Report) => this.severity.label + ": " + this.message;
+
+// ---------------------------------------------------------------------------
+// The expression tree: a sum mould that leads back to itself
+// ---------------------------------------------------------------------------
+
+/// Two children and the operator between them. The children lead back to the
+/// enclosing type, so the compiler boxes them; nothing is written for that.
+type Operation = #struct {
+	left Expr;
+	right Expr;
+	op Operator;
+}
+
+Operation(left Expr, right Expr, op Operator) => init{ left, right, op };
+
+/// A value of a variant holds exactly one of its cases at a time.
+type Expr = #variant {
+	number Float;
+	name String;
+	operation Operation;
+	negation Expr;
+}
+
+// ---------------------------------------------------------------------------
+// The environment: a reference type, mutated in place and lent out as a guest
+// ---------------------------------------------------------------------------
+
+/// Four named slots. `_count` is private, so only a method — a verb whose
+/// first parameter is `this` — can read it.
+type Environment = #struct {
+	names Array<String, 4>;
+	values Array<Float, 4>;
+	_count Int;
+}
+
+Environment.of(names Array<String, 4>, values Array<Float, 4>) => init{
+	names,
+	values,
+	_count = 3
+};
+
+/// A subscript projects a place inside the subject and writes no return type.
+(this Environment)[index Int] => this.values[index];
+
+/// A read-only method, called with `:`. It aborts rather than returning a
+/// sentinel, so every caller has to say what an unknown name means.
+Float?String lookup(this Environment, wanted String) {
+	loop index from 0 to this._count - 1 {
+		if this.names[index] == wanted {
+			return this.values[index];
+		}
+	}
+
+	abort "unknown name: " + wanted;
+}
+
+/// A mutating method, declared `mut` and called with `!`.
+Unit bind(this Environment, wanted String, value Float) mut {
+	// `guard` leaves the scope when its condition holds, after running the
+	// block attached to it.
+	guard 4 <= this._count {
+		std$print("environment is full");
+		return Unit();
+	}
+
+	this.names[this._count] = wanted;
+	this.values[this._count] = value;
+	this._count = this._count + 1;
+	return Unit();
+}
+
+/// A cursor borrows the environment it walks: `&` marks a guest field, which
+/// hosts nothing and must outlive nothing.
+type Cursor = #struct {
+	env &Environment;
+	position Column;
+}
+
+Cursor(env &Environment) => init{ env, position = 0 };
+
+/// Reading through a guest is ordinary access; the subscript above resolves
+/// the same way it does on a host.
+Float peek(this Cursor) => this.env[this.position];
+
+// ---------------------------------------------------------------------------
+// Evaluation
+// ---------------------------------------------------------------------------
+
+/// One arm per case, no default. Abort flows through a `match`, so handling
+/// an arm's abort is the caller's job rather than this block's.
+Float?String evaluate(node Expr, env &Environment) {
+	return match node {
+		value number => value;
+		wanted name => env:lookup(wanted) ? missing {
+			abort missing;
+		};
+		inner negation {
+			value Float = evaluate(inner, env) ? missing {
+				abort missing;
+			};
+			return ~value;
+		}
+		call operation {
+			left Float = evaluate(call.left, env) ? missing {
+				abort missing;
+			};
+			right Float = evaluate(call.right, env) ? missing {
+				abort missing;
+			};
+			return apply(call.op, left, right) ? refused {
+				abort refused;
+			};
+		}
+	};
+}
+
+/// An enum scrutinee matches the same way a variant does, minus the binders.
+Float?String apply(op Operator, left Float, right Float) {
+	empty Bool = right == Float(0);
+	if empty and Operator.div == op {
+		abort "division by zero";
+	}
+
+	return match op {
+		add => left + right;
+		sub => left - right;
+		mul => left * right;
+		div => left / right;
+	};
+}
+
+/// Several scrutinees are a bare comma list, and a `[ ]` selector shares one
+/// arm between cases. Every combination has to be covered.
+Severity worst(left Severity, right Severity) => match left, right {
+	failure, [note, warning, failure] => Severity.failure;
+	[note, warning], failure => Severity.failure;
+	warning, [note, warning] => Severity.warning;
+	note, warning => Severity.warning;
+	note, note => Severity.note;
+};
+
+/// A map read through a variable: the peer arrives as an ordinary parameter,
+/// and `.symbol` finds its entry all the same.
+String describe(op Operator) => "the " + op.symbol + " operator";
+
+// ---------------------------------------------------------------------------
+// Generics
+// ---------------------------------------------------------------------------
+
+/// A parameterized type declares its parameters in a `<>` header.
+type Pair<T Type> = struct {
+	left T;
+	right T;
+}
+
+/// A constructor for one carries the applied return type instead, and picks
+/// its parameter up from the first value parameter that marks it.
+Pair<T>(left T Type, right T) => init{ left, right };
+
+/// An operator definition is a package-scope verb named after a token. It
+/// never takes `this`, so it is not a method.
+Pair<T> +(a Pair<T Type>, b Pair<T>) => Pair(a.left + b.left, a.right + b.right);
+
+/// The prefix operator takes one parameter, and flips a composite one
+/// component at a time.
+Pair<T> ~(value Pair<T Type>) => Pair(~value.left, ~value.right);
+
+/// A verb introduces a number parameter the same way, inside a parameter's
+/// own type.
+T first(values Array<T Type, n Number>) => values[0];
+
+/// A concept-typed parameter accepts a source literal and lowers it.
+String quote(text @concepts$Text) => "\"" + String(text) + "\"";
+
+// ---------------------------------------------------------------------------
+// Reporting
+// ---------------------------------------------------------------------------
+
+/// An `if` chain. Peers compare with `==` like any other value, so a branch
+/// on one needs no `match`.
+Unit announce(entry Report) {
+	guard entry.span.length < 1;
+
+	if Severity.failure == entry.severity {
+		std$print("stopped: " + entry:render());
+	}
+	elif Severity.warning == entry.severity {
+		std$print("carrying on: " + entry:render());
+	}
+	else {
+		std$print(entry:render());
+	}
+
+	return Unit();
+}
+
+// ---------------------------------------------------------------------------
+// The program
+// ---------------------------------------------------------------------------
 
 Unit main() {
-	print("hello");
-	std$print(1 + 1 + 3 + 4);
-	@intrinsics$print("hello");
-	print(res.value);
-	print(res:getValue());
+	// The instantiation shorthand: a declaration that is its own initializer.
+	env Environment.of(
+		Array(["x", "y", "z", ""]),
+		Array([Float(3), Float(4), Float(0), Float(0)])
+	);
+
+	// `!` calls a mutating method, `:` a read-only one.
+	env!bind("answer", Float(42));
+
+	// Construction nests: naming a case takes its payload whole, so a whole
+	// tree is one expression. This one reads `x + y * 2`.
+	program Expr = Expr.operation(Operation(
+		Expr.name("x"),
+		Expr.operation(Operation(Expr.name("y"), Expr.number(Float(2)), Operator.mul)),
+		Operator.add
+	));
+
+	// An abortable call is handled where it is made, and every path out of
+	// the handler is a `resolve`, a `return`, or an `abort`.
+	result Float = evaluate(program, &env) ? failure {
+		entry Report{ severity = Severity.failure, message = failure };
+		announce(entry);
+		resolve Float(0);
+	};
+
+	// `??` is the resolve-only shorthand for the same thing.
+	answer Float = env:lookup("answer") ?? Float(0);
+
+	// A lambda-variable is an ordinary symbol whose type is a function type.
+	blend Float[Float, Float] = Float(a Float, b Float) => (a + b) / Float(2);
+
+	// The same declaration, in the shorthand that drops the `= literal`.
+	double Float(value Float) => value * Float(2);
+
+	middle Float = double(blend(result, answer));
+
+	// A pipe hands one value to a callable.
+	reading String = describe|Operator.mul;
+
+	// Both maps again, in a context that wants an `Int` rather than a String.
+	spread Int = Operator.mul.precedence - Operator.add.precedence;
+
+	// A subscript expression reaches through the declaration above, and the
+	// counted loop is inclusive at both ends.
+	total Float = Float(0);
+	loop index from 0 to 3 {
+		total = total + env[index];
+	}
+
+	// A guest of the environment, walked without ever hosting it.
+	walker Cursor(&env);
+
+	// Comparisons are ordinary calls, and `and` binds tighter than `or`.
+	settled Bool = Float(0) < middle and middle < Float(100) or answer == Float(42);
+
+	// An implicit constructor covers the `span` field from a bare offset.
+	summary Report{ severity = Severity.note, message = "read four slots", span = 3 };
+	loudest Severity = worst(summary.severity, Severity.warning);
+	announce(summary);
+
+	// A value type is mutated through the caller's own slot.
+	mark Span.point(12);
+	mark!widen(spread);
+
+	// Both operator definitions above, on one expression.
+	shifted Pair<Int> = ~Pair(spread, mark.length) + Pair(1, 1);
+
+	// The compiler namespaces are reachable where a machine type is meant.
+	bits @primitives$I64(loudest.exitCode);
+
+	head String = first(Array(["x", "y", "z", ""]));
+	std$print(quote(head));
+	std$print(reading);
+	std$print(walker:peek());
+	std$print(shifted.left);
+	std$print(bits);
+
+	// The other way into a map: straight off the member name.
+	std$print(Operator.add.identity);
+
+	// `spawn` starts a call concurrently; an abortable one still handles here.
+	spawn std$print(total);
+	spawn evaluate(program, &env) ?? Float(0);
+
+	guard settled {
+		std$print("settled");
+		return Unit();
+	}
+
+	std$print("unsettled");
 	return Unit();
 }
