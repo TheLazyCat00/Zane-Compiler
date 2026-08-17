@@ -39,11 +39,12 @@ on:
           - general
           - deep-function-body
       timeout:
-        # This bounds only the concretization search that runs after an
-        # abstract candidate. The abstract phase has no wall clock of its own:
-        # it ends when the pair space is exhausted or the memory-derived pair
-        # limit is reached, which is why the job needs a hard timeout too.
-        description: Timeout for the concretization search
+        # Each search phase gets this in full: the abstract proof runs under
+        # its own deadline, and the concretization search that may follow
+        # starts a fresh one. Budget the job for twice the value chosen, on
+        # top of checkout, Devbox, the opam bootstrap and the build — 30m is
+        # the largest offered, so the 60-minute job cap holds.
+        description: Timeout per search phase
         required: true
         default: 15m
         type: choice
@@ -72,9 +73,13 @@ jobs:
   prove:
     name: Prove level ${{ inputs.level || '3' }} on ${{ inputs.ref || github.ref_name }}
     runs-on: ubuntu-latest
-    # The abstract phase stops on the pair limit rather than on a clock, so the
-    # job timeout is the real bound on a level that turns out to be too high.
-    timeout-minutes: 60
+    # Both search phases obey --timeout, so the tool now bounds itself: at the
+    # largest offered value the two phases total 60 minutes. This cap is the
+    # backstop around them and has to clear that total plus checkout, Devbox,
+    # the opam bootstrap and the build, because a job killed here prints no
+    # verdict line at all and the report the verdict is read from is never
+    # written — turning an honest "not proven" into a broken run.
+    timeout-minutes: 75
     env:
       # Public ubuntu-latest runners provide four CPUs and 16 GB RAM:
       # https://docs.github.com/en/actions/reference/runners/github-hosted-runners#standard-github-hosted-runners-for-public-repositories
