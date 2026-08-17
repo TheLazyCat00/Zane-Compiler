@@ -920,6 +920,7 @@ type prove_result =
   | Proven of int
   | Abstract_candidate of string list * int
   | Pair_overflow of int
+  | Prove_timeout of int
 
 (* Proof-mode exit statuses. A proof is a verdict rather than a success or a
    failure, so `ambiguity prove` reports which of the three it reached in its
@@ -930,7 +931,8 @@ type prove_result =
 let ambiguous_status = 1
 let not_proven_status = 3
 
-let prove engine limit pair_limit =
+let prove engine limit pair_limit timeout =
+  let deadline = Unix.gettimeofday () +. timeout in
   let automaton = engine.automaton in
   let gotos = goto_edges automaton in
   let preds = predecessors automaton in
@@ -994,7 +996,14 @@ let prove engine limit pair_limit =
     StringSet.elements (class_representatives automaton automaton.terminals)
   in
   push None ([ 0 ], [ 0 ], false);
-  while (not (Queue.is_empty queue)) && !candidate = None && not !overflow do
+  (* The clock is read once per dequeued pair, as the concretization search
+     reads it once per expanded frontier: a pair costs a joint-outcome pass
+     over every terminal class, so the read does not show up beside it. *)
+  while
+    (not (Queue.is_empty queue))
+    && !candidate = None && (not !overflow)
+    && Unix.gettimeofday () < deadline
+  do
     let (left, right, diverged) as node = Queue.take queue in
     List.iter
       (fun (_, _, chain_diverged) ->
@@ -1013,9 +1022,17 @@ let prove engine limit pair_limit =
         terminals
   done;
   let explored = Hashtbl.length parents in
+  (* A queue left with work in it is the only way past the loop other than a
+     verdict, so it - not the clock - is what says the deadline cut the search
+     short. Draining the queue exactly as time runs out is a completed proof,
+     and is reported as one. *)
+  let ran_out_of_time = not (Queue.is_empty queue) in
   match !candidate with
   | Some tokens -> Abstract_candidate (tokens, explored)
-  | None -> if !overflow then Pair_overflow explored else Proven explored
+  | None ->
+      if !overflow then Pair_overflow explored
+      else if ran_out_of_time then Prove_timeout explored
+      else Proven explored
 
 type outcome = {
   witnesses : ((int * string) list * string list) list;
@@ -2060,7 +2077,7 @@ let main () =
           "Proof budget: %d abstract pairs (single-threaded; the %d-worker \
            split does not apply).\n"
           prove_limits.max_frontiers jobs;
-        match prove engine !prove_level prove_limits.max_frontiers with
+        match prove engine !prove_level prove_limits.max_frontiers timeout with
         | Proven pairs ->
             Printf.printf
               "PROVEN UNAMBIGUOUS: no diverging pair of accepting parses \
@@ -2074,6 +2091,13 @@ let main () =
                abstraction level %d. Raise AMBIGUITY_MEMORY_MB or \
                AMBIGUITY_MAX_FRONTIER_RATIO, or lower --prove.\n"
               pairs !prove_level;
+            exit not_proven_status
+        | Prove_timeout pairs ->
+            Printf.printf
+              "NOT PROVEN: the timeout (%gs) expired during the abstract \
+               phase at level %d, after %d pairs. Raise --timeout, or lower \
+               --prove.\n"
+              timeout !prove_level pairs;
             exit not_proven_status
         | Abstract_candidate (tokens, pairs) ->
             Printf.printf

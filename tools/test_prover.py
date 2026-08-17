@@ -172,11 +172,13 @@ class ProverTestCase(unittest.TestCase):
         level: int,
         *,
         environment: dict[str, str] | None = None,
+        timeout: str = "30",
     ) -> tuple[int, str]:
         path = self.directory / "grammar.mly"
         path.write_text(grammar, encoding="utf-8")
-        # --timeout bounds only the concretization search; a process-level
-        # timeout keeps a hung binary or menhir from blocking the whole suite.
+        # --timeout bounds each search phase separately, so a proof run may
+        # take up to twice it; a process-level timeout keeps a hung binary or
+        # menhir from blocking the whole suite regardless.
         result = subprocess.run(
             [
                 str(ENGINE),
@@ -185,7 +187,7 @@ class ProverTestCase(unittest.TestCase):
                 "--max-tokens",
                 "8",
                 "--timeout",
-                "30",
+                timeout,
                 "--max-witnesses",
                 "5",
                 str(path),
@@ -286,6 +288,25 @@ class ProofStatusTests(ProverTestCase):
         self.assertEqual(status, NOT_PROVEN, output)
         self.assertRegex(output, NOT_PROVEN_LINE)
         self.assertNotRegex(output, PROVEN_LINE)
+
+    def test_an_expired_timeout_reports_not_proven(self) -> None:
+        # The abstract phase runs under the same --timeout as the search that
+        # may follow it. A deadline of zero cannot admit a single pair, so the
+        # proof stops with work still queued -- the one route out of the loop
+        # that is neither a verdict nor an overflow. It must read as "not
+        # proven": a proof cut short by the clock has established nothing, and
+        # reporting one would be the worst bug this tool can have.
+        status, output = self.prove(LR1_LIST, 2, timeout="0")
+        self.assertEqual(status, NOT_PROVEN, output)
+        self.assertRegex(output, NOT_PROVEN_LINE)
+        self.assertNotRegex(output, PROVEN_LINE)
+
+    def test_a_generous_timeout_still_proves(self) -> None:
+        # The guard against the test above passing for the wrong reason: the
+        # same grammar and level prove when the clock is not the constraint,
+        # so the deadline is what changed the verdict.
+        status, output = self.prove(LR1_LIST, 2)
+        self.assertEqual(status, PROVEN, output)
 
     def test_a_plain_search_reports_no_verdict(self) -> None:
         # Only proof mode returns a verdict. A bounded search that finds

@@ -135,10 +135,11 @@ the state is triaged into one of these categories.
   on it without reading the report: exit 0 "PROVEN UNAMBIGUOUS" is a genuine
   proof with no sentence-length bound; exit 1 means a concrete ambiguous
   sentence was found, which is a bug in the grammar rather than a limit of the
-  abstraction; exit 3 means not proven — either the abstraction reported a
-  candidate the bounded search could not concretize, so raise the proof level
-  or override the concretization profile, or the abstract pair limit was
-  reached, so raise the memory budget. Exit 2 keeps its usual meaning
+  abstraction; exit 3 means not proven — the abstraction reported a candidate
+  the bounded search could not concretize, so raise the proof level or override
+  the concretization profile; or the abstract pair limit was reached, so raise
+  the memory budget; or the timeout expired mid-proof, so raise it. Exit 2
+  keeps its usual meaning
   everywhere in this tool — the run itself failed — so a caller can tell a
   verdict from a broken invocation. Only proof mode reports a verdict: a plain
   `ambiguity search` exits 0 whether or not it found witnesses, since a bounded
@@ -157,7 +158,7 @@ the state is triaged into one of these categories.
   is, but exhausting the budget still reports "not proven", since a search that
   stopped early has proved nothing.
 
-  Two things bound the abstraction's reach, and they are independent. **Its
+  Three things bound the abstraction's reach, and they are independent. **Its
   precision** is the proof level: below the top K states the stack is unknown,
   and a reduction popping into the unknown re-enters through every goto edge on
   the reduced nonterminal, which is where spurious candidates come from. When a
@@ -170,7 +171,11 @@ the state is triaged into one of these categories.
   search, so the budget is derived for one worker and `AMBIGUITY_JOBS` does not
   divide it; the concretization search that may follow still uses every worker.
   The profile's token bound feeds the same estimate, so a narrower
-  concretization profile also buys a larger pair budget.
+  concretization profile also buys a larger pair budget. **Its time** is
+  `--timeout`, which each search phase gets in full: the abstract proof runs
+  under its own deadline, and the concretization search that may follow starts
+  a fresh one, so a proof run's worst case is twice the value passed. A proof
+  cut short by either deadline reports "not proven", never a proof.
 - `ambiguity classes` — lists the terminal equivalence classes the search
   collapses, so a grammar change that unexpectedly splits or merges a class is
   visible. The same classes bound the prover's terminal alphabet.
