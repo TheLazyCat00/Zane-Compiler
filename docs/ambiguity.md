@@ -131,15 +131,51 @@ the state is triaged into one of these categories.
   into the ambiguity search. It abstracts GLR stacks to their top-K states and
   exhaustively explores pairs of abstract parses of the same input, comparing
   reduction chains in lockstep. It does not depend on an external constraint
-  solver. Three verdicts: exit 0 "PROVEN UNAMBIGUOUS" is a genuine proof with
-  no sentence-length bound; exit 1 means a concrete ambiguous sentence was
-  found; exit 3 means not proven — the abstraction reported a candidate the
-  bounded search could not concretize, so raise the proof level or override the
-  concretization profile.
+  solver. Three verdicts, each reported in the exit status so a script can act
+  on it without reading the report: exit 0 "PROVEN UNAMBIGUOUS" is a genuine
+  proof with no sentence-length bound; exit 1 means a concrete ambiguous
+  sentence was found, which is a bug in the grammar rather than a limit of the
+  abstraction; exit 3 means not proven — the abstraction reported a candidate
+  the bounded search could not concretize, so raise the proof level or override
+  the concretization profile; or the abstract pair limit was reached, so raise
+  the memory budget; or the timeout expired mid-proof, so raise it. Exit 2
+  keeps its usual meaning
+  everywhere in this tool — the run itself failed — so a caller can tell a
+  verdict from a broken invocation. Only proof mode reports a verdict: a plain
+  `ambiguity search` exits 0 whether or not it found witnesses, since a bounded
+  finding is not one.
   Because unambiguity is undecidable in general, the "not proven" verdict can
   never be eliminated entirely; the prover is validated against known-ambiguous
   grammars, LR(1) grammars, precedence-resolved expression grammars, and
-  unambiguous non-LR grammars such as palindromes.
+  unambiguous non-LR grammars such as palindromes. That corpus lives in
+  `tools/test_prover.py`, which pins both directions of soundness — an
+  ambiguous grammar is never proven, and an unambiguous one never yields a
+  witness — so a change that sharpens the abstraction cannot quietly start
+  proving false theorems. A conflict-free automaton offers one action per state
+  and lookahead, so no pair of abstract runs can ever diverge and it is proven
+  at every level, given a pair budget large enough to finish: that is a
+  property of the automaton rather than of how sharp the abstraction currently
+  is, but exhausting the budget still reports "not proven", since a search that
+  stopped early has proved nothing.
+
+  Three things bound the abstraction's reach, and they are independent. **Its
+  precision** is the proof level: below the top K states the stack is unknown,
+  and a reduction popping into the unknown re-enters through every goto edge on
+  the reduced nonterminal, which is where spurious candidates come from. When a
+  reduction pops exactly the known suffix, the state it exposes must be one that
+  can sit directly below the suffix's deepest entry, so only that entry's
+  predecessors are admitted; popping further reaches a state the suffix
+  constrains in no way, and every goto edge stays admissible. **Its budget** is
+  the abstract pair limit, derived from `AMBIGUITY_MEMORY_MB` and
+  `AMBIGUITY_MAX_FRONTIER_RATIO`. The abstract phase is a single sequential
+  search, so the budget is derived for one worker and `AMBIGUITY_JOBS` does not
+  divide it; the concretization search that may follow still uses every worker.
+  The profile's token bound feeds the same estimate, so a narrower
+  concretization profile also buys a larger pair budget. **Its time** is
+  `--timeout`, which each search phase gets in full: the abstract proof runs
+  under its own deadline, and the concretization search that may follow starts
+  a fresh one, so a proof run's worst case is twice the value passed. A proof
+  cut short by either deadline reports "not proven", never a proof.
 - `ambiguity classes` — lists the terminal equivalence classes the search
   collapses, so a grammar change that unexpectedly splits or merges a class is
   visible. The same classes bound the prover's terminal alphabet.

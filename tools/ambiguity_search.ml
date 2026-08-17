@@ -4,6 +4,7 @@
 
 module StringSet = Set.Make (String)
 module IntMap = Map.Make (Int)
+module IntSet = Set.Make (Int)
 module ConflictSet = Set.Make (struct
   type t = int * string
   let compare = compare
@@ -739,6 +740,27 @@ let goto_edges automaton =
     automaton.states;
   table
 
+(* The states that can sit directly below a given state on a parser stack:
+   [p] is a predecessor of [s] exactly when some grammar symbol takes [p] to
+   [s]. Every abstract suffix is a chain of adjacent states — each one is
+   pushed onto the one below it by a shift or a goto, and truncation only
+   drops entries from the bottom — so the state a suffix hides beneath its
+   deepest entry is always one of that entry's predecessors. *)
+let predecessors automaton =
+  let table = Array.make (Array.length automaton.states) IntSet.empty in
+  Array.iteri
+    (fun source state ->
+      Hashtbl.iter
+        (fun _ target -> table.(target) <- IntSet.add source table.(target))
+        state.transitions)
+    automaton.states;
+  table
+
+let rec last_state = function
+  | [] -> invalid_arg "last_state: empty suffix"
+  | [ state ] -> state
+  | _ :: tail -> last_state tail
+
 (* One micro-step of a single run while consuming a token: apply one
    reduction, or terminate the chain by shifting the token (accepting, when
    the token is "#"). *)
@@ -746,11 +768,12 @@ type side_move =
   | Reduce of int * int list (* production id, suffix afterwards *)
   | Terminate of int list (* suffix after the shift, or at acceptance *)
 
-let side_moves automaton gotos limit cache suffix token =
+let side_moves automaton gotos preds limit cache suffix token =
   match Hashtbl.find_opt cache (suffix, token) with
   | Some moves -> moves
   | None ->
       let moves = ref [] in
+      let depth = List.length suffix in
       (match suffix with
       | [] -> ()
       | top :: _ ->
@@ -767,7 +790,7 @@ let side_moves automaton gotos limit cache suffix token =
               (Hashtbl.find_opt state.transitions token);
           List.iter
             (fun reduction ->
-              if reduction.width < List.length suffix then
+              if reduction.width < depth then
                 match drop_states reduction.width suffix with
                 | [] -> assert false
                 | base :: _ as remaining ->
@@ -782,13 +805,25 @@ let side_moves automaton gotos limit cache suffix token =
                          automaton.states.(base).transitions reduction.lhs)
               else
                 (* The reduction pops into the unknown part of the stack; the
-                   goto source is the state left on top afterwards. *)
+                   goto source is the state left on top afterwards.
+
+                   Popping exactly the known suffix exposes whatever sits
+                   directly below its deepest entry, so only that entry's
+                   predecessors are possible goto sources. Popping further
+                   reaches a state the suffix constrains in no way, and every
+                   goto edge on the reduced nonterminal stays admissible. *)
+                let deepest = last_state suffix in
                 List.iter
                   (fun (source, target) ->
-                    moves :=
-                      Reduce
-                        (reduction.prod, truncate_suffix limit [ target; source ])
-                      :: !moves)
+                    if
+                      reduction.width > depth
+                      || IntSet.mem source preds.(deepest)
+                    then
+                      moves :=
+                        Reduce
+                          ( reduction.prod,
+                            truncate_suffix limit [ target; source ] )
+                        :: !moves)
                   (Option.value
                      (Hashtbl.find_opt gotos reduction.lhs)
                      ~default:[]))
@@ -885,18 +920,45 @@ type prove_result =
   | Proven of int
   | Abstract_candidate of string list * int
   | Pair_overflow of int
+  | Prove_timeout of int
 
-let prove engine limit pair_limit =
+(* Proof-mode exit statuses. A proof is a verdict rather than a success or a
+   failure, so `ambiguity prove` reports which of the three it reached in its
+   status: 0 proven, 1 a concrete ambiguous sentence, 3 neither. Status 2 stays
+   what it is everywhere else in this tool - the run itself went wrong - so a
+   caller can tell a verdict from a broken invocation. A plain search reports no
+   verdict and keeps exiting 0 whether or not it found witnesses. *)
+let ambiguous_status = 1
+let not_proven_status = 3
+
+let prove engine limit pair_limit timeout =
+  let deadline = Unix.gettimeofday () +. timeout in
   let automaton = engine.automaton in
   let gotos = goto_edges automaton in
+  let preds = predecessors automaton in
+  (* Keyed by a single suffix rather than a pair, so this stays small and is
+     read by every pair that reaches the same stack: worth keeping whole. *)
   let moves_cache = Hashtbl.create 100_003 in
-  let moves = side_moves automaton gotos limit moves_cache in
-  let joint_cache = Hashtbl.create 100_003 in
+  let moves = side_moves automaton gotos preds limit moves_cache in
+  (* The pair cache is the opposite. Each node is dequeued once and asks for
+     every terminal class exactly once, so the only repeat key is the twin
+     node that shares a stack pair and differs in its divergence flag. Left
+     unbounded it would hold one entry per explored pair per terminal class,
+     dwarfing the pair table that the memory budget actually caps, so it is
+     emptied whenever it outgrows its share. *)
+  let joint_capacity = max 1 (pair_limit / 8) in
+  (* Sized to start where the other tables do, but never larger than the cap it
+     will be held to: a small budget must not pre-allocate a table it can never
+     fill, and a large one should still grow on demand rather than reserve its
+     ceiling up front. *)
+  let joint_cache = Hashtbl.create (min 100_003 joint_capacity) in
   let joint pair token =
     match Hashtbl.find_opt joint_cache (pair, token) with
     | Some outcomes -> outcomes
     | None ->
         let outcomes = joint_outcomes moves pair token in
+        if Hashtbl.length joint_cache >= joint_capacity then
+          Hashtbl.reset joint_cache;
         Hashtbl.add joint_cache (pair, token) outcomes;
         outcomes
   in
@@ -934,7 +996,14 @@ let prove engine limit pair_limit =
     StringSet.elements (class_representatives automaton automaton.terminals)
   in
   push None ([ 0 ], [ 0 ], false);
-  while (not (Queue.is_empty queue)) && !candidate = None && not !overflow do
+  (* The clock is read once per dequeued pair, as the concretization search
+     reads it once per expanded frontier: a pair costs a joint-outcome pass
+     over every terminal class, so the read does not show up beside it. *)
+  while
+    (not (Queue.is_empty queue))
+    && !candidate = None && (not !overflow)
+    && Unix.gettimeofday () < deadline
+  do
     let (left, right, diverged) as node = Queue.take queue in
     List.iter
       (fun (_, _, chain_diverged) ->
@@ -953,9 +1022,17 @@ let prove engine limit pair_limit =
         terminals
   done;
   let explored = Hashtbl.length parents in
+  (* A queue left with work in it is the only way past the loop other than a
+     verdict, so it - not the clock - is what says the deadline cut the search
+     short. Draining the queue exactly as time runs out is a completed proof,
+     and is reported as one. *)
+  let ran_out_of_time = not (Queue.is_empty queue) in
   match !candidate with
   | Some tokens -> Abstract_candidate (tokens, explored)
-  | None -> if !overflow then Pair_overflow explored else Proven explored
+  | None ->
+      if !overflow then Pair_overflow explored
+      else if ran_out_of_time then Prove_timeout explored
+      else Proven explored
 
 type outcome = {
   witnesses : ((int * string) list * string list) list;
@@ -1832,7 +1909,8 @@ let options =
     ( "--prove",
       Arg.Set_int prove_level,
       "K attempt an unambiguity proof with a top-K stack abstraction; \
-       all completed outcomes exit 0 \
+       exits 0 proven, 1 a concrete ambiguous sentence, 3 neither, \
+       2 a failed run \
        (the derived dedup-frontier limit also bounds the abstract pair count)" );
     ( "--dump-terminal-classes",
       Arg.Set dump_classes,
@@ -1975,16 +2053,6 @@ let main () =
           branched = derivations initial_frontier >= 2;
         }
       in
-      let memory_limits =
-        derive_memory_limits ~memory_mb ~max_frontier_ratio ~jobs ~max_tokens
-      in
-      Printf.printf
-        "Memory budget: %d MiB total across %d worker(s); workers compact at %.0f MiB and stop admitting frontiers at %.0f MiB each (10%% reserved); per-worker limits are %d queued frontiers and %d retained dedup frontiers (ratio %g).\n"
-        memory_mb jobs
-        (memory_limits.soft_heap_bytes /. 1024. /. 1024.)
-        (memory_limits.hard_heap_bytes /. 1024. /. 1024.)
-        memory_limits.max_queue memory_limits.max_frontiers
-        max_frontier_ratio;
       Printf.printf
         "Search constraints: %d..%d total tokens; %d-token prefix; %s.\n"
         !min_tokens max_tokens prefix_depth
@@ -1995,7 +2063,21 @@ let main () =
       if !prefix_tokens <> [] then
         Printf.printf "Prefix tokens: %s\n" (String.concat " " !prefix_tokens);
       if !prove_level > 0 then begin
-        match prove engine !prove_level memory_limits.max_frontiers with
+        (* The abstract phase is one sequential search, not a pool of workers,
+           so dividing the budget by AMBIGUITY_JOBS would hand most of it to
+           workers that never start. It is derived here for a single worker;
+           the concretization search below still splits the budget its own
+           way. Note that the profile's token bound feeds the entry-size
+           estimate, so a narrower profile also buys a larger pair budget. *)
+        let prove_limits =
+          derive_memory_limits ~memory_mb ~max_frontier_ratio ~jobs:1
+            ~max_tokens
+        in
+        Printf.printf
+          "Proof budget: %d abstract pairs (single-threaded; the %d-worker \
+           split does not apply).\n"
+          prove_limits.max_frontiers jobs;
+        match prove engine !prove_level prove_limits.max_frontiers timeout with
         | Proven pairs ->
             Printf.printf
               "PROVEN UNAMBIGUOUS: no diverging pair of accepting parses \
@@ -2009,7 +2091,14 @@ let main () =
                abstraction level %d. Raise AMBIGUITY_MEMORY_MB or \
                AMBIGUITY_MAX_FRONTIER_RATIO, or lower --prove.\n"
               pairs !prove_level;
-            exit 0
+            exit not_proven_status
+        | Prove_timeout pairs ->
+            Printf.printf
+              "NOT PROVEN: the timeout (%gs) expired during the abstract \
+               phase at level %d, after %d pairs. Raise --timeout, or lower \
+               --prove.\n"
+              timeout !prove_level pairs;
+            exit not_proven_status
         | Abstract_candidate (tokens, pairs) ->
             Printf.printf
               "Abstract ambiguity candidate at level %d after %d pairs \
@@ -2019,6 +2108,22 @@ let main () =
             Printf.printf
               "Attempting to concretize with the bounded search...\n\n"
       end;
+      (* Only the concretization search runs workers, and only the code below
+         reaches it: a proof that finished on its own never needs the
+         worker-divided limits, and deriving them here keeps a proof-only
+         verdict from depending on AMBIGUITY_JOBS at all - including through
+         the error this derivation raises when the per-worker share is too
+         small to hold a single queue entry. *)
+      let memory_limits =
+        derive_memory_limits ~memory_mb ~max_frontier_ratio ~jobs ~max_tokens
+      in
+      Printf.printf
+        "Memory budget: %d MiB total across %d worker(s); workers compact at %.0f MiB and stop admitting frontiers at %.0f MiB each (10%% reserved); per-worker limits are %d queued frontiers and %d retained dedup frontiers (ratio %g).\n"
+        memory_mb jobs
+        (memory_limits.soft_heap_bytes /. 1024. /. 1024.)
+        (memory_limits.hard_heap_bytes /. 1024. /. 1024.)
+        memory_limits.max_queue memory_limits.max_frontiers
+        max_frontier_ratio;
       let conflicts = conflict_states automaton in
       let conflict_distance = reverse_distances automaton conflicts in
       let accept_targets =
@@ -2053,7 +2158,7 @@ let main () =
                within the search bounds; the grammar is neither proven \
                unambiguous nor shown ambiguous. Raising --prove may remove \
                the spurious candidate.\n";
-            exit 0
+            exit not_proven_status
           end;
           Printf.printf "This is a bounded result, not a proof of unambiguity.\n";
           exit 0
@@ -2079,7 +2184,11 @@ let main () =
             (fun reason ->
               Printf.printf "Search stopped because %s.\n" reason)
             outcome.stopped;
-          exit 0)
+          (* Concretizing the abstract candidate settles the proof: the
+             witnesses above are the ambiguity the level-K abstraction
+             suspected. A plain search reports the same witnesses as a bounded
+             finding, not as a verdict, so it keeps its own status. *)
+          exit (if !prove_level > 0 then ambiguous_status else 0))
 
 let () =
   try main ()
