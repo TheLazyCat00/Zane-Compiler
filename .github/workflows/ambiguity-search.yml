@@ -6,7 +6,7 @@ on:
       ref:
         description: Branch, tag, or commit to search
         required: true
-        default: essential/parser
+        default: main
         type: string
       profile:
         description: Search profile
