@@ -1511,10 +1511,17 @@ let unified_search engine initial ~max_tokens ~min_tokens ~nodes_per_depth
     emit_progress false
   done;
   emit_progress true;
-  if Unix.gettimeofday () >= deadline then
-    stopped := Some "the timeout was reached"
-  else if Hashtbl.length witnesses >= max_witnesses then
+  (* The deadline alone does not mean the deadline stopped anything. The loop
+     also exits with a drained queue, and expanding the last frontier can carry
+     the clock past the deadline on its way out - so a search that finished the
+     whole token bound would be recorded as timed out, and reported as a
+     curtailed run when it is the conclusive one. Only work still queued makes
+     the deadline the reason. A dropped frontier keeps its own reason whatever
+     the clock says: the bound was not covered, so the run is not exhaustive. *)
+  if Hashtbl.length witnesses >= max_witnesses then
     stopped := Some "the witness limit was reached"
+  else if !queued > 0 && Unix.gettimeofday () >= deadline then
+    stopped := Some "the timeout was reached"
   else if !dropped then
     stopped := Some "the memory budget dropped part of the search space";
   ( {

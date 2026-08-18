@@ -820,7 +820,16 @@ def search_variant(args: argparse.Namespace, grammar: Path) -> SearchResult:
     if code not in {0, 1}:
         message = (stderr or stdout or f"search exited with status {code}").strip()
         return SearchResult(None, None, None, None, None, None, [], seconds, message)
+    return parse_search_output(stdout, seconds)
 
+
+def parse_search_output(stdout: str, seconds: float) -> SearchResult:
+    """Read one search report into a `SearchResult`.
+
+    Separate from running the search so the report contract - in particular
+    what a missing termination line has to mean - can be exercised without a
+    built engine.
+    """
     family_match = FAMILIES_RE.search(stdout)
     families = int(family_match.group(1)) if family_match else 0
     explored_match = EXPLORED_RE.search(stdout)
@@ -834,7 +843,24 @@ def search_variant(args: argparse.Namespace, grammar: Path) -> SearchResult:
         explored = unique = seeds = None
     depth_match = DEPTH_RE.search(stdout)
     stopped_match = STOPPED_RE.search(stdout)
-    stopped_reason = stopped_match.group(1) if stopped_match else None
+    if depth_match is None or stopped_match is None:
+        # Every search states how it ended, so output without that line did not
+        # come from an engine holding to this contract -- a stale report, or a
+        # run that died before printing one. Reading a missing reason as "no
+        # reason" would hand it to metric() as a confidently clean result, which
+        # is the one conclusion the absent line cannot support. Fail closed.
+        return SearchResult(
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            [],
+            seconds,
+            "search output is missing the termination line",
+        )
+    stopped_reason = stopped_match.group(1)
     if stopped_reason == COMPLETED_REASON:
         stopped_reason = None
     return SearchResult(
@@ -842,7 +868,7 @@ def search_variant(args: argparse.Namespace, grammar: Path) -> SearchResult:
         explored,
         unique,
         seeds,
-        int(depth_match.group(1)) if depth_match else None,
+        int(depth_match.group(1)),
         stopped_reason,
         SOURCE_RE.findall(stdout)[:5],
         seconds,
