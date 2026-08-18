@@ -35,13 +35,15 @@ NOT_PROVEN = 3
 VERDICT_STATUSES = (PROVEN, AMBIGUOUS, NOT_PROVEN)
 
 # Witnesses are announced by "Found N complete ambiguity families." The search
-# also reports "No complete ambiguity ... was found" when there are none, so
-# these have to be anchored: a bare "complete ambiguity" substring matches the
-# announcement and its denial alike, and would read every empty search as a
-# witness.
+# says "no complete ambiguity was found" when there are none, so these have to
+# be anchored: a bare "complete ambiguity" substring matches the announcement
+# and its denial alike, and would read every empty search as a witness.
 WITNESS_LINE = re.compile(r"^Found \d+ complete ambiguity", re.MULTILINE)
 PROVEN_LINE = re.compile(r"^PROVEN UNAMBIGUOUS:", re.MULTILINE)
 NOT_PROVEN_LINE = re.compile(r"^NOT PROVEN:", re.MULTILINE)
+# Every search reports how it ended, so this line is present whether or not
+# witnesses were found and whether or not a limit curtailed the run.
+TERMINATION_LINE = re.compile(r"^Search ended at depth \d+ because ", re.MULTILINE)
 
 
 # Ambiguous: `a + a + a` groups two ways with nothing to choose between them.
@@ -332,6 +334,58 @@ class ProofStatusTests(ProverTestCase):
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertRegex(result.stdout, WITNESS_LINE)
+
+
+class SearchTerminationTests(ProverTestCase):
+    """Every search says how it ended, so silence is never the explanation."""
+
+    def search(
+        self, grammar: str, *, max_tokens: str = "6", timeout: str = "30"
+    ) -> str:
+        path = self.directory / "grammar.mly"
+        path.write_text(grammar, encoding="utf-8")
+        result = subprocess.run(
+            [
+                str(ENGINE),
+                "--max-tokens",
+                max_tokens,
+                "--timeout",
+                timeout,
+                "--max-witnesses",
+                "5",
+                str(path),
+            ],
+            env=self.environment,
+            text=True,
+            capture_output=True,
+            timeout=180,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        return result.stdout
+
+    def test_an_exhausted_bound_says_so(self) -> None:
+        # The conclusive case, and the one that used to be reported by leaving
+        # the reason out: nothing of this length is ambiguous because every
+        # sentence of this length was checked, not because the search gave up.
+        output = self.search(LR1_LIST)
+        self.assertRegex(output, TERMINATION_LINE)
+        self.assertIn("the search space within the token bound was exhausted", output)
+
+    def test_a_curtailed_search_names_its_limit(self) -> None:
+        # The other side of the same line: a deadline of zero stops the search
+        # before it can rule anything out, and the report has to say which of
+        # the two happened.
+        output = self.search(AMBIGUOUS_EXPRESSION, max_tokens="16", timeout="0")
+        self.assertRegex(output, TERMINATION_LINE)
+        self.assertIn("the timeout was reached", output)
+        self.assertNotIn("the search space within the token bound was exhausted", output)
+
+    def test_a_search_with_witnesses_also_reports_termination(self) -> None:
+        # Witnesses do not excuse the run from saying how it ended: whether the
+        # ones reported are all of them depends on the same distinction.
+        output = self.search(AMBIGUOUS_EXPRESSION)
+        self.assertRegex(output, WITNESS_LINE)
+        self.assertRegex(output, TERMINATION_LINE)
 
 
 class ProofBudgetTests(ProverTestCase):

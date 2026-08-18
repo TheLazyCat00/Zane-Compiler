@@ -88,8 +88,12 @@ the state is triaged into one of these categories.
   options can temporarily override a profile. The default `general` profile
   is breadth-first; `deep-function-body` fixes the function-body prefix and
   rotates depth waves so sibling statements continue to receive attention.
-  The search itself is bounded by the profile's token range and timeout, and a
-  run that had to drop part of the space reports itself as interrupted.
+  The search itself is bounded by the profile's token range and timeout, and
+  every run states the depth it reached and why it ended: the token bound was
+  exhausted, or the timeout, witness limit or memory budget curtailed it. That
+  distinction is what a result without witnesses is worth — an exhausted bound
+  has checked every sentence that short, while a curtailed run has only stopped
+  looking — so it is reported rather than left to be inferred.
   In an interactive terminal, one transient status line shows the active token
   depth, ambiguity families found at that depth, explored and unique frontiers,
   elapsed time, and a RAM bar against the configured memory budget. The

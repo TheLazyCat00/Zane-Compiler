@@ -707,8 +707,15 @@ EXPLORED_RE = re.compile(r"Explored (\d+) frontiers \((\d+) unique\); (\d+) conf
 NO_WITNESS_RE = re.compile(
     r"(?:after exploring|found in) (\d+) (?:explored )?frontiers \((\d+) unique\)"
 )
-DEPTH_RE = re.compile(r"Search stopped at depth (\d+)")
-STOPPED_RE = re.compile(r"Search stopped (?:because|at depth \d+ because) ([^.;]+)")
+# Every search now names how it ended, exhaustion included, so these match on
+# each run rather than only on a curtailed one. `stopped` still means "ended
+# early" to the rest of this tool -- uncertain_clean and the report's stop
+# column both read it that way -- so the exhaustion reason is recognised here
+# and mapped back to None, keeping "stopped" about limits rather than about
+# whether the engine bothered to explain itself.
+COMPLETED_REASON = "the search space within the token bound was exhausted"
+DEPTH_RE = re.compile(r"Search ended at depth (\d+)")
+STOPPED_RE = re.compile(r"Search ended at depth \d+ because ([^.;]+)")
 SOURCE_RE = re.compile(r"^\s*Source: (.*)$", re.MULTILINE)
 
 
@@ -827,13 +834,16 @@ def search_variant(args: argparse.Namespace, grammar: Path) -> SearchResult:
         explored = unique = seeds = None
     depth_match = DEPTH_RE.search(stdout)
     stopped_match = STOPPED_RE.search(stdout)
+    stopped_reason = stopped_match.group(1) if stopped_match else None
+    if stopped_reason == COMPLETED_REASON:
+        stopped_reason = None
     return SearchResult(
         families,
         explored,
         unique,
         seeds,
         int(depth_match.group(1)) if depth_match else None,
-        stopped_match.group(1) if stopped_match else None,
+        stopped_reason,
         SOURCE_RE.findall(stdout)[:5],
         seconds,
     )
