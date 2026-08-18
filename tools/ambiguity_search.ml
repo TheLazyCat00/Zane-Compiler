@@ -1511,12 +1511,19 @@ let unified_search engine initial ~max_tokens ~min_tokens ~nodes_per_depth
     emit_progress false
   done;
   emit_progress true;
-  if Unix.gettimeofday () >= deadline then
-    stopped := Some "the timeout was reached"
-  else if Hashtbl.length witnesses >= max_witnesses then
+  (* The deadline alone does not mean the deadline stopped anything. The loop
+     also exits with a drained queue, and expanding the last frontier can carry
+     the clock past the deadline on its way out - so a search that finished the
+     whole token bound would be recorded as timed out, and reported as a
+     curtailed run when it is the conclusive one. Only work still queued makes
+     the deadline the reason. A dropped frontier keeps its own reason whatever
+     the clock says: the bound was not covered, so the run is not exhaustive. *)
+  if Hashtbl.length witnesses >= max_witnesses then
     stopped := Some "the witness limit was reached"
   else if !dropped then
-    stopped := Some "the memory budget dropped part of the search space";
+    stopped := Some "the memory budget dropped part of the search space"
+  else if !queued > 0 && Unix.gettimeofday () >= deadline then
+    stopped := Some "the timeout was reached";
   ( {
       witnesses =
         Hashtbl.fold
@@ -2141,17 +2148,22 @@ let main () =
           ~hard_heap_bytes:memory_limits.hard_heap_bytes conflict_distance
           accept_distance temporary
       in
+      (* Why the search ended decides what its silence is worth: a run that
+         exhausted the space within the token bound has checked every sentence
+         that short, while one that hit a limit has merely stopped looking.
+         Both used to print "no ambiguity found", and only the second named a
+         reason - so the conclusive case was the one identifiable by the
+         absence of an explanation. Every run says how it ended now. *)
+      let termination =
+        match outcome.stopped with
+        | Some reason -> reason
+        | None -> "the search space within the token bound was exhausted"
+      in
       match outcome.witnesses with
       | [] ->
-          (match outcome.stopped with
-          | None ->
-              Printf.printf
-                "No complete ambiguity satisfying the search constraints was found after exploring %d frontiers (%d unique).\n"
-                outcome.explored outcome.unique
-          | Some reason ->
-              Printf.printf
-                "Search stopped at depth %d because %s; no complete ambiguity was found in %d explored frontiers (%d unique).\n"
-                outcome.deepest reason outcome.explored outcome.unique);
+          Printf.printf
+            "Search ended at depth %d because %s; no complete ambiguity was found in %d explored frontiers (%d unique).\n"
+            outcome.deepest termination outcome.explored outcome.unique;
           if !prove_level > 0 then begin
             Printf.printf
               "NOT PROVEN: the abstract candidate could not be concretized \
@@ -2180,10 +2192,8 @@ let main () =
           Printf.printf "\n";
           Printf.printf "Explored %d frontiers (%d unique); %d conflict seeds.\n"
             outcome.explored outcome.unique conflict_seeds;
-          Option.iter
-            (fun reason ->
-              Printf.printf "Search stopped because %s.\n" reason)
-            outcome.stopped;
+          Printf.printf "Search ended at depth %d because %s.\n"
+            outcome.deepest termination;
           (* Concretizing the abstract candidate settles the proof: the
              witnesses above are the ambiguity the level-K abstraction
              suspected. A plain search reports the same witnesses as a bounded

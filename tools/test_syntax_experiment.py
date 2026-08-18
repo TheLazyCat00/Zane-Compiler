@@ -139,5 +139,52 @@ class WitnessSpellingTests(unittest.TestCase):
         )
 
 
+class SearchReportParsingTests(unittest.TestCase):
+    """The report contract, read the way `metric` will read it."""
+
+    EXHAUSTED = (
+        "Search ended at depth 8 because the search space within the token "
+        "bound was exhausted; no complete ambiguity was found in 25842 "
+        "explored frontiers (25937 unique).\n"
+        "This is a bounded result, not a proof of unambiguity.\n"
+    )
+    CURTAILED = (
+        "Search ended at depth 13 because one or more workers reached a "
+        "search limit; no complete ambiguity was found in 24029962 explored "
+        "frontiers (31925217 unique).\n"
+    )
+
+    def test_an_exhausted_bound_is_not_recorded_as_stopped(self) -> None:
+        # `stopped` means "a limit intervened" to metric() and the summary
+        # table, so the reason for a completed bound has to come back as None
+        # even though the engine now always prints one.
+        result = experiments.parse_search_output(self.EXHAUSTED, 1.0)
+        self.assertIsNone(result.error)
+        self.assertIsNone(result.stopped)
+        self.assertEqual(result.deepest, 8)
+        self.assertEqual(result.families, 0)
+        self.assertEqual(result.explored, 25842)
+
+    def test_a_curtailed_search_keeps_its_reason(self) -> None:
+        result = experiments.parse_search_output(self.CURTAILED, 1.0)
+        self.assertIsNone(result.error)
+        self.assertEqual(result.stopped, "one or more workers reached a search limit")
+        self.assertEqual(result.deepest, 13)
+
+    def test_a_missing_termination_line_is_an_error(self) -> None:
+        # The failure that has to stay closed: without the line there is no
+        # evidence the bound completed, and a None reason would be read as a
+        # confidently clean result -- the one conclusion the output cannot
+        # support.
+        result = experiments.parse_search_output(
+            "No complete ambiguity satisfying the search constraints was "
+            "found after exploring 25842 frontiers (25937 unique).\n",
+            1.0,
+        )
+        self.assertIsNotNone(result.error)
+        self.assertIsNone(result.families)
+        self.assertIsNone(result.stopped)
+
+
 if __name__ == "__main__":
     unittest.main()
