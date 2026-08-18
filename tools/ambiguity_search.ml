@@ -1520,10 +1520,10 @@ let unified_search engine initial ~max_tokens ~min_tokens ~nodes_per_depth
      the clock says: the bound was not covered, so the run is not exhaustive. *)
   if Hashtbl.length witnesses >= max_witnesses then
     stopped := Some "the witness limit was reached"
-  else if !queued > 0 && Unix.gettimeofday () >= deadline then
-    stopped := Some "the timeout was reached"
   else if !dropped then
-    stopped := Some "the memory budget dropped part of the search space";
+    stopped := Some "the memory budget dropped part of the search space"
+  else if !queued > 0 && Unix.gettimeofday () >= deadline then
+    stopped := Some "the timeout was reached";
   ( {
       witnesses =
         Hashtbl.fold
