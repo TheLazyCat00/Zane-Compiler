@@ -41,9 +41,10 @@ on:
       timeout:
         # Each search phase gets this in full: the abstract proof runs under
         # its own deadline, and the concretization search that may follow
-        # starts a fresh one. Budget the job for twice the value chosen, on
-        # top of checkout, Devbox, the opam bootstrap and the build — 30m is
-        # the largest offered, so the 60-minute job cap holds.
+        # starts a fresh one, so an ordinary proof can spend twice the value
+        # chosen. A survey exits before concretization and spends it once.
+        # The long options exist for surveys, which cannot stop at the first
+        # divergence; 30m is already generous for an ordinary proof.
         description: Timeout per search phase
         required: true
         default: 15m
@@ -52,6 +53,8 @@ on:
           - 5m
           - 15m
           - 30m
+          - 1h
+          - 3h
       survey:
         # Diagnostic rather than verdict: instead of stopping at the first
         # divergence, walk the whole abstract space and count how many distinct
@@ -83,13 +86,19 @@ jobs:
   prove:
     name: Prove level ${{ inputs.level || '3' }} on ${{ inputs.ref || github.ref_name }}
     runs-on: ubuntu-latest
-    # Both search phases obey --timeout, so the tool now bounds itself: at the
-    # largest offered value the two phases total 60 minutes. This cap is the
+    # Both search phases obey --timeout, so the tool bounds itself: at the
+    # largest offered value the two phases total six hours. This cap is the
     # backstop around them and has to clear that total plus checkout, Devbox,
     # the opam bootstrap and the build, because a job killed here prints no
     # verdict line at all and the report the verdict is read from is never
     # written — turning an honest "not proven" into a broken run.
-    timeout-minutes: 75
+    #
+    # It is a backstop, not an expected duration. A survey is what needs the
+    # long end: it cannot stop at the first divergence, and at level 3 the walk
+    # was still going after 121k pairs in 30 minutes, so the counts came back
+    # as a floor. Only a survey run should reach for 3h, and a survey exits
+    # before the concretization search, so it spends one phase rather than two.
+    timeout-minutes: 380
     env:
       # Public ubuntu-latest runners provide four CPUs and 16 GB RAM:
       # https://docs.github.com/en/actions/reference/runners/github-hosted-runners#standard-github-hosted-runners-for-public-repositories
