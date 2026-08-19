@@ -52,6 +52,16 @@ on:
           - 5m
           - 15m
           - 30m
+      survey:
+        # Diagnostic rather than verdict: instead of stopping at the first
+        # divergence, walk the whole abstract space and count how many distinct
+        # sites produce one. That count is what says whether refining the
+        # abstraction is worth attempting, or whether the remaining conflicts
+        # belong in written obligations instead.
+        description: Enumerate divergence sites, showing up to N examples (0 = ordinary proof)
+        required: false
+        default: "0"
+        type: string
       strict:
         description: Fail the job on "not proven", not only on a found ambiguity
         required: false
@@ -129,6 +139,7 @@ jobs:
           LEVEL: ${{ inputs.level || '3' }}
           PROFILE: ${{ inputs.profile || 'quick' }}
           SEARCH_TIMEOUT: ${{ inputs.timeout || '15m' }}
+          SURVEY: ${{ inputs.survey || '0' }}
           WITNESSES: "50"
         run: |
           set -euo pipefail
