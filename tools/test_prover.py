@@ -123,9 +123,27 @@ p:
   | B p B { () }
 """
 
+# Ambiguous, and the divergence is born on the EOF lookahead: `a` reduces to
+# either `x` or `y`, and nothing before end of input distinguishes them. EOF is
+# not one of the terminals the survey iterates -- it is a separate sentinel --
+# so a grammar whose only divergence lives there is what catches a survey that
+# counts sites on regular lookaheads alone.
+EOF_REDUCE_REDUCE = """\
+%token A "a"
+%token EOF "<eof>"
+%start <unit> main
+%%
+main:
+  | x EOF { () }
+  | y EOF { () }
+x: A { () }
+y: A { () }
+"""
+
 AMBIGUOUS_GRAMMARS = {
     "expression without precedence": AMBIGUOUS_EXPRESSION,
     "dangling else": DANGLING_ELSE,
+    "reduce/reduce on eof": EOF_REDUCE_REDUCE,
 }
 
 UNAMBIGUOUS_GRAMMARS = {
@@ -392,7 +410,13 @@ class SearchTerminationTests(ProverTestCase):
 class SurveyTests(ProverTestCase):
     """Counting the blind spots, not stopping at the first."""
 
-    def survey(self, grammar: str, level: int, examples: int = 3) -> tuple[int, str]:
+    def survey(
+        self,
+        grammar: str,
+        level: int,
+        examples: int = 3,
+        timeout: str = "30",
+    ) -> tuple[int, str]:
         path = self.directory / "grammar.mly"
         path.write_text(grammar, encoding="utf-8")
         result = subprocess.run(
@@ -405,7 +429,7 @@ class SurveyTests(ProverTestCase):
                 "--max-tokens",
                 "8",
                 "--timeout",
-                "30",
+                timeout,
                 "--max-witnesses",
                 "5",
                 str(path),
@@ -442,6 +466,27 @@ class SurveyTests(ProverTestCase):
         match = re.search(r"Survey at level \d+: (\d+) distinct", output)
         self.assertIsNotNone(match, output)
         self.assertGreater(int(match.group(1)), 1, output)
+
+    def test_a_divergence_on_eof_is_counted_as_a_site(self) -> None:
+        # The soundness case for this mode. EOF is not one of the terminals the
+        # site loop walks, so a grammar whose only divergence is on end of
+        # input once produced zero sites while still accepting a diverged pair.
+        # A survey gated on the site count would have called that a proof.
+        status, output = self.survey(EOF_REDUCE_REDUCE, 2)
+        self.assertRegex(output, SURVEY_LINE)
+        self.assertNotIn("0 distinct divergence site(s)", output)
+        self.assertNotRegex(output, PROVEN_LINE)
+        self.assertEqual(status, NOT_PROVEN, output)
+
+    def test_an_incomplete_survey_never_proves(self) -> None:
+        # A walk that was cut short has counted nothing, so its zero is a floor
+        # rather than a total and must not read as a proof -- the same rule the
+        # ordinary bounded search follows.
+        status, output = self.survey(LR1_LIST, 2, timeout="0")
+        self.assertRegex(output, SURVEY_LINE)
+        self.assertIn("incomplete", output)
+        self.assertNotRegex(output, PROVEN_LINE)
+        self.assertEqual(status, NOT_PROVEN, output)
 
     def test_a_survey_is_rejected_without_a_proof_level(self) -> None:
         path = self.directory / "grammar.mly"

@@ -1031,11 +1031,20 @@ let prove engine limit pair_limit timeout survey_limit =
     && Unix.gettimeofday () < deadline
   do
     let (left, right, diverged) as node = Queue.take queue in
+    (* EOF is a lookahead like any other, but it is not in [terminals] - it is
+       the sentinel the joint outcomes take separately - so a pair that first
+       parts ways on end of input would otherwise never have its site recorded
+       while still counting as an accepting divergence. *)
+    let eof_outcomes = joint (left, right) "#" in
     let accepts_diverged =
       List.exists
         (fun (_, _, chain_diverged) -> diverged || chain_diverged)
-        (joint (left, right) "#")
+        eof_outcomes
     in
+    if
+      surveying && (not diverged)
+      && List.exists (fun (_, _, chain_diverged) -> chain_diverged) eof_outcomes
+    then Hashtbl.replace sites (left, right, "#") ();
     if accepts_diverged then begin
       incr accepting;
       if !candidate = None then candidate := Some (List.rev (trail node));
@@ -2168,7 +2177,11 @@ let main () =
                 Printf.printf "  %d. %s\n" (index + 1)
                   (String.concat " " tokens))
               survey.examples;
-            if survey.sites = 0 && survey.covered then begin
+            (* The proof turns on whether any diverging pair reaches
+               acceptance, which is what `accepting` counts. Sites are a
+               diagnostic breakdown of the same thing, and gating the verdict on
+               them would let any gap in site accounting print a false proof. *)
+            if survey.accepting = 0 && survey.covered then begin
               Printf.printf
                 "PROVEN UNAMBIGUOUS: no diverging pair of accepting parses \
                  exists in the top-%d stack abstraction (%d abstract pairs \
