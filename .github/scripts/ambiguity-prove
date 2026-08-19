@@ -33,6 +33,13 @@ if [[ -n "${TOKENS:-}" ]]; then
 	args+=(--tokens "$TOKENS")
 fi
 
+# A survey answers "how many blind spots" instead of "is it proven": it walks
+# the whole abstract space rather than stopping at the first divergence, so it
+# costs more and reports a count. Zero keeps the ordinary proof.
+if [[ "${SURVEY:-0}" != "0" ]]; then
+	args+=(--survey "$SURVEY")
+fi
+
 # The report directory is created here as well as by --output, so the artifact
 # upload finds a directory even when the run dies before its first write.
 mkdir -p "$(dirname "$REPORT")"

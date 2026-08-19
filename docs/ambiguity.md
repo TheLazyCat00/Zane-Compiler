@@ -175,7 +175,28 @@ the state is triaged into one of these categories.
   search, so the budget is derived for one worker and `AMBIGUITY_JOBS` does not
   divide it; the concretization search that may follow still uses every worker.
   The profile's token bound feeds the same estimate, so a narrower
-  concretization profile also buys a larger pair budget. **Its time** is
+  concretization profile also buys a larger pair budget.
+
+  `--survey N` answers a different question from a proof. The proof stops at
+  the first divergence it can reach, which says nothing about how many more lie
+  behind it — and that count is what decides whether sharpening the abstraction
+  is worth attempting. A survey walks the whole abstract space instead,
+  reporting how many **distinct sites** produce a divergence, with up to `N`
+  example sentences. A site is the stack pair and lookahead at which two parses
+  first part ways, so the same blind spot reached by many sentences counts
+  once. A handful of sites is a tractable list to attack; a large number means
+  the grammar is not unambiguous for any reason this abstraction can see, and
+  the remaining conflicts belong in written transience arguments rather than in
+  a larger proof level. Surveying costs more than proving, since it cannot stop
+  early, and its counts are a floor rather than a total if the pair budget or
+  the timeout cut the walk short.
+
+  Which of those two a site turns out to be shows in how its example behaves as
+  the level rises. A bounded blind spot keeps the same shape and disappears at
+  some level; one that stands on unbounded stack correlation grows longer with
+  every level and never disappears, because defeating a deeper abstraction
+  simply takes a longer sentence. The palindrome in the corpus is the second
+  kind, which is why no level proves it. **Its time** is
   `--timeout`, which each search phase gets in full: the abstract proof runs
   under its own deadline, and the concretization search that may follow starts
   a fresh one, so a proof run's worst case is twice the value passed. A proof

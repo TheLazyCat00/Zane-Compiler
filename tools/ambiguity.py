@@ -469,13 +469,19 @@ def apply_overrides(
     return result
 
 
-def engine_arguments(profile: SearchProfile, prove: int | None = None) -> list[str]:
+def engine_arguments(
+    profile: SearchProfile, prove: int | None = None, survey: int = 0
+) -> list[str]:
     arguments: list[str] = []
     for setting in SETTINGS:
         if setting.to_engine_args is not None:
             arguments.extend(setting.to_engine_args(profile))
     if prove is not None:
         arguments.extend(["--prove", str(prove)])
+    # A survey is a property of one invocation rather than of a saved search
+    # intent, so it stays a flag and never becomes a profile key.
+    if survey > 0:
+        arguments.extend(["--prove-survey", str(survey)])
     return arguments
 
 
@@ -565,6 +571,16 @@ def parser() -> argparse.ArgumentParser:
         nargs="?",
         default="quick",
         help="profile for bounded concretization (default: quick)",
+    )
+    prove.add_argument(
+        "--survey",
+        type=int,
+        default=0,
+        metavar="N",
+        help=(
+            "do not stop at the first divergence: count every distinct site "
+            "the abstraction cannot separate, showing up to N examples"
+        ),
     )
     add_overrides(prove)
 
@@ -694,7 +710,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         summary = profile_summary(profile, action)
         if output_path is not None:
             summary += f"\nReport: {output_path}"
-        engine_args = engine_arguments(profile, proof_level)
+        survey = getattr(arguments, "survey", 0)
+        if survey < 0:
+            raise ConfigurationError("--survey must be non-negative")
+        engine_args = engine_arguments(profile, proof_level, survey)
         if arguments.dry_run:
             print(summary)
             print("\nEngine arguments:")

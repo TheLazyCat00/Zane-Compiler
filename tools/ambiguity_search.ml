@@ -916,11 +916,26 @@ let joint_outcomes moves (start_left, start_right) token =
   done;
   Hashtbl.fold (fun key () list -> key :: list) results []
 
+(* A survey answers a different question from a proof. The proof stops at the
+   first divergence it can reach, which says nothing about how many more lie
+   behind it - and that count is what decides whether refining the abstraction
+   is worth attempting at all. A handful of sites is a tractable list; a
+   thousand means the grammar is not unambiguous for reasons this abstraction
+   can ever see, and the remainder belong in written obligations instead. *)
+type prove_survey = {
+  sites : int;
+  accepting : int;
+  examples : string list list;
+  survey_pairs : int;
+  covered : bool;
+}
+
 type prove_result =
   | Proven of int
   | Abstract_candidate of string list * int
   | Pair_overflow of int
   | Prove_timeout of int
+  | Surveyed of prove_survey
 
 (* Proof-mode exit statuses. A proof is a verdict rather than a success or a
    failure, so `ambiguity prove` reports which of the three it reached in its
@@ -931,7 +946,7 @@ type prove_result =
 let ambiguous_status = 1
 let not_proven_status = 3
 
-let prove engine limit pair_limit timeout =
+let prove engine limit pair_limit timeout survey_limit =
   let deadline = Unix.gettimeofday () +. timeout in
   let automaton = engine.automaton in
   let gotos = goto_edges automaton in
@@ -971,6 +986,16 @@ let prove engine limit pair_limit timeout =
   let queue = Queue.create () in
   let overflow = ref false in
   let candidate = ref None in
+  (* A site is the stack pair and lookahead at which two parses first part
+     ways: the same divergence reached by many sentences is one blind spot,
+     not many, so sites are what get counted. *)
+  let sites : (int list * int list * string, unit) Hashtbl.t =
+    Hashtbl.create 1_009
+  in
+  let accepting = ref 0 in
+  let examples = ref [] in
+  let example_count = ref 0 in
+  let surveying = survey_limit > 0 in
   let canonical (left, right, diverged) =
     if compare left right <= 0 then (left, right, diverged)
     else (right, left, diverged)
@@ -1001,20 +1026,44 @@ let prove engine limit pair_limit timeout =
      over every terminal class, so the read does not show up beside it. *)
   while
     (not (Queue.is_empty queue))
-    && !candidate = None && (not !overflow)
+    && (surveying || !candidate = None)
+    && (not !overflow)
     && Unix.gettimeofday () < deadline
   do
     let (left, right, diverged) as node = Queue.take queue in
-    List.iter
-      (fun (_, _, chain_diverged) ->
-        if (diverged || chain_diverged) && !candidate = None then
-          candidate := Some (List.rev (trail node)))
-      (joint (left, right) "#");
-    if !candidate = None then
+    (* EOF is a lookahead like any other, but it is not in [terminals] - it is
+       the sentinel the joint outcomes take separately - so a pair that first
+       parts ways on end of input would otherwise never have its site recorded
+       while still counting as an accepting divergence. *)
+    let eof_outcomes = joint (left, right) "#" in
+    let accepts_diverged =
+      List.exists
+        (fun (_, _, chain_diverged) -> diverged || chain_diverged)
+        eof_outcomes
+    in
+    if
+      surveying && (not diverged)
+      && List.exists (fun (_, _, chain_diverged) -> chain_diverged) eof_outcomes
+    then Hashtbl.replace sites (left, right, "#") ();
+    if accepts_diverged then begin
+      incr accepting;
+      if !candidate = None then candidate := Some (List.rev (trail node));
+      if surveying && !example_count < survey_limit then begin
+        examples := List.rev (trail node) :: !examples;
+        incr example_count
+      end
+    end;
+    if surveying || !candidate = None then
       List.iter
         (fun token ->
           List.iter
             (fun (next_left, next_right, chain_diverged) ->
+              (* Born here, rather than inherited: a node that is already
+                 diverged carries its ancestor's site, and counting it again
+                 at every step would report the length of the path instead of
+                 the number of blind spots. *)
+              if surveying && (not diverged) && chain_diverged then
+                Hashtbl.replace sites (left, right, token) ();
               push
                 (Some (token, node))
                 (next_left, next_right, diverged || chain_diverged))
@@ -1027,12 +1076,23 @@ let prove engine limit pair_limit timeout =
      short. Draining the queue exactly as time runs out is a completed proof,
      and is reported as one. *)
   let ran_out_of_time = not (Queue.is_empty queue) in
-  match !candidate with
-  | Some tokens -> Abstract_candidate (tokens, explored)
-  | None ->
-      if !overflow then Pair_overflow explored
-      else if ran_out_of_time then Prove_timeout explored
-      else Proven explored
+  if surveying then
+    Surveyed
+      {
+        sites = Hashtbl.length sites;
+        accepting = !accepting;
+        examples = List.rev !examples;
+        survey_pairs = explored;
+        (* Counts are a floor unless the whole abstract space was walked. *)
+        covered = (not !overflow) && not ran_out_of_time;
+      }
+  else
+    match !candidate with
+    | Some tokens -> Abstract_candidate (tokens, explored)
+    | None ->
+        if !overflow then Pair_overflow explored
+        else if ran_out_of_time then Prove_timeout explored
+        else Proven explored
 
 type outcome = {
   witnesses : ((int * string) list * string list) list;
@@ -1848,6 +1908,7 @@ let timeout = ref None
 let max_witnesses = ref None
 let check_tokens = ref []
 let prove_level = ref 0
+let survey_limit = ref 0
 let dump_classes = ref false
 
 type memory_limits = {
@@ -1919,6 +1980,11 @@ let options =
        exits 0 proven, 1 a concrete ambiguous sentence, 3 neither, \
        2 a failed run \
        (the derived dedup-frontier limit also bounds the abstract pair count)" );
+    ( "--prove-survey",
+      Arg.Set_int survey_limit,
+      "N with --prove, do not stop at the first divergence: walk the whole \
+       abstract space and report how many distinct sites produce one, with up \
+       to N example sentences" );
     ( "--dump-terminal-classes",
       Arg.Set dump_classes,
       " list the terminal equivalence classes the search collapses, then exit" );
@@ -1963,6 +2029,10 @@ let main () =
     (fun value ->
       if value < 1 then invalid_arg "--max-witnesses must be at least 1")
     !max_witnesses;
+  if !survey_limit < 0 then
+    invalid_arg "--prove-survey must be non-negative";
+  if !survey_limit > 0 && !prove_level <= 0 then
+    invalid_arg "--prove-survey requires --prove";
   let search_limits =
     if !check_tokens <> [] || !dump_classes then None
     else
@@ -2084,7 +2154,10 @@ let main () =
           "Proof budget: %d abstract pairs (single-threaded; the %d-worker \
            split does not apply).\n"
           prove_limits.max_frontiers jobs;
-        match prove engine !prove_level prove_limits.max_frontiers timeout with
+        match
+          prove engine !prove_level prove_limits.max_frontiers timeout
+            !survey_limit
+        with
         | Proven pairs ->
             Printf.printf
               "PROVEN UNAMBIGUOUS: no diverging pair of accepting parses \
@@ -2092,6 +2165,34 @@ let main () =
                explored).\n"
               !prove_level pairs;
             exit 0
+        | Surveyed survey ->
+            Printf.printf
+              "Survey at level %d: %d distinct divergence site(s), %d \
+               accepting abstract pair(s), %d pairs explored%s.\n"
+              !prove_level survey.sites survey.accepting survey.survey_pairs
+              (if survey.covered then ""
+               else " (incomplete: the counts are a floor)");
+            List.iteri
+              (fun index tokens ->
+                Printf.printf "  %d. %s\n" (index + 1)
+                  (String.concat " " tokens))
+              survey.examples;
+            (* The proof turns on whether any diverging pair reaches
+               acceptance, which is what `accepting` counts. Sites are a
+               diagnostic breakdown of the same thing, and gating the verdict on
+               them would let any gap in site accounting print a false proof. *)
+            if survey.accepting = 0 && survey.covered then begin
+              Printf.printf
+                "PROVEN UNAMBIGUOUS: no diverging pair of accepting parses \
+                 exists in the top-%d stack abstraction (%d abstract pairs \
+                 explored).\n"
+                !prove_level survey.survey_pairs;
+              exit 0
+            end;
+            Printf.printf
+              "NOT PROVEN: the survey enumerates where the abstraction cannot \
+               separate two parses; it does not concretize them.\n";
+            exit not_proven_status
         | Pair_overflow pairs ->
             Printf.printf
               "NOT PROVEN: the abstract pair limit (%d) was reached at \

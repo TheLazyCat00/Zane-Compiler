@@ -429,6 +429,33 @@ class CommandLineTests(unittest.TestCase):
         )
 
 
+class SurveyFlagTests(unittest.TestCase):
+    """The survey reaches the engine only when asked for."""
+
+    def profile(self) -> ambiguity.SearchProfile:
+        return ambiguity.SearchProfile(
+            name="quick",
+            description="",
+            min_tokens=0,
+            max_tokens=16,
+            timeout_seconds=900,
+            witnesses=50,
+            prefix_tokens=(),
+            nodes_per_depth=None,
+        )
+
+    def test_a_survey_is_absent_unless_requested(self) -> None:
+        arguments = ambiguity.engine_arguments(self.profile(), 3)
+        self.assertNotIn("--prove-survey", arguments)
+
+    def test_a_requested_survey_reaches_the_engine(self) -> None:
+        arguments = ambiguity.engine_arguments(self.profile(), 3, 5)
+        self.assertIn("--prove-survey", arguments)
+        self.assertEqual(
+            arguments[arguments.index("--prove-survey") + 1], "5"
+        )
+
+
 class TerminalClassEngineTests(unittest.TestCase):
     """End-to-end checks that the search collapses interchangeable terminals
     without losing an ambiguity reachable only through a non-representative
