@@ -197,14 +197,26 @@ the state is triaged into one of these categories.
   separated them. Under the sentence come the lookahead and, for each side of
   the pair, the retained stack (top state first) and the moves that stack's top
   state has on that lookahead, with productions named as `menhir --explain`
-  names them. The state numbers cross-reference the `.automaton` file. A
-  reduction tagged `[pops past the retained stack]` is the one to look for: it
-  pops into the part of the stack the abstraction discarded, so the state it
-  returns to is unconstrained and every goto edge on the reduced nonterminal
-  stays admissible. A site whose two sides differ only through such a
-  reduction is a candidate for sharpening the abstraction; a site whose sides
-  present genuinely different productions over known stack is a real conflict
-  to settle in the grammar or in a transience argument.
+  names them. The state numbers cross-reference the `.automaton` file.
+
+  A reduction is tagged by how far it pops, which is what says how much the
+  abstraction had to invent about where it lands. An untagged reduction pops
+  less than the retained stack, so its goto resolves exactly and nothing was
+  lost. `[pops the retained stack exactly: goto limited to predecessors]` pops
+  the whole retained stack, exposing whatever sat directly below its deepest
+  entry — the goto source is narrowed to that entry's predecessors, so it is
+  constrained but no longer known. `[pops past the retained stack: any goto
+  edge]` pops further still, landing somewhere the stack constrains in no way,
+  where every goto edge on the reduced nonterminal stays admissible.
+
+  Only the third is unconstrained context loss, and the three must be read
+  apart: the middle case is already narrowed by the predecessor filter, so
+  treating it as the third points a refinement at a gap that is not there. A
+  site whose two sides differ only through a `pops past` reduction is a
+  candidate for sharpening the abstraction; a site whose sides present
+  genuinely different productions over stack that is retained or
+  predecessor-constrained is a real conflict to settle in the grammar or in a
+  transience argument.
 
   Which of those two a site turns out to be shows in how its example behaves as
   the level rises. A bounded blind spot keeps the same shape and disappears at

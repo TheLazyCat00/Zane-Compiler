@@ -1067,11 +1067,19 @@ let prove engine limit pair_limit timeout survey_limit =
   in
   (* One side of a site, as the abstraction sees it. The stack is the retained
      top-[limit] states with the top first, and the moves are what the top
-     state can do on the lookahead. A reduction whose width reaches the bottom
-     of the retained stack is the one worth spotting: it pops into the part the
-     abstraction discarded, so the state it returns to is unconstrained and
-     every goto edge on the reduced nonterminal stays admissible. That is how a
-     pair the real parser could separate survives here. *)
+     state can do on the lookahead.
+
+     A reduction is tagged by how far it pops, because that is what says how
+     much the abstraction had to invent about where it lands. Popping less than
+     the retained stack resolves the goto exactly and needs no tag. Popping the
+     stack exactly exposes whatever sat directly below its deepest entry, so
+     the goto source is narrowed to that entry's predecessors - constrained,
+     but no longer known. Popping further lands somewhere the stack constrains
+     in no way, and every goto edge on the reduced nonterminal stays
+     admissible; that is the case where a pair the real parser could separate
+     survives here. The two must not share a tag: the middle case is already
+     narrowed by the predecessor filter, and reading it as the third would
+     point a refinement at a gap that is not there. *)
   let describe_side label suffix lookahead =
     let depth = List.length suffix in
     let moves_here =
@@ -1092,8 +1100,11 @@ let prove engine limit pair_limit timeout survey_limit =
               (fun reduction ->
                 Printf.sprintf "reduce %s%s"
                   (production_name automaton reduction.prod)
-                  (if reduction.width >= depth then
-                     " [pops past the retained stack]"
+                  (if reduction.width > depth then
+                     " [pops past the retained stack: any goto edge]"
+                   else if reduction.width = depth then
+                     " [pops the retained stack exactly: goto limited to \
+                      predecessors]"
                    else ""))
               (reductions state lookahead)
           in

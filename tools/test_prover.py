@@ -150,6 +150,24 @@ x: A { () }
 y: A { () }
 """
 
+# The same reduce/reduce conflict, but reached over two symbols instead of one.
+# At proof level 1 the retained stack is a single state, so the competing
+# reductions here are strictly wider than it while `EOF_REDUCE_REDUCE`'s are
+# exactly as wide -- the two sides of the boundary the site dump has to keep
+# apart.
+WIDE_REDUCE_REDUCE = """\
+%token A "a"
+%token B "b"
+%token EOF "<eof>"
+%start <unit> main
+%%
+main:
+  | x EOF { () }
+  | y EOF { () }
+x: A B { () }
+y: A B { () }
+"""
+
 AMBIGUOUS_GRAMMARS = {
     "expression without precedence": AMBIGUOUS_EXPRESSION,
     "dangling else": DANGLING_ELSE,
@@ -516,6 +534,44 @@ class SurveyTests(ProverTestCase):
         self.assertTrue(
             any("reduce " in line and " -> " in line for line in site),
             "\n".join(site),
+        )
+
+    def site_lines(self, grammar: str, level: int) -> list[str]:
+        _, output = self.survey(grammar, level, examples=1)
+        lines = [line for line in output.splitlines() if SITE_STACK_LINE.match(line)]
+        self.assertEqual(len(lines), 2, output)
+        return lines
+
+    def test_a_reduction_that_pops_the_retained_stack_exactly_is_constrained(
+        self,
+    ) -> None:
+        # The boundary case. Popping exactly the retained stack exposes what sat
+        # below its deepest entry, so the goto source is narrowed to that
+        # entry's predecessors -- constrained, not unknown. Reporting it as
+        # unconstrained would point a refinement at a gap the predecessor filter
+        # already closed. At level 1 the retained stack is one state and
+        # `x: A` is one symbol wide, so this is exactly that case.
+        lines = self.site_lines(EOF_REDUCE_REDUCE, 1)
+        self.assertTrue(
+            any("pops the retained stack exactly" in line for line in lines),
+            "\n".join(lines),
+        )
+        self.assertFalse(
+            any("pops past the retained stack" in line for line in lines),
+            "\n".join(lines),
+        )
+
+    def test_a_reduction_that_pops_past_the_retained_stack_is_unconstrained(
+        self,
+    ) -> None:
+        # The case a refinement could actually close: the reduction lands where
+        # the retained stack says nothing, so every goto edge on the reduced
+        # nonterminal stays admissible. `x: A B` is two symbols wide against a
+        # one-state stack.
+        lines = self.site_lines(WIDE_REDUCE_REDUCE, 1)
+        self.assertTrue(
+            any("pops past the retained stack" in line for line in lines),
+            "\n".join(lines),
         )
 
     def test_a_proving_survey_dumps_no_sites(self) -> None:
