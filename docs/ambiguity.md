@@ -194,10 +194,23 @@ the state is triaged into one of these categories.
   Each example is printed with the site it was born at, because the sentence
   alone does not say why the pair was admitted — the same trail appears whether
   two parses genuinely differ or the abstraction merely lost the context that
-  separated them. Under the sentence come the lookahead and, for each side of
-  the pair, the retained stack (top state first) and the moves that stack's top
-  state has on that lookahead, with productions named as `menhir --explain`
-  names them. The state numbers cross-reference the `.automaton` file.
+  separated them. Under the sentence come the lookahead, the abstract stack
+  (top state first, cross-referencing the `.automaton` file), and the two moves
+  in conflict, with productions named as `menhir --explain` names them.
+
+  A site holds one stack rather than two. Two runs can part ways only by taking
+  different moves, and the step that does marks the pair diverged, so every
+  pair still undiverged carries the same stack on both sides.
+
+  The conflict is reported at the stack it fires from, which is usually **not**
+  the site's own. The chain reduces in lockstep for as long as one move is on
+  offer, so a site's top state typically shows a single shared reduction and
+  explains nothing; the competing moves appear a step or two further down. The
+  report follows the shared chain from the site until a stack admits two moves
+  that two parses of one sentence could take — two different productions, or a
+  reduction against a shift — and prints that stack and those moves. Moves that
+  share a production and differ only in their goto are different possible
+  worlds rather than a divergence, so the chain continues through them.
 
   A reduction is tagged by how far it pops, which is what says how much the
   abstraction had to invent about where it lands. An untagged reduction pops
@@ -212,11 +225,10 @@ the state is triaged into one of these categories.
   Only the third is unconstrained context loss, and the three must be read
   apart: the middle case is already narrowed by the predecessor filter, so
   treating it as the third points a refinement at a gap that is not there. A
-  site whose two sides differ only through a `pops past` reduction is a
-  candidate for sharpening the abstraction; a site whose sides present
-  genuinely different productions over stack that is retained or
-  predecessor-constrained is a real conflict to settle in the grammar or in a
-  transience argument.
+  conflict whose competing moves are `pops past` reductions is a candidate for
+  sharpening the abstraction; one between genuinely different productions over
+  stack that is retained or predecessor-constrained is a real conflict to
+  settle in the grammar or in a transience argument.
 
   Which of those two a site turns out to be shows in how its example behaves as
   the level rises. A bounded blind spot keeps the same shape and disappears at
