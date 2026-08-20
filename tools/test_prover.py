@@ -45,6 +45,21 @@ NOT_PROVEN_LINE = re.compile(r"^NOT PROVEN:", re.MULTILINE)
 # witnesses were found and whether or not a limit curtailed the run.
 TERMINATION_LINE = re.compile(r"^Search ended at depth \d+ because ", re.MULTILINE)
 SURVEY_LINE = re.compile(r"^Survey at level \d+: ", re.MULTILINE)
+# Each surveyed example is followed by the site it was born at: the lookahead,
+# the shared abstract stack, and the conflicting moves localized to the stack
+# they fire from. The sentence alone does not say why the pair was admitted.
+EXAMPLE_LINE = re.compile(r"^  \d+\. ", re.MULTILINE)
+SITE_LOOKAHEAD_LINE = re.compile(
+    r"^     divergence site on lookahead \S+$", re.MULTILINE
+)
+SITE_STACK_LINE = re.compile(
+    r"^     abstract stack \(top first\): (\d+( \d+)*)?$", re.MULTILINE
+)
+# The site's own top state usually offers a single shared reduction; the
+# competing moves appear further down the chain, so the conflict is reported at
+# the stack it actually fires from.
+SITE_CONFLICT_LINE = re.compile(r"^     conflict at stack (\d+( \d+)*)?:$", re.MULTILINE)
+SITE_MOVE_LINE = re.compile(r"^       (reduce |shift to |accept)", re.MULTILINE)
 
 
 # Ambiguous: `a + a + a` groups two ways with nothing to choose between them.
@@ -138,6 +153,24 @@ main:
   | y EOF { () }
 x: A { () }
 y: A { () }
+"""
+
+# The same reduce/reduce conflict, but reached over two symbols instead of one.
+# At proof level 1 the retained stack is a single state, so the competing
+# reductions here are strictly wider than it while `EOF_REDUCE_REDUCE`'s are
+# exactly as wide -- the two sides of the boundary the site dump has to keep
+# apart.
+WIDE_REDUCE_REDUCE = """\
+%token A "a"
+%token B "b"
+%token EOF "<eof>"
+%start <unit> main
+%%
+main:
+  | x EOF { () }
+  | y EOF { () }
+x: A B { () }
+y: A B { () }
 """
 
 AMBIGUOUS_GRAMMARS = {
@@ -477,6 +510,93 @@ class SurveyTests(ProverTestCase):
         self.assertNotIn("0 distinct divergence site(s)", output)
         self.assertNotRegex(output, PROVEN_LINE)
         self.assertEqual(status, NOT_PROVEN, output)
+
+    def test_every_example_carries_the_site_it_was_born_at(self) -> None:
+        # The point of the dump. A token trail is the same whether two parses
+        # genuinely differ or the abstraction merely lost the context that
+        # separated them; the stack, lookahead and conflicting moves are what
+        # tell them apart, so no example may be reported without them.
+        _, output = self.survey(AMBIGUOUS_EXPRESSION, 2)
+        examples = len(EXAMPLE_LINE.findall(output))
+        self.assertGreater(examples, 0, output)
+        self.assertEqual(len(SITE_LOOKAHEAD_LINE.findall(output)), examples, output)
+        # Two runs part ways only by taking different moves, so an undiverged
+        # pair holds one stack rather than two.
+        self.assertEqual(len(SITE_STACK_LINE.findall(output)), examples, output)
+        self.assertEqual(len(SITE_CONFLICT_LINE.findall(output)), examples, output)
+        self.assertEqual(len(SITE_MOVE_LINE.findall(output)), 2 * examples, output)
+
+    def test_a_site_names_the_moves_the_abstraction_had_to_choose_between(
+        self,
+    ) -> None:
+        # A bare pair of state numbers is only a cross-reference into
+        # `menhir --explain`. Naming the two productions in conflict is what
+        # makes it findable in the grammar itself.
+        moves = self.conflict_moves(AMBIGUOUS_EXPRESSION, 2)
+        # Menhir prints productions as "lhs -> rhs", and a divergence needs a
+        # reduction on at least one of the two sides.
+        self.assertTrue(
+            any("reduce " in line and " -> " in line for line in moves),
+            "\n".join(moves),
+        )
+
+    def test_the_conflict_is_localized_past_the_site_when_the_chain_shares_a_step(
+        self,
+    ) -> None:
+        # The failure this dump was rewritten for. A site's own top state often
+        # offers a single shared reduction, and reporting only that shows two
+        # identical moves and explains nothing -- the competing moves live a
+        # step or two down the chain. Whatever the conflict turns out to be, it
+        # must never be reported as one move against an identical one.
+        moves = self.conflict_moves(AMBIGUOUS_EXPRESSION, 2)
+        self.assertNotEqual(moves[0], moves[1], "\n".join(moves))
+
+    def conflict_moves(self, grammar: str, level: int) -> list[str]:
+        _, output = self.survey(grammar, level, examples=1)
+        lines = [line for line in output.splitlines() if SITE_MOVE_LINE.match(line)]
+        self.assertEqual(len(lines), 2, output)
+        return lines
+
+    def test_a_reduction_that_pops_the_retained_stack_exactly_is_constrained(
+        self,
+    ) -> None:
+        # The boundary case. Popping exactly the retained stack exposes what sat
+        # below its deepest entry, so the goto source is narrowed to that
+        # entry's predecessors -- constrained, not unknown. Reporting it as
+        # unconstrained would point a refinement at a gap the predecessor filter
+        # already closed. At level 1 the retained stack is one state and
+        # `x: A` is one symbol wide, so this is exactly that case.
+        lines = self.conflict_moves(EOF_REDUCE_REDUCE, 1)
+        self.assertTrue(
+            any("pops the retained stack exactly" in line for line in lines),
+            "\n".join(lines),
+        )
+        self.assertFalse(
+            any("pops past the retained stack" in line for line in lines),
+            "\n".join(lines),
+        )
+
+    def test_a_reduction_that_pops_past_the_retained_stack_is_unconstrained(
+        self,
+    ) -> None:
+        # The case a refinement could actually close: the reduction lands where
+        # the retained stack says nothing, so every goto edge on the reduced
+        # nonterminal stays admissible. `x: A B` is two symbols wide against a
+        # one-state stack.
+        lines = self.conflict_moves(WIDE_REDUCE_REDUCE, 1)
+        self.assertTrue(
+            any("pops past the retained stack" in line for line in lines),
+            "\n".join(lines),
+        )
+
+    def test_a_proving_survey_dumps_no_sites(self) -> None:
+        # Nothing accepted means nothing to explain, and a site block printed
+        # anyway would read as a blind spot the proof says is not there.
+        status, output = self.survey(LR1_LIST, 2)
+        self.assertEqual(status, PROVEN, output)
+        self.assertNotRegex(output, SITE_LOOKAHEAD_LINE)
+        self.assertNotRegex(output, SITE_STACK_LINE)
+        self.assertNotRegex(output, SITE_CONFLICT_LINE)
 
     def test_an_incomplete_survey_never_proves(self) -> None:
         # A walk that was cut short has counted nothing, so its zero is a floor
