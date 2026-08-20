@@ -27,7 +27,17 @@ type automaton = {
      automorphism of the recognition relation, so the search only needs to try
      one representative per class instead of every interchangeable token. *)
   terminal_class : (string, int) Hashtbl.t;
+  (* Production ids read back as the text Menhir printed for them. The search
+     itself only ever compares ids, but a diagnostic that names the two
+     productions a conflict is between is what makes the conflict findable in
+     the grammar, so the mapping is kept rather than discarded after parsing. *)
+  production_text : (int, string) Hashtbl.t;
 }
+
+let production_name automaton prod =
+  Option.value
+    (Hashtbl.find_opt automaton.production_text prod)
+    ~default:(Printf.sprintf "production %d" prod)
 
 let empty_state () =
   {
@@ -416,7 +426,11 @@ let parse_automaton path terminals aliases =
   let maximum = Hashtbl.fold (fun number _ value -> max number value) table 0 in
   let states = Array.init (maximum + 1) (fun number -> get_state number) in
   let terminal_class = compute_terminal_classes states terminals in
-  { states; terminals; aliases; terminal_class }
+  let production_text = Hashtbl.create (Hashtbl.length productions) in
+  Hashtbl.iter
+    (fun text id -> Hashtbl.replace production_text id text)
+    productions;
+  { states; terminals; aliases; terminal_class; production_text }
 
 module Stack_pool = struct
   type node = {
@@ -922,10 +936,20 @@ let joint_outcomes moves (start_left, start_right) token =
    is worth attempting at all. A handful of sites is a tractable list; a
    thousand means the grammar is not unambiguous for reasons this abstraction
    can ever see, and the remainder belong in written obligations instead. *)
+(* A sentence alone does not say why the abstraction admitted a pair: the same
+   token trail is reported whether the two parses genuinely differ or the
+   abstraction merely lost the context that separated them. The site does say,
+   so each example carries the stacks and lookahead it was born at, rendered
+   with the moves available there. *)
+type survey_example = {
+  example_tokens : string list;
+  example_site : string list;
+}
+
 type prove_survey = {
   sites : int;
   accepting : int;
-  examples : string list list;
+  examples : survey_example list;
   survey_pairs : int;
   covered : bool;
 }
@@ -1014,11 +1038,77 @@ let prove engine limit pair_limit timeout survey_limit =
     | None -> []
     | Some (token, parent) -> token :: trail parent
   in
+  (* Where the divergence was born, not where it was noticed. An accepting pair
+     usually inherits its flag from an ancestor, and it is the ancestor's
+     stacks and lookahead - the same triple the site table counts - that say
+     why the abstraction could not separate the two parses. A pair that is not
+     itself diverged reached acceptance by parting ways on end of input, so its
+     own stacks under "#" are the site. *)
+  let accepting_site ((left, right, _) as node) =
+    let rec climb ((_, _, diverged) as node) =
+      if not diverged then None
+      else
+        match Hashtbl.find parents node with
+        | None -> None
+        | Some (token, ((parent_left, parent_right, parent_diverged) as parent))
+          ->
+            if parent_diverged then climb parent
+            else Some (parent_left, parent_right, token)
+    in
+    match climb node with
+    | Some site -> site
+    | None -> (left, right, "#")
+  in
   (* One representative per terminal class: interchangeable lookaheads drive
      the same abstract reduction chains, so exploring one covers the class and
      shrinks the abstract pair space by the same factor as the search. *)
   let terminals =
     StringSet.elements (class_representatives automaton automaton.terminals)
+  in
+  (* One side of a site, as the abstraction sees it. The stack is the retained
+     top-[limit] states with the top first, and the moves are what the top
+     state can do on the lookahead. A reduction whose width reaches the bottom
+     of the retained stack is the one worth spotting: it pops into the part the
+     abstraction discarded, so the state it returns to is unconstrained and
+     every goto edge on the reduced nonterminal stays admissible. That is how a
+     pair the real parser could separate survives here. *)
+  let describe_side label suffix lookahead =
+    let depth = List.length suffix in
+    let moves_here =
+      match suffix with
+      | [] -> []
+      | top :: _ ->
+          let state = automaton.states.(top) in
+          let shift =
+            if lookahead = "#" then
+              if StringSet.mem "#" state.accepts then [ "accept" ] else []
+            else
+              match Hashtbl.find_opt state.transitions lookahead with
+              | Some target -> [ Printf.sprintf "shift to %d" target ]
+              | None -> []
+          in
+          let reduce =
+            List.map
+              (fun reduction ->
+                Printf.sprintf "reduce %s%s"
+                  (production_name automaton reduction.prod)
+                  (if reduction.width >= depth then
+                     " [pops past the retained stack]"
+                   else ""))
+              (reductions state lookahead)
+          in
+          shift @ reduce
+    in
+    Printf.sprintf "%s stack (top first) %s: %s" label
+      (String.concat " " (List.map string_of_int suffix))
+      (if moves_here = [] then "no moves" else String.concat ", " moves_here)
+  in
+  let describe_site (left, right, lookahead) =
+    [
+      Printf.sprintf "divergence site on lookahead %s" lookahead;
+      describe_side "left" left lookahead;
+      describe_side "right" right lookahead;
+    ]
   in
   push None ([ 0 ], [ 0 ], false);
   (* The clock is read once per dequeued pair, as the concretization search
@@ -1049,7 +1139,12 @@ let prove engine limit pair_limit timeout survey_limit =
       incr accepting;
       if !candidate = None then candidate := Some (List.rev (trail node));
       if surveying && !example_count < survey_limit then begin
-        examples := List.rev (trail node) :: !examples;
+        examples :=
+          {
+            example_tokens = List.rev (trail node);
+            example_site = describe_site (accepting_site node);
+          }
+          :: !examples;
         incr example_count
       end
     end;
@@ -2173,9 +2268,12 @@ let main () =
               (if survey.covered then ""
                else " (incomplete: the counts are a floor)");
             List.iteri
-              (fun index tokens ->
+              (fun index example ->
                 Printf.printf "  %d. %s\n" (index + 1)
-                  (String.concat " " tokens))
+                  (String.concat " " example.example_tokens);
+                List.iter
+                  (fun line -> Printf.printf "     %s\n" line)
+                  example.example_site)
               survey.examples;
             (* The proof turns on whether any diverging pair reaches
                acceptance, which is what `accepting` counts. Sites are a

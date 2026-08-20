@@ -45,6 +45,16 @@ NOT_PROVEN_LINE = re.compile(r"^NOT PROVEN:", re.MULTILINE)
 # witnesses were found and whether or not a limit curtailed the run.
 TERMINATION_LINE = re.compile(r"^Search ended at depth \d+ because ", re.MULTILINE)
 SURVEY_LINE = re.compile(r"^Survey at level \d+: ", re.MULTILINE)
+# Each surveyed example is followed by the site it was born at: the lookahead,
+# then one line per side giving the retained stack and the moves available on
+# it. The sentence alone does not say why the abstraction admitted the pair.
+EXAMPLE_LINE = re.compile(r"^  \d+\. ", re.MULTILINE)
+SITE_LOOKAHEAD_LINE = re.compile(
+    r"^     divergence site on lookahead \S+$", re.MULTILINE
+)
+SITE_STACK_LINE = re.compile(
+    r"^     (left|right) stack \(top first\) (\d+( \d+)*|): ", re.MULTILINE
+)
 
 
 # Ambiguous: `a + a + a` groups two ways with nothing to choose between them.
@@ -477,6 +487,44 @@ class SurveyTests(ProverTestCase):
         self.assertNotIn("0 distinct divergence site(s)", output)
         self.assertNotRegex(output, PROVEN_LINE)
         self.assertEqual(status, NOT_PROVEN, output)
+
+    def test_every_example_carries_the_site_it_was_born_at(self) -> None:
+        # The point of the dump. A token trail is the same whether two parses
+        # genuinely differ or the abstraction merely lost the context that
+        # separated them; the stacks and lookahead are what tell them apart, so
+        # no example may be reported without them.
+        _, output = self.survey(AMBIGUOUS_EXPRESSION, 2)
+        examples = len(EXAMPLE_LINE.findall(output))
+        self.assertGreater(examples, 0, output)
+        self.assertEqual(len(SITE_LOOKAHEAD_LINE.findall(output)), examples, output)
+        # One line per side of the pair.
+        self.assertEqual(len(SITE_STACK_LINE.findall(output)), 2 * examples, output)
+
+    def test_a_site_names_the_moves_the_abstraction_had_to_choose_between(
+        self,
+    ) -> None:
+        # A bare pair of state numbers is only a cross-reference into
+        # `menhir --explain`. Naming the productions available on the lookahead
+        # is what makes the conflict findable in the grammar itself.
+        _, output = self.survey(AMBIGUOUS_EXPRESSION, 2, examples=1)
+        site = [
+            line for line in output.splitlines() if SITE_STACK_LINE.match(line)
+        ]
+        self.assertEqual(len(site), 2, output)
+        # Menhir prints productions as "lhs -> rhs", and a divergence is born
+        # from a reduction on at least one of the two sides.
+        self.assertTrue(
+            any("reduce " in line and " -> " in line for line in site),
+            "\n".join(site),
+        )
+
+    def test_a_proving_survey_dumps_no_sites(self) -> None:
+        # Nothing accepted means nothing to explain, and a site block printed
+        # anyway would read as a blind spot the proof says is not there.
+        status, output = self.survey(LR1_LIST, 2)
+        self.assertEqual(status, PROVEN, output)
+        self.assertNotRegex(output, SITE_LOOKAHEAD_LINE)
+        self.assertNotRegex(output, SITE_STACK_LINE)
 
     def test_an_incomplete_survey_never_proves(self) -> None:
         # A walk that was cut short has counted nothing, so its zero is a floor

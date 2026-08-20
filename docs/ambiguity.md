@@ -191,6 +191,21 @@ the state is triaged into one of these categories.
   early, and its counts are a floor rather than a total if the pair budget or
   the timeout cut the walk short.
 
+  Each example is printed with the site it was born at, because the sentence
+  alone does not say why the pair was admitted — the same trail appears whether
+  two parses genuinely differ or the abstraction merely lost the context that
+  separated them. Under the sentence come the lookahead and, for each side of
+  the pair, the retained stack (top state first) and the moves that stack's top
+  state has on that lookahead, with productions named as `menhir --explain`
+  names them. The state numbers cross-reference the `.automaton` file. A
+  reduction tagged `[pops past the retained stack]` is the one to look for: it
+  pops into the part of the stack the abstraction discarded, so the state it
+  returns to is unconstrained and every goto edge on the reduced nonterminal
+  stays admissible. A site whose two sides differ only through such a
+  reduction is a candidate for sharpening the abstraction; a site whose sides
+  present genuinely different productions over known stack is a real conflict
+  to settle in the grammar or in a transience argument.
+
   Which of those two a site turns out to be shows in how its example behaves as
   the level rises. A bounded blind spot keeps the same shape and disappears at
   some level; one that stands on unbounded stack correlation grows longer with
