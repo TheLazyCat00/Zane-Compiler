@@ -129,27 +129,46 @@ def run_level(
     environment: dict[str, str],
 ) -> Result:
     started = time.monotonic()
-    completed = subprocess.run(
-        [
-            str(ENGINE),
-            "--prove",
-            str(level),
-            # One example is enough: the sweep asks whether the blind spot
-            # survives, and the site of the first survivor is what says why.
-            "--prove-survey",
-            "1",
-            "--max-tokens",
-            max_tokens,
-            "--timeout",
-            timeout,
-            "--max-witnesses",
-            "5",
-            str(grammar),
-        ],
-        env=environment,
-        text=True,
-        capture_output=True,
-    )
+    # `--timeout` bounds the engine's own search phases, not the process around
+    # them: a hang in startup, in the menhir invocation, or in cleanup would
+    # block here forever and take the rest of the sweep with it. The outer
+    # bound is deliberately slack, so it can only fire on a process that is
+    # stuck rather than on a level that is merely slow.
+    process_timeout = float(timeout) + 120.0
+    try:
+        completed = subprocess.run(
+            [
+                str(ENGINE),
+                "--prove",
+                str(level),
+                # One example is enough: the sweep asks whether the blind spot
+                # survives, and the site of the first survivor is what says why.
+                "--prove-survey",
+                "1",
+                "--max-tokens",
+                max_tokens,
+                "--timeout",
+                timeout,
+                "--max-witnesses",
+                "5",
+                str(grammar),
+            ],
+            env=environment,
+            text=True,
+            capture_output=True,
+            timeout=process_timeout,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as expired:
+        captured = "".join(
+            part for part in (expired.stdout, expired.stderr) if part
+        )
+        return Result(
+            level, BROKEN, None, None, None, None,
+            time.monotonic() - started, [],
+            f"the engine outlasted its process bound of {process_timeout:.0f}s "
+            f"without honouring its own {timeout}s timeout\n{captured}",
+        )
     elapsed = time.monotonic() - started
     match = SURVEY_RE.search(completed.stdout)
     if match is None:
@@ -187,10 +206,24 @@ def corpus_grammars() -> dict[str, str]:
 
 
 def parse_levels(text: str) -> list[int]:
+    """Levels named by a range or a comma list, refusing selections that name
+    none. A reversed range yields an empty sweep, which would otherwise run no
+    proof at all and report "not proven" as though it had looked."""
     if "-" in text:
         low, _, high = text.partition("-")
-        return list(range(int(low), int(high) + 1))
-    return [int(part) for part in text.split(",")]
+        levels = list(range(int(low), int(high) + 1))
+        if not levels:
+            raise ValueError(
+                f"{text!r} runs backwards and names no level; "
+                "write the lower bound first"
+            )
+    else:
+        levels = [int(part) for part in text.split(",") if part.strip()]
+    if not levels:
+        raise ValueError(f"{text!r} names no level")
+    if any(level < 1 for level in levels):
+        raise ValueError(f"{text!r} names a level below 1")
+    return levels
 
 
 def main() -> int:
@@ -226,7 +259,33 @@ def main() -> int:
             "whose terminal output is not kept"
         ),
     )
+    parser.add_argument(
+        "--budget",
+        type=float,
+        metavar="SECONDS",
+        help=(
+            "refuse to start when the worst case - one full timeout for every "
+            "level - exceeds this. For a sweep running under an outer cap that "
+            "kills the job, where being killed loses the reading entirely and "
+            "an honest answer becomes a broken run"
+        ),
+    )
     arguments = parser.parse_args()
+
+    # Both checks run before anything is opened or spawned: a sweep that cannot
+    # finish should say so in a second rather than after its setup.
+    try:
+        levels = parse_levels(arguments.levels)
+    except ValueError as error:
+        parser.error(str(error))
+    worst_case = len(levels) * float(arguments.timeout)
+    if arguments.budget is not None and worst_case > arguments.budget:
+        parser.error(
+            f"{len(levels)} level(s) at {arguments.timeout}s each is "
+            f"{worst_case:.0f}s in the worst case, past the "
+            f"{arguments.budget:.0f}s budget. Narrow --levels, lower "
+            "--timeout, or raise the cap the budget was derived from."
+        )
 
     # Rows are printed as each level finishes rather than collected and dumped
     # at the end: a sweep whose last level runs long is exactly the one whose
@@ -270,7 +329,7 @@ def main() -> int:
     emit(header)
     emit("-" * len(header))
 
-    for level in parse_levels(arguments.levels):
+    for level in levels:
         result = run_level(
             arguments.grammar,
             level,
@@ -297,6 +356,25 @@ def main() -> int:
             break
 
     emit()
+    # Checked before any trend: a level that never reached a verdict has
+    # counted nothing, and reading a trend across the levels that did would
+    # report an under-resourced or broken run as a property of the grammar.
+    broken = [
+        r for r in results if r.status not in (PROVEN, AMBIGUOUS, NOT_PROVEN)
+    ]
+    if broken:
+        emit(
+            "BROKEN: "
+            + ", ".join(f"level {r.level}" for r in broken)
+            + " reached no verdict, so this run went wrong rather than the "
+            "grammar being unproven. The engine's output for the first is "
+            "below."
+        )
+        emit()
+        for line in broken[0].stdout.splitlines()[:20]:
+            emit(line)
+        return BROKEN
+
     proved = next((r for r in results if r.status == PROVEN), None)
     if proved is not None:
         emit(

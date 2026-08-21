@@ -40,6 +40,10 @@ on:
         required: true
         default: "1-8"
         type: string
+        # A selection whose worst case outruns the job's sweeping budget is
+        # refused before any work starts, rather than being killed part-way
+        # with its reading lost. Eight levels at the longest per-level timeout
+        # is exactly the budget; anything wider needs a shorter timeout.
       level_timeout:
         # Per level, not per run: the job's own cap below has to cover this
         # multiplied by the number of levels swept.
@@ -70,15 +74,17 @@ jobs:
     name: Sweep ${{ inputs.grammar }} over levels ${{ inputs.levels }}
     runs-on: ubuntu-latest
     # The sweep bounds itself per level, so the worst case is the per-level
-    # timeout times the number of levels. This cap is the backstop around that
-    # total plus checkout, Devbox, the opam bootstrap and the build. A job
-    # killed here writes no reading into the report, turning an honest
-    # "unbounded" or "inconclusive" into a broken run — the same failure mode
-    # the proof workflow's cap exists to prevent.
+    # timeout times the number of levels — and `levels` is a free string, so
+    # that product is chosen by the caller rather than fixed here. A job killed
+    # by this cap writes no reading into the report, turning an honest
+    # "unbounded" or "inconclusive" into a broken run, so the cap cannot be the
+    # only thing standing between a wide request and a lost answer.
     #
-    # At the largest offered per-level timeout an eight-level sweep would need
-    # four hours, which no grammar small enough to sweep that wide will ever
-    # approach; the cap covers it rather than assuming it.
+    # SWEEP_BUDGET below is what actually holds: the sweep refuses to start
+    # when the worst case exceeds it, in a second rather than after four hours.
+    # The two are set together — 240 minutes of sweeping, and 20 more for
+    # checkout, Devbox, the opam bootstrap and the build, which have run in
+    # about five.
     timeout-minutes: 260
     env:
       # Public ubuntu-latest runners provide four CPUs and 16 GB RAM:
@@ -90,6 +96,9 @@ jobs:
       AMBIGUITY_MAX_FRONTIER_RATIO: "1.0"
       AMBIGUITY_JOBS: "1"
       AMBIGUITY_MENHIR: menhir
+      # Kept in step with timeout-minutes above: the sweeping share of the cap,
+      # in seconds. A request whose worst case exceeds it is refused up front.
+      SWEEP_BUDGET: "14400"
       REPORT: reports/actions/sweep-${{ github.run_id }}-${{ github.run_attempt }}.txt
 
     steps:

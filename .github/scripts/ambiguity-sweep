@@ -14,6 +14,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 : "${GRAMMAR:?must be set}"
 : "${LEVELS:?must be set}"
 : "${LEVEL_TIMEOUT:?must be set}"
+: "${SWEEP_BUDGET:?must be set}"
 : "${REPORT:?must be set}"
 
 if [[ ! -f "$ROOT/$GRAMMAR" ]]; then
@@ -35,6 +36,7 @@ python3 "$ROOT/tools/precision_sweep.py" \
 	--levels "$LEVELS" \
 	--timeout "$LEVEL_TIMEOUT" \
 	--max-tokens "${SWEEP_TOKENS:-12}" \
+	--budget "$SWEEP_BUDGET" \
 	--output "$REPORT" || status=$?
 
 case "$status" in
@@ -64,6 +66,11 @@ fi
 # `ambiguity-verdict` does: text is the signal that survives a tool whose exit
 # statuses change, and an unrecognized report must stop the job loudly instead
 # of passing as a sweep that found nothing.
+if grep -q '^BROKEN:' "$REPORT"; then
+	announce "A level reached no verdict, so this run went wrong rather than the grammar being unproven. The engine's output is in the report."
+	exit 2
+fi
+
 if grep -q '^AMBIGUOUS:' "$REPORT"; then
 	announce "A concrete ambiguous sentence was found. This is a bug in the grammar, not a limit of the abstraction, and no level will ever prove it."
 	exit 1
