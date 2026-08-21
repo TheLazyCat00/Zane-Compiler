@@ -36,16 +36,20 @@ on:
         # Cost grows roughly an order of magnitude per level, so a wide range
         # is only sensible on a small grammar. The sweep stops at the first
         # level that proves, since every wider window proves too.
-        description: Levels to sweep, e.g. 1-8 or 2,4,6
+        description: Levels to sweep, e.g. 1-9 or 2,4,6
         required: true
-        default: "1-8"
+        default: "1-9"
         type: string
         # A selection whose worst case outruns the job's sweeping budget is
         # refused before any work starts, rather than being killed part-way
         # with its reading lost. A level costs its timeout plus the slack the
         # sweep allows the process past it, so at the longest per-level timeout
         # seven levels fit and eight do not; wider sweeps need a shorter one.
-        # The default eight at 600s costs 5760s, well inside the budget.
+        # The default is nine because the slice's widest reduction -- the
+        # eight-symbol enum map -- is only resolved exactly by a retained
+        # stack of nine, so a sweep that stops earlier cannot tell a bounded
+        # blind spot from an unbounded one. Nine at 600s costs 6480s, well
+        # inside the budget.
       level_timeout:
         # Per level, not per run: the job's own cap below has to cover this
         # multiplied by the number of levels swept.
