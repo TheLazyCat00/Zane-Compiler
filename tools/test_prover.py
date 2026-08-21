@@ -79,6 +79,30 @@ REFINEMENT_ROUND_LINE = re.compile(
 REFINEMENT_STOPPED_LINE = re.compile(
     r"^Refinement stopped after (\d+) round\(s\): (.+)\.$", re.MULTILINE
 )
+# The forward walk from a candidate's divergence site down to acceptance. Each
+# step names the token, the stacks, and either "[exact]" or the states where a
+# side had to guess a goto -- which is the whole point of the walk, so a step
+# saying neither would be a step that explains nothing.
+FORWARD_HEADER = re.compile(
+    r"^  forward from the site, to acceptance:$", re.MULTILINE
+)
+FORWARD_STEP = re.compile(
+    r"^ *(\d+)\. on (\S+) +(?:stack|left) ", re.MULTILINE
+)
+# No side attribution: the pair is stored canonicalised, so which side a guess
+# belongs to is not recoverable, and a label would be a guess about a guess.
+FORWARD_GUESS = re.compile(r"^ +guessed at state \d+ \(exact from \d+\)$")
+# A refinement request for more depth than the ceiling allows is clamped to the
+# ceiling rather than skipped, so the run still makes what progress it can. The
+# clamp has to be reported: silently cutting a request down is how a candidate
+# can need a retained stack of 11, be asked for 9 every round, and survive with
+# nothing in the output saying the ceiling was the constraint.
+REFINEMENT_CAPPED = re.compile(
+    r"^Refinement was capped: (\d+) state\(s\) asked for a deeper stack than "
+    r"--prove-refine (\d+) allows and were cut down to it; the deepest is "
+    r"state (\d+), which is exact from (\d+)\.$",
+    re.MULTILINE,
+)
 REFINEMENT_DEEPEST = re.compile(
     r"to a retained stack of (\d+) at the deepest\.", re.MULTILINE
 )
@@ -221,6 +245,40 @@ main:
   | P Q R w x EOF { () }
   | P Q R w y EOF { () }
 w: A B C D E F { () }
+x: A { () }
+y: A { () }
+"""
+
+# Three productions reduced in one state on one lookahead, so a pair walking
+# through it takes two of them and leaves the third unselected. A trace claims
+# to say what happened on the path this pair took, so the chain it never entered
+# must not appear in it.
+THREE_WAY_CONFLICT = """\
+%token A "a"
+%token B "b"
+%token C "c"
+%token EOF "<eof>"
+%start <unit> main
+%%
+main:
+  | p C EOF { () }
+  | q C EOF { () }
+  | r B EOF { () }
+p: A B { () }
+q: A B { () }
+r: A B { () }
+"""
+
+# No end-of-input terminal, so the two parses can only part ways under the
+# sentinel the search appends. That is the case where the walk has no recorded
+# edge to replay and has to fall back to the accepting node's own step.
+SENTINEL_REDUCE_REDUCE = """\
+%token A "a"
+%start <unit> main
+%%
+main:
+  | x { () }
+  | y { () }
 x: A { () }
 y: A { () }
 """
@@ -453,6 +511,29 @@ class RefinementTests(ProverTestCase):
             len(candidates[-1].split()), len(candidates[0].split()), output
         )
 
+    def test_a_request_past_the_ceiling_is_reported_not_swallowed(self) -> None:
+        # The palindrome's competing reduction is three symbols wide, so its
+        # chain asks for a retained stack of four. A ceiling of two cannot give
+        # that, and clamping quietly would leave the run looking as though the
+        # depth it asked for had been granted.
+        _, output = self.prove(
+            EVEN_PALINDROME, 1, extra=("--prove-refine", "2")
+        )
+        capped = REFINEMENT_CAPPED.search(output)
+        self.assertIsNotNone(capped, output)
+        self.assertEqual(capped.group(2), "2", output)
+        self.assertGreater(int(capped.group(4)), 2, output)
+
+    def test_no_cap_is_reported_when_every_request_fits(self) -> None:
+        # The guard against the line above appearing whenever refinement runs:
+        # a ceiling of eight covers everything the palindrome's chain asks for,
+        # so there is nothing to cut down and nothing to report.
+        _, output = self.prove(
+            EVEN_PALINDROME, 1, extra=("--prove-refine", "8")
+        )
+        self.assertRegex(output, REFINEMENT_ROUND_LINE)
+        self.assertNotRegex(output, REFINEMENT_CAPPED)
+
     def test_the_round_limit_is_honoured(self) -> None:
         # The loop reruns a whole proof per round, so an unbounded blind spot
         # would otherwise refine until the clock stopped it, reporting a
@@ -468,6 +549,32 @@ class RefinementTests(ProverTestCase):
         self.assertIsNotNone(stopped, output)
         self.assertIn("round limit", stopped.group(2), output)
 
+    def test_a_curtailed_run_still_reports_what_refinement_did(self) -> None:
+        # Running out of pairs after refining is a different situation from
+        # never having refined, and the report used to look identical: the
+        # pair-limit message alone, with no sign that the abstraction it
+        # overflowed on was one refinement had already deepened. A reader
+        # cannot tell from that whether to raise the budget or lower the
+        # ceiling.
+        #
+        # The ratio admits the first round and not a later one, so the run
+        # refines and then overflows rather than overflowing outright.
+        status, output = self.prove(
+            EVEN_PALINDROME,
+            1,
+            extra=("--prove-refine", "8"),
+            environment={
+                **self.environment,
+                "AMBIGUITY_MAX_FRONTIER_RATIO": "0.0008",
+            },
+        )
+        self.assertEqual(status, NOT_PROVEN, output)
+        self.assertRegex(output, NOT_PROVEN_LINE)
+        self.assertRegex(output, REFINEMENT_ROUND_LINE)
+        self.assertRegex(
+            output, re.compile(r"^Refinement reached: ", re.MULTILINE)
+        )
+
     def test_rejected_combinations_do_not_run(self) -> None:
         # Each of these would otherwise look like it did something: refining
         # without a proof, refining shallower than the level it starts from, or
@@ -480,6 +587,113 @@ class RefinementTests(ProverTestCase):
                 "with --prove-survey",
                 1,
                 ("--prove-refine", "4", "--prove-survey", "1"),
+            ),
+        ):
+            with self.subTest(combination=name):
+                status, output = self.prove(
+                    LR1_LIST, level, extra=extra, expect_verdict=False
+                )
+                self.assertNotIn(status, VERDICT_STATUSES)
+                self.assertNotRegex(output, PROVEN_LINE)
+
+
+class ForwardTraceTests(ProverTestCase):
+    """`--prove-trace` reports what happened after two parses parted ways.
+
+    Every other diagnostic reports where a divergence was *born*, which
+    explains a candidate only when the site is also the reason it survived.
+    When the site's own conflict is exact -- two moves a real sentence could
+    both begin with -- the pair is admitted by both sides walking on to
+    acceptance, and the step that should have killed one of them is somewhere
+    along that walk. Nothing else in the tool shows it.
+    """
+
+    def test_a_trace_is_absent_unless_requested(self) -> None:
+        _, output = self.prove(AMBIGUOUS_EXPRESSION, 2)
+        self.assertNotRegex(output, FORWARD_HEADER)
+
+    def test_a_trace_follows_the_candidate_to_acceptance(self) -> None:
+        # The walk has to end where the pair was counted: at end of input. That
+        # step is not one of the recorded edges -- the pair reaches acceptance
+        # under the sentinel, which the search takes separately -- so leaving it
+        # off is the easy way for this to stop short of the thing it explains.
+        _, output = self.prove(
+            AMBIGUOUS_EXPRESSION, 2, extra=("--prove-trace",)
+        )
+        self.assertRegex(output, FORWARD_HEADER)
+        steps = FORWARD_STEP.findall(output)
+        self.assertGreaterEqual(len(steps), 2, output)
+        self.assertEqual(steps[-1][1], "#", output)
+        # Numbered consecutively from one, so a dropped step is visible rather
+        # than silently shortening the walk.
+        self.assertEqual(
+            [number for number, _ in steps],
+            [str(index + 1) for index in range(len(steps))],
+            output,
+        )
+
+    def test_every_step_says_whether_it_guessed(self) -> None:
+        # A step that reports neither "[exact]" nor a guessed state explains
+        # nothing, and this walk exists to answer exactly that question at
+        # every step. Checked structurally rather than by counting, so a step
+        # that loses its annotation fails here.
+        _, output = self.prove(
+            AMBIGUOUS_EXPRESSION, 2, extra=("--prove-trace",)
+        )
+        lines = output.splitlines()
+        starts = [
+            index for index, line in enumerate(lines) if FORWARD_STEP.match(line)
+        ]
+        self.assertGreaterEqual(len(starts), 2, output)
+        for index in starts:
+            if lines[index].endswith("[exact]"):
+                continue
+            self.assertLess(index + 1, len(lines), output)
+            self.assertRegex(lines[index + 1], FORWARD_GUESS, output)
+
+    def test_each_guess_is_reported_once_per_step(self) -> None:
+        # A reduction popping into the unknown yields one move per goto edge it
+        # is allowed to take, and reporting each of them prints the same finding
+        # several times over -- once per possibility the abstraction kept, which
+        # reads as several separate problems. Three competing reductions in one
+        # state is the case that produced it.
+        _, output = self.prove(
+            THREE_WAY_CONFLICT, 1, extra=("--prove-trace",)
+        )
+        lines = output.splitlines()
+        starts = [
+            index for index, line in enumerate(lines) if FORWARD_STEP.match(line)
+        ]
+        self.assertGreaterEqual(len(starts), 1, output)
+        for position, start in enumerate(starts):
+            stop = starts[position + 1] if position + 1 < len(starts) else len(lines)
+            guesses = [
+                line.strip()
+                for line in lines[start + 1 : stop]
+                if FORWARD_GUESS.match(line)
+            ]
+            self.assertCountEqual(guesses, set(guesses), output)
+
+    def test_a_divergence_born_at_end_of_input_still_traces(self) -> None:
+        # The walk replays recorded edges, and a pair that parts ways under the
+        # sentinel has none: its divergence is born at the step the search takes
+        # separately. That printed no trace at all, while still reporting that
+        # one had been asked for.
+        _, output = self.prove(
+            SENTINEL_REDUCE_REDUCE, 1, extra=("--prove-trace",)
+        )
+        self.assertRegex(output, FORWARD_HEADER)
+        steps = FORWARD_STEP.findall(output)
+        self.assertEqual(len(steps), 1, output)
+        self.assertEqual(steps[0][1], "#", output)
+
+    def test_rejected_combinations_do_not_run(self) -> None:
+        for name, level, extra in (
+            ("without --prove", 0, ("--prove-trace",)),
+            (
+                "with --prove-survey",
+                1,
+                ("--prove-trace", "--prove-survey", "1"),
             ),
         ):
             with self.subTest(combination=name):

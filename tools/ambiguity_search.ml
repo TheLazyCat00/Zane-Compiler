@@ -1169,6 +1169,188 @@ let chain_imprecision automaton moves suffix token =
   done;
   !requests
 
+(* The imprecise reductions on the joint step a recorded edge actually took.
+
+   [chain_imprecision] explores every chain leaving one stack, which is what
+   refinement wants: deepening a state the candidate did not go through costs
+   precision it did not need, never a wrong verdict. A trace cannot be read that
+   way, because it claims to say what happened on this pair's path, and a guess
+   from a branch the pair never entered names the wrong state to sharpen.
+
+   Filtering each side on its own by "can this chain reach one of the recorded
+   child's stacks" is not enough either. It is a reachability test, so a chain
+   that reaches the right stack for the wrong reason still passes, and it says
+   nothing about whether the two sides' chains were taken *together* - which is
+   the only sense in which a joint step has a provenance at all.
+
+   So this replays the step the way [joint_outcomes] walks it, keeping both
+   sides in lockstep and with the same pairing rules, and marks the joint nodes
+   that can still reach an outcome matching the recorded child. A reduction is
+   reported only when it fires on an edge between two marked nodes: taken on a
+   path that demonstrably ends where this pair ended. Any deviation from
+   [joint_outcomes]'s rules here would replay a different graph from the one the
+   search walked, so the pairing logic is deliberately identical.
+
+   The child is matched as an unordered pair, because [push] canonicalises by
+   ordering the two sides and which side became which is not recoverable. That
+   is the one place this stays an approximation: a step whose two sides ended on
+   the same pair of stacks in the opposite arrangement is indistinguishable from
+   the recorded one. It cannot admit a chain that ends somewhere else. *)
+let joint_imprecision automaton moves pair token target =
+  let matches (left, right) =
+    match target with
+    | None -> true
+    | Some (child_left, child_right) ->
+        (left = child_left && right = child_right)
+        || (left = child_right && right = child_left)
+  in
+  let width_of stack prod =
+    match stack with
+    | [] -> None
+    | top :: _ ->
+        Option.map
+          (fun reduction -> reduction.width)
+          (List.find_opt
+             (fun reduction -> reduction.prod = prod)
+             (reductions automaton.states.(top) token))
+  in
+  (* A move is imprecise exactly where [side_moves] had to guess: the reduction
+     reaches or passes the depth the stack retains. *)
+  let imprecision stack move =
+    match move with
+    | Terminate _ -> None
+    | Reduce (prod, _) -> (
+        match width_of stack prod with
+        | Some width when width >= List.length stack ->
+            Some (List.hd stack, width + 1)
+        | _ -> None)
+  in
+  let successors = Hashtbl.create 64 in
+  let reaches = Hashtbl.create 64 in
+  let visited = ref [] in
+  let seen = Hashtbl.create 64 in
+  let queue = Queue.create () in
+  let visits = ref 0 in
+  let push node =
+    if not (Hashtbl.mem seen node) then begin
+      Hashtbl.add seen node ();
+      Queue.add node queue
+    end
+  in
+  let record source target_node found =
+    Hashtbl.replace successors source
+      ((target_node, found)
+      :: Option.value (Hashtbl.find_opt successors source) ~default:[]);
+    push target_node
+  in
+  let start = (Running (fst pair), Running (snd pair), false) in
+  push start;
+  while (not (Queue.is_empty queue)) && !visits < 4096 do
+    incr visits;
+    let ((left, right, diverged) as current) = Queue.take queue in
+    visited := current :: !visited;
+    match (left, right) with
+    | Finished result_left, Finished result_right ->
+        if matches (result_left, result_right) then
+          Hashtbl.replace reaches current ()
+    | Running suffix_left, Running suffix_right ->
+        let paired move_left move_right =
+          let found =
+            List.filter_map
+              (fun (stack, move) -> imprecision stack move)
+              [ (suffix_left, move_left); (suffix_right, move_right) ]
+          in
+          match (move_left, move_right) with
+          | Reduce (p, l), Reduce (q, r) ->
+              Some ((Running l, Running r, diverged || p <> q), found)
+          | Reduce (_, l), Terminate r -> Some ((Running l, Finished r, true), found)
+          | Terminate l, Reduce (_, r) -> Some ((Finished l, Running r, true), found)
+          | Terminate l, Terminate r ->
+              Some ((Finished l, Finished r, diverged), found)
+        in
+        if (not diverged) && suffix_left = suffix_right then
+          let all = moves suffix_left token in
+          List.iter
+            (fun move_left ->
+              List.iter
+                (fun move_right ->
+                  let compatible =
+                    match (move_left, move_right) with
+                    | Reduce (p, _), Reduce (q, _) -> p <> q
+                    | Reduce _, Terminate _ | Terminate _, Reduce _ -> true
+                    | Terminate _, Terminate _ -> false
+                  in
+                  if move_left == move_right || compatible then
+                    Option.iter
+                      (fun (next, found) -> record current next found)
+                      (paired move_left move_right))
+                all)
+            all
+        else
+          let moves_left = moves suffix_left token in
+          let moves_right = moves suffix_right token in
+          List.iter
+            (fun move_left ->
+              List.iter
+                (fun move_right ->
+                  Option.iter
+                    (fun (next, found) -> record current next found)
+                    (paired move_left move_right))
+                moves_right)
+            moves_left
+    | Running suffix_left, Finished _ ->
+        List.iter
+          (fun move ->
+            let found =
+              Option.to_list (imprecision suffix_left move)
+            in
+            match move with
+            | Reduce (_, l) -> record current (Running l, right, diverged) found
+            | Terminate l -> record current (Finished l, right, diverged) found)
+          (moves suffix_left token)
+    | Finished _, Running suffix_right ->
+        List.iter
+          (fun move ->
+            let found =
+              Option.to_list (imprecision suffix_right move)
+            in
+            match move with
+            | Reduce (_, r) -> record current (left, Running r, diverged) found
+            | Terminate r -> record current (left, Finished r, diverged) found)
+          (moves suffix_right token)
+  done;
+  (* Backward from the matching outcomes: a node is on a path to the recorded
+     child when one of its edges leads to a node that is. The joint graph can
+     cycle, so this is a fixpoint rather than one sweep. *)
+  let changed = ref true in
+  while !changed do
+    changed := false;
+    List.iter
+      (fun node ->
+        if not (Hashtbl.mem reaches node) then
+          if
+            List.exists
+              (fun (next, _) -> Hashtbl.mem reaches next)
+              (Option.value (Hashtbl.find_opt successors node) ~default:[])
+          then begin
+            Hashtbl.replace reaches node ();
+            changed := true
+          end)
+      !visited
+  done;
+  let requests = Hashtbl.create 16 in
+  List.iter
+    (fun node ->
+      if Hashtbl.mem reaches node then
+        List.iter
+          (fun (next, found) ->
+            if Hashtbl.mem reaches next then
+              List.iter (fun request -> Hashtbl.replace requests request ()) found)
+          (Option.value (Hashtbl.find_opt successors node) ~default:[]))
+    !visited;
+  List.sort compare
+    (Hashtbl.fold (fun request () found -> request :: found) requests [])
+
 (* A survey answers a different question from a proof. The proof stops at the
    first divergence it can reach, which says nothing about how many more lie
    behind it - and that count is what decides whether refining the abstraction
@@ -1202,7 +1384,8 @@ type prove_survey = {
    same form a survey prints. *)
 type prove_result =
   | Proven of int
-  | Abstract_candidate of string list * int * survey_example * (int * int) list
+  | Abstract_candidate of
+      string list * int * survey_example * string list * (int * int) list
   | Pair_overflow of int
   | Prove_timeout of int
   | Surveyed of prove_survey
@@ -1220,7 +1403,8 @@ let not_proven_status = 3
    several times over: the rounds share one budget for the abstract phase, so a
    proof that needed four of them is not four times as patient as one that
    needed none. *)
-let prove engine (precision : precision) pair_limit deadline survey_limit =
+let prove engine (precision : precision) pair_limit deadline survey_limit trace
+    =
   let automaton = engine.automaton in
   let gotos = goto_edges automaton in
   let preds = predecessors automaton in
@@ -1309,6 +1493,110 @@ let prove engine (precision : precision) pair_limit deadline survey_limit =
     match climb node with
     | Some site -> site
     | None -> (left, right, "#")
+  in
+  (* The node the divergence was born at, rather than the triple describing it:
+     the forward walk has to start somewhere it can walk down from. *)
+  let divergence_origin node =
+    let rec climb ((_, _, diverged) as node) =
+      if not diverged then None
+      else
+        match Hashtbl.find parents node with
+        | None -> None
+        | Some (_, ((_, _, parent_diverged) as parent)) ->
+            if parent_diverged then climb parent else Some parent
+    in
+    climb node
+  in
+  (* Every step a pair took, root first, as the node standing before each token
+     and the token it then consumed. [parents] points upward, so this is the
+     same walk [trail] makes, keeping the nodes instead of discarding them. *)
+  let path_steps node =
+    let rec walk node collected =
+      match Hashtbl.find parents node with
+      | None -> collected
+      | Some (token, parent) -> walk parent ((parent, token) :: collected)
+    in
+    walk node []
+  in
+  (* What happened *after* the two parses parted ways.
+
+     Every other diagnostic here reports where a divergence was born. That is
+     the right thing when the abstraction lost the context that separated two
+     parses, because then the site is also the explanation. It says nothing
+     when the site's own conflict is exact - two moves a real sentence could
+     both begin with - since then the pair is admitted not by anything at the
+     site but by both sides walking on to acceptance, and the step that should
+     have killed one of them is somewhere along that walk.
+
+     So this replays the recorded path from the site down to the accepting
+     node, and asks of each step the only question that distinguishes a real
+     ambiguity from an artifact: did this step need the abstraction to guess a
+     goto anywhere in it? A walk that guesses nowhere is a pair no extra precision will
+     remove, whatever the level, and says the sentence is worth concretizing.
+     One that guesses at a particular step names the state to sharpen, which
+     the site alone never could. *)
+  let describe_forward node =
+    let node_pair = node in
+    let render_stack suffix =
+      String.concat " " (List.map string_of_int suffix)
+    in
+    let guesses (left, right, _) token child =
+      let target =
+        Option.map
+          (fun (child_left, child_right, _) -> (child_left, child_right))
+          child
+      in
+      List.map
+        (fun (top, depth) ->
+          Printf.sprintf "guessed at state %d (exact from %d)" top depth)
+        (joint_imprecision automaton moves (left, right) token target)
+    in
+    let step index ((left, right, _) as node) token child =
+      let stacks =
+        if left = right then Printf.sprintf "stack %s" (render_stack left)
+        else
+          Printf.sprintf "left %s | right %s" (render_stack left)
+            (render_stack right)
+      in
+      let line =
+        Printf.sprintf "%2d. on %-12s %s" index token stacks
+      in
+      match guesses node token child with
+      | [] -> [ line ^ "  [exact]" ]
+      | found -> line :: List.map (fun text -> "      " ^ text) found
+    in
+    (* Acceptance is not one of the recorded edges - the pair reaches it under
+       the end-of-input sentinel, which the walk takes separately - so it is
+       replayed here rather than left off the end. It has no recorded child, so
+       any termination counts. *)
+    let closing index = step index node "#" None in
+    match divergence_origin node with
+    (* Not diverged means the pair parted ways on end of input, exactly as
+       [accepting_site] treats it: its own stacks under "#" are the site, and
+       that single step is the whole walk. Returning nothing here printed no
+       trace at all for a candidate whose divergence was born at EOF, while
+       still reporting that one was requested. *)
+    | None -> "forward from the site, to acceptance:" :: closing 1
+    | Some origin ->
+        let rec from_origin = function
+          | [] -> []
+          | (candidate, _) :: _ as rest when candidate = origin -> rest
+          | _ :: tail -> from_origin tail
+        in
+        let steps = from_origin (path_steps node) in
+        (* Each recorded step is rendered against the pair it actually produced,
+           which is the next step's node, or the accepting node for the last.
+           An origin that is somehow not on the recorded path leaves no steps to
+           pair up; the closing step still says what happened at acceptance,
+           which is better than a diagnostic that raises. *)
+        let rec render index = function
+          | [] -> []
+          | [ (node, token) ] -> step index node token (Some node_pair)
+          | (node, token) :: ((next, _) :: _ as rest) ->
+              step index node token (Some next) @ render (index + 1) rest
+        in
+        ("forward from the site, to acceptance:" :: render 1 steps)
+        @ closing (List.length steps + 1)
   in
   (* Every place along a candidate's path where the abstraction guessed, keyed
      by the state on top there and carrying the deepest request made of it. The
@@ -1501,6 +1789,7 @@ let prove engine (precision : precision) pair_limit deadline survey_limit =
               example_tokens = List.rev (trail node);
               example_site = describe_site (accepting_site node);
             },
+            (if trace then describe_forward node else []),
             candidate_refinements node )
     | None ->
         if !overflow then Pair_overflow explored
@@ -2324,6 +2613,7 @@ let prove_level = ref 0
 let survey_limit = ref 0
 let refine_max = ref 0
 let refine_rounds = ref 12
+let trace_forward = ref false
 let dump_classes = ref false
 
 type memory_limits = {
@@ -2404,6 +2694,11 @@ let options =
     ( "--prove-refine-rounds",
       Arg.Set_int refine_rounds,
       "N give up after N refinement rounds (default 12)" );
+    ( "--prove-trace",
+      Arg.Set trace_forward,
+      " with --prove, follow the reported candidate from its divergence site \
+       down to acceptance, naming every step where either side needed the \
+       abstraction to guess a goto" );
     ( "--prove-survey",
       Arg.Set_int survey_limit,
       "N with --prove, do not stop at the first divergence: walk the whole \
@@ -2470,6 +2765,12 @@ let main () =
     invalid_arg "--prove-refine cannot be combined with --prove-survey";
   if !refine_rounds < 1 then
     invalid_arg "--prove-refine-rounds must be at least 1";
+  if !trace_forward && !prove_level <= 0 then
+    invalid_arg "--prove-trace requires --prove";
+  (* A survey never reports a single candidate, so there is no path to follow;
+     it walks the whole abstract space and prints sites instead. *)
+  if !trace_forward && !survey_limit > 0 then
+    invalid_arg "--prove-trace cannot be combined with --prove-survey";
   let search_limits =
     if !check_tokens <> [] || !dump_classes then None
     else
@@ -2609,13 +2910,22 @@ let main () =
         let deadline = Unix.gettimeofday () +. timeout in
         let rounds = ref 0 in
         let stalled = ref None in
+        (* A request for more depth than --prove-refine allows is clamped to the
+           ceiling rather than skipped, so refinement still makes what progress
+           it can. Clamping silently is what made the ceiling invisible: a
+           candidate could need a retained stack of 11, be asked for 9 every
+           round, and survive without a single line of output saying the
+           requirement had been cut down. The deepest request is kept so the
+           report can name the number to raise the ceiling to. *)
+        let capped : (int, int) Hashtbl.t = Hashtbl.create 16 in
         let rec attempt () =
           let result =
             prove engine precision prove_limits.max_frontiers deadline
-              !survey_limit
+              !survey_limit !trace_forward
           in
           match result with
-          | Abstract_candidate (tokens, _, _, requests) when !refine_max > 0 ->
+          | Abstract_candidate (tokens, _, _, _, requests) when !refine_max > 0
+            ->
               (* What the chain asks for is the depth that would make each of
                  its guessed gotos exact. That is the right first request and
                  not always a sufficient one: a reduction consumes the entries
@@ -2627,6 +2937,13 @@ let main () =
                  the caller set rather than stalling well below it - and makes
                  a candidate that survives all the way to that ceiling mean
                  what --prove-refine says it means. *)
+              List.iter
+                (fun (state, depth) ->
+                  if depth > !refine_max then
+                    match Hashtbl.find_opt capped state with
+                    | Some existing when existing >= depth -> ()
+                    | _ -> Hashtbl.replace capped state depth)
+                requests;
               let wanted depth_of =
                 List.filter_map
                   (fun request ->
@@ -2681,6 +2998,22 @@ let main () =
               end
           | result -> result
         in
+        let capped_summary () =
+          if Hashtbl.length capped = 0 then None
+          else
+            let deepest_state, deepest_depth =
+              Hashtbl.fold
+                (fun state depth ((_, best) as previous) ->
+                  if depth > best then (state, depth) else previous)
+                capped (-1, 0)
+            in
+            Some
+              (Printf.sprintf
+                 "%d state(s) asked for a deeper stack than --prove-refine %d \
+                  allows and were cut down to it; the deepest is state %d, \
+                  which is exact from %d."
+                 (Hashtbl.length capped) !refine_max deepest_state deepest_depth)
+        in
         let precision_summary () =
           let deepest = Array.fold_left max 0 precision in
           let deepened =
@@ -2692,6 +3025,19 @@ let main () =
             "%d refinement round(s); %d of %d state(s) deepened past level \
              %d, to a retained stack of %d at the deepest."
             !rounds deepened (Array.length precision) !prove_level deepest
+        in
+        (* Refinement's own state, for the outcomes that are not a verdict about
+           the grammar. A run that deepened the abstraction and then ran out of
+           pairs or clock is a different situation from one that never refined,
+           and the ceiling may be part of why: reporting neither leaves the
+           reader to guess whether raising --prove-refine would have helped or
+           was already the thing making the run expensive. *)
+        let report_refinement () =
+          if !rounds > 0 then
+            Printf.printf "Refinement reached: %s\n" (precision_summary ());
+          Option.iter
+            (fun summary -> Printf.printf "Refinement was capped: %s\n" summary)
+            (capped_summary ())
         in
         match attempt () with
         | Proven pairs ->
@@ -2743,6 +3089,7 @@ let main () =
                abstraction level %d. Raise AMBIGUITY_MEMORY_MB or \
                AMBIGUITY_MAX_FRONTIER_RATIO, or lower --prove.\n"
               pairs !prove_level;
+            report_refinement ();
             exit not_proven_status
         | Prove_timeout pairs ->
             Printf.printf
@@ -2750,8 +3097,9 @@ let main () =
                phase at level %d, after %d pairs. Raise --timeout, or lower \
                --prove.\n"
               timeout !prove_level pairs;
+            report_refinement ();
             exit not_proven_status
-        | Abstract_candidate (tokens, pairs, example, _) ->
+        | Abstract_candidate (tokens, pairs, example, forward, _) ->
             Printf.printf
               "Abstract ambiguity candidate at level %d after %d pairs \
                (possibly spurious): %s\n"
@@ -2764,6 +3112,7 @@ let main () =
             List.iter
               (fun line -> Printf.printf "  %s\n" line)
               example.example_site;
+            List.iter (fun line -> Printf.printf "  %s\n" line) forward;
             (* Why refinement gave up is the part worth reading. A candidate
                that outlived an abstraction made exact along its own path is
                evidence of a real ambiguity, and reads very differently from
@@ -2774,6 +3123,11 @@ let main () =
                   !rounds reason;
                 Printf.printf "Refinement reached: %s\n" (precision_summary ()))
               !stalled;
+            (* Printed whether or not refinement stalled, because it is the one
+               line that says the ceiling itself was the constraint. *)
+            Option.iter
+              (fun summary -> Printf.printf "Refinement was capped: %s\n" summary)
+              (capped_summary ());
             Printf.printf
               "Attempting to concretize with the bounded search...\n\n"
       end;

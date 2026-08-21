@@ -475,6 +475,7 @@ def engine_arguments(
     survey: int = 0,
     refine: int = 0,
     refine_rounds: int = 0,
+    trace: bool = False,
 ) -> list[str]:
     arguments: list[str] = []
     for setting in SETTINGS:
@@ -491,6 +492,8 @@ def engine_arguments(
         arguments.extend(["--prove-refine", str(refine)])
         if refine_rounds > 0:
             arguments.extend(["--prove-refine-rounds", str(refine_rounds)])
+    if trace:
+        arguments.append("--prove-trace")
     return arguments
 
 
@@ -600,6 +603,14 @@ def parser() -> argparse.ArgumentParser:
             "treat a candidate as a reason to sharpen the abstraction rather "
             "than as an answer: deepen the retained stack behind it, up to K "
             "states, and try again"
+        ),
+    )
+    prove.add_argument(
+        "--trace",
+        action="store_true",
+        help=(
+            "follow the reported candidate from its divergence site down to "
+            "acceptance, naming every step where a side had to guess a goto"
         ),
     )
     prove.add_argument(
@@ -757,8 +768,13 @@ def main(argv: Sequence[str] | None = None) -> int:
             raise ConfigurationError("--refine must be at least the proof level")
         if refine > 0 and survey > 0:
             raise ConfigurationError("--refine cannot be combined with --survey")
+        trace = getattr(arguments, "trace", False)
+        # A survey reports every site rather than one candidate, so there is no
+        # single path for a trace to follow.
+        if trace and survey > 0:
+            raise ConfigurationError("--trace cannot be combined with --survey")
         engine_args = engine_arguments(
-            profile, proof_level, survey, refine, refine_rounds
+            profile, proof_level, survey, refine, refine_rounds, trace
         )
         if arguments.dry_run:
             print(summary)

@@ -240,14 +240,53 @@ the state is triaged into one of these categories.
   possible predecessor instead of giving up, with a bounded fan-out — was tried
   and is **not** in the tool. On the current grammar it cost 26% more abstract
   pairs (60,423 to 76,143), and 75% more on the palindrome, without changing a
-  verdict or removing a candidate. The reason is worth recording, because it
-  corrects the obvious diagnosis: the candidate that survives refinement,
-  `& ( Foo ) [ ] ;`, stalls at a site whose own conflict is already exact — an
-  empty `list_verb_type_suffix_` reduction against a shift, neither of them
-  tagged — so the pair is not being kept alive by a guessed goto at all.
-  Whatever admits it lies on the forward walk from that site, which none of the
-  current diagnostics show. Deepening the stack, by any means, is the wrong
-  lever for it.
+  verdict or removing a candidate. That much still holds.
+
+  The reading attached to it did not. The candidate that survives refinement,
+  `& ( Foo ) [ ] ;`, stalls at a site whose two *competing* moves are both
+  untagged — an empty `list_verb_type_suffix_` reduction against a shift — and
+  that was taken to mean the pair was not being kept alive by a guessed goto at
+  all, so that stack depth could not be the lever. `--trace` showed otherwise on
+  its first run: the very first step of the walk guesses, at a state exact only
+  from a retained stack of six. `conflict at stack …` prints the two moves in
+  conflict, not the rest of the reduction chain they sit in, so untagged moves
+  there say nothing about whether the step guessed. Read a localized conflict
+  as evidence about precision and this is the mistake it invites.
+
+  `--trace` follows a reported candidate from its divergence site down to
+  acceptance. Every other diagnostic here reports where a divergence was
+  *born*, which explains a candidate only when the site is also the reason it
+  survived. When the site's own conflict is exact — two moves a real sentence
+  could both begin with — the pair is admitted by both sides walking on to
+  acceptance, and the step that should have killed one of them is somewhere
+  along that walk, which nothing else shows.
+
+  Each step names the token, the abstract stacks, and either `[exact]` or the
+  states where a side had to guess a goto, with the retained depth that would
+  have made it exact. That last number is the useful one: it is a refinement
+  request the loop may not have been able to honour: a request past `--refine K`
+  is clamped to `K` so the round still makes what progress it can, and the run
+  now says so — `Refinement was capped: … the deepest is state N, which is
+  exact from D` names the depth to raise the ceiling to. Before that line
+  existed the clamp was silent, and a candidate could need a retained stack of
+  11, be asked for 9 every round, and survive with nothing in the output
+  saying the ceiling was the constraint.
+  Reading a localized conflict that way is the trap this option exists to
+  close: `conflict at stack …` prints the two *competing* moves, not the rest
+  of the reduction chain they sit in, so untagged moves there do not mean the
+  step guessed nothing.
+
+  The walk replays the step the way the proof's own joint walk takes it, both
+  sides in lockstep under the same pairing rules, and keeps only the joint nodes
+  that can still reach the outcome the recorded child carries. A reduction is
+  reported when it fires on an edge between two such nodes — taken on a path
+  that demonstrably ends where this pair ended. Scanning each side's chains
+  separately, or asking only whether a chain can reach one of the child's
+  stacks, would report guesses from branches the pair never entered, and a trace
+  that names the wrong state to sharpen is worse than none. Guesses carry no
+  side attribution, because a pair is stored with its two sides ordered and
+  which one became which is not recoverable; labelling them would be a guess
+  about a guess.
 
   `--survey N` answers a different question from a proof. The proof stops at
   the first divergence it can reach, which says nothing about how many more lie
