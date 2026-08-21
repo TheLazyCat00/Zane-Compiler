@@ -175,7 +175,19 @@ the state is triaged into one of these categories.
   every step past the suffix, which is the precision a deeper stack buys back,
   and it is empty exactly where the suffix reaches the bottom of the stack:
   nothing sits below the initial state, so a reduction that would pop past it is
-  not a move any parse can make. **Its budget** is
+  not a move any parse can make.
+
+  A reduction that pops past the retained stack also has to *rebuild* it, as a
+  goto target sitting on one of those guessed sources — two entries, with
+  nothing underneath. That two used to be a constant, independent of the
+  retained depth, so one imprecise reduction reset the stack for the rest of the
+  run and every reduction after it popped into the unknown immediately, however
+  much depth had been paid for. Where the automaton determines what sits below —
+  exactly one state has a transition into the source, which holds for 744 of the
+  current grammar's 919 reachable states — that context is recovered by walking
+  those forced predecessors downward, so a rebuilt stack reaches the retained
+  depth like any other. It stops at the first entry with more than one possible
+  predecessor, and at the bottom of the stack. **Its budget** is
   the abstract pair limit, derived from `AMBIGUITY_MEMORY_MB` and
   `AMBIGUITY_MAX_FRONTIER_RATIO`. The abstract phase is a single sequential
   search, so the budget is derived for one worker and `AMBIGUITY_JOBS` does not
@@ -223,6 +235,19 @@ the state is triaged into one of these categories.
   fraction of the cost. When refinement gives up it says why, and prints the
   surviving candidate's site in the same form a survey uses, so a stall can be
   read rather than guessed at.
+
+  Splitting the rebuild at that stopping point — producing one stack per
+  possible predecessor instead of giving up, with a bounded fan-out — was tried
+  and is **not** in the tool. On the current grammar it cost 26% more abstract
+  pairs (60,423 to 76,143), and 75% more on the palindrome, without changing a
+  verdict or removing a candidate. The reason is worth recording, because it
+  corrects the obvious diagnosis: the candidate that survives refinement,
+  `& ( Foo ) [ ] ;`, stalls at a site whose own conflict is already exact — an
+  empty `list_verb_type_suffix_` reduction against a shift, neither of them
+  tagged — so the pair is not being kept alive by a guessed goto at all.
+  Whatever admits it lies on the forward walk from that site, which none of the
+  current diagnostics show. Deepening the stack, by any means, is the wrong
+  lever for it.
 
   `--survey N` answers a different question from a proof. The proof stops at
   the first divergence it can reach, which says nothing about how many more lie
