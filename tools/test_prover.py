@@ -79,6 +79,19 @@ REFINEMENT_ROUND_LINE = re.compile(
 REFINEMENT_STOPPED_LINE = re.compile(
     r"^Refinement stopped after (\d+) round\(s\): (.+)\.$", re.MULTILINE
 )
+# The forward walk from a candidate's divergence site down to acceptance. Each
+# step names the token, the stacks, and either "[exact]" or the states where a
+# side had to guess a goto -- which is the whole point of the walk, so a step
+# saying neither would be a step that explains nothing.
+FORWARD_HEADER = re.compile(
+    r"^  forward from the site, to acceptance:$", re.MULTILINE
+)
+FORWARD_STEP = re.compile(
+    r"^ *(\d+)\. on (\S+) +(?:stack|left) ", re.MULTILINE
+)
+FORWARD_GUESS = re.compile(
+    r"^ +(?:left |right )?guessed at state \d+ \(exact from \d+\)$"
+)
 REFINEMENT_DEEPEST = re.compile(
     r"to a retained stack of (\d+) at the deepest\.", re.MULTILINE
 )
@@ -480,6 +493,77 @@ class RefinementTests(ProverTestCase):
                 "with --prove-survey",
                 1,
                 ("--prove-refine", "4", "--prove-survey", "1"),
+            ),
+        ):
+            with self.subTest(combination=name):
+                status, output = self.prove(
+                    LR1_LIST, level, extra=extra, expect_verdict=False
+                )
+                self.assertNotIn(status, VERDICT_STATUSES)
+                self.assertNotRegex(output, PROVEN_LINE)
+
+
+class ForwardTraceTests(ProverTestCase):
+    """`--prove-trace` reports what happened after two parses parted ways.
+
+    Every other diagnostic reports where a divergence was *born*, which
+    explains a candidate only when the site is also the reason it survived.
+    When the site's own conflict is exact -- two moves a real sentence could
+    both begin with -- the pair is admitted by both sides walking on to
+    acceptance, and the step that should have killed one of them is somewhere
+    along that walk. Nothing else in the tool shows it.
+    """
+
+    def test_a_trace_is_absent_unless_requested(self) -> None:
+        _, output = self.prove(AMBIGUOUS_EXPRESSION, 2)
+        self.assertNotRegex(output, FORWARD_HEADER)
+
+    def test_a_trace_follows_the_candidate_to_acceptance(self) -> None:
+        # The walk has to end where the pair was counted: at end of input. That
+        # step is not one of the recorded edges -- the pair reaches acceptance
+        # under the sentinel, which the search takes separately -- so leaving it
+        # off is the easy way for this to stop short of the thing it explains.
+        _, output = self.prove(
+            AMBIGUOUS_EXPRESSION, 2, extra=("--prove-trace",)
+        )
+        self.assertRegex(output, FORWARD_HEADER)
+        steps = FORWARD_STEP.findall(output)
+        self.assertGreaterEqual(len(steps), 2, output)
+        self.assertEqual(steps[-1][1], "#", output)
+        # Numbered consecutively from one, so a dropped step is visible rather
+        # than silently shortening the walk.
+        self.assertEqual(
+            [number for number, _ in steps],
+            [str(index + 1) for index in range(len(steps))],
+            output,
+        )
+
+    def test_every_step_says_whether_it_guessed(self) -> None:
+        # A step that reports neither "[exact]" nor a guessed state explains
+        # nothing, and this walk exists to answer exactly that question at
+        # every step. Checked structurally rather than by counting, so a step
+        # that loses its annotation fails here.
+        _, output = self.prove(
+            AMBIGUOUS_EXPRESSION, 2, extra=("--prove-trace",)
+        )
+        lines = output.splitlines()
+        starts = [
+            index for index, line in enumerate(lines) if FORWARD_STEP.match(line)
+        ]
+        self.assertGreaterEqual(len(starts), 2, output)
+        for index in starts:
+            if lines[index].endswith("[exact]"):
+                continue
+            self.assertLess(index + 1, len(lines), output)
+            self.assertRegex(lines[index + 1], FORWARD_GUESS, output)
+
+    def test_rejected_combinations_do_not_run(self) -> None:
+        for name, level, extra in (
+            ("without --prove", 0, ("--prove-trace",)),
+            (
+                "with --prove-survey",
+                1,
+                ("--prove-trace", "--prove-survey", "1"),
             ),
         ):
             with self.subTest(combination=name):

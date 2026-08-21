@@ -249,6 +249,28 @@ the state is triaged into one of these categories.
   current diagnostics show. Deepening the stack, by any means, is the wrong
   lever for it.
 
+  `--trace` follows a reported candidate from its divergence site down to
+  acceptance. Every other diagnostic here reports where a divergence was
+  *born*, which explains a candidate only when the site is also the reason it
+  survived. When the site's own conflict is exact — two moves a real sentence
+  could both begin with — the pair is admitted by both sides walking on to
+  acceptance, and the step that should have killed one of them is somewhere
+  along that walk, which nothing else shows.
+
+  Each step names the token, the abstract stacks, and either `[exact]` or the
+  states where a side had to guess a goto, with the retained depth that would
+  have made it exact. That last number is the useful one: it is a refinement
+  request the loop may never have been able to honour, because a request past
+  `--refine K` is clamped to `K` rather than reported, so the depth a candidate
+  actually needs is otherwise invisible. On the current grammar the surviving
+  candidate's walk asks for depth 11 at one state while every run so far
+  capped at 9 — a requirement no other output named, and the reason the
+  conflict-localization line was misread as meaning depth could not help.
+  Reading a localized conflict that way is the trap this option exists to
+  close: `conflict at stack …` prints the two *competing* moves, not the rest
+  of the reduction chain they sit in, so untagged moves there do not mean the
+  step guessed nothing.
+
   `--survey N` answers a different question from a proof. The proof stops at
   the first divergence it can reach, which says nothing about how many more lie
   behind it — and that count is what decides whether sharpening the abstraction

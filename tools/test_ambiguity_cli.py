@@ -479,6 +479,13 @@ class SurveyFlagTests(unittest.TestCase):
             arguments[arguments.index("--prove-refine-rounds") + 1], "4"
         )
 
+    def test_a_trace_only_travels_when_asked(self) -> None:
+        self.assertNotIn("--prove-trace", ambiguity.engine_arguments(self.profile(), 3))
+        self.assertIn(
+            "--prove-trace",
+            ambiguity.engine_arguments(self.profile(), 3, trace=True),
+        )
+
     def test_the_wrapper_rejects_its_own_invalid_refinements(self) -> None:
         # The wrapper repeats two checks the engine also makes, so that the
         # message names the option the caller typed rather than the engine's
@@ -488,6 +495,7 @@ class SurveyFlagTests(unittest.TestCase):
             ("below the proof level", ["prove", "4", "--refine", "2"]),
             ("with a survey", ["prove", "1", "--refine", "4", "--survey", "1"]),
             ("rounds without refinement", ["prove", "1", "--refine-rounds", "4"]),
+            ("trace with a survey", ["prove", "1", "--trace", "--survey", "1"]),
         ):
             with self.subTest(combination=name):
                 with self.assertRaises(SystemExit):
