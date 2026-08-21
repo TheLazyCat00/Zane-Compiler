@@ -849,20 +849,17 @@ let below_steps preds =
    grows, and it can only grow to the depth first requested, so the walk
    terminates on any automaton. *)
 let deepen (precision : precision) preds state depth =
-  let changed = ref false in
   let queue = Queue.create () in
   Queue.add (state, depth) queue;
   while not (Queue.is_empty queue) do
     let state, depth = Queue.take queue in
     if depth > precision.(state) then begin
       precision.(state) <- depth;
-      changed := true;
       if depth > 1 then
         IntSet.iter (fun source -> Queue.add (source, depth - 1) queue)
           preds.(state)
     end
-  done;
-  !changed
+  done
 
 let rec last_state = function
   | [] -> invalid_arg "last_state: empty suffix"
@@ -1343,7 +1340,8 @@ let prove engine (precision : precision) pair_limit deadline survey_limit =
           (match width with
           | Some width when width > depth ->
               Printf.sprintf
-                " [pops past the retained stack: goto limited to states %d                  below its deepest]"
+                " [pops past the retained stack: goto limited to states %d \
+                 below its deepest]"
                 (width - depth + 1)
           | Some width when width = depth ->
               " [pops the retained stack exactly: goto limited to predecessors]"
@@ -2356,7 +2354,8 @@ let options =
       Arg.Set_int refine_max,
       "K with --prove, treat a candidate as a reason to sharpen the \
        abstraction rather than as an answer: deepen the retained stack along \
-       the candidate's own chain, up to K states, and try again (0 disables)" );
+       the candidate's own chain to a depth of at most K, and try again \
+       (0 disables)" );
     ( "--prove-refine-rounds",
       Arg.Set_int refine_rounds,
       "N give up after N refinement rounds (default 12)" );
@@ -2593,16 +2592,15 @@ let main () =
                   requests
               in
               let exact = wanted snd in
+              (* [wanted] keeps only requests for more than a state already
+                 retains, so an empty list is exactly the case where deepening
+                 would change nothing. Asking that question without performing
+                 the deepening is what lets the round limit be checked first:
+                 refining for a round that will not run would leave the report
+                 describing a precision no proof was ever run at. *)
               let deeper =
                 if exact <> [] then exact
                 else wanted (fun (state, _) -> precision.(state) + 1)
-              in
-              let changed =
-                List.fold_left
-                  (fun changed (state, depth) ->
-                    let moved = deepen precision preds state depth in
-                    moved || changed)
-                  false deeper
               in
               let stop reason =
                 stalled := Some reason;
@@ -2612,7 +2610,7 @@ let main () =
                 stop
                   "the candidate's chain never needed the abstraction to \
                    invent a goto, so no retained stack rules it out"
-              else if not changed then
+              else if deeper = [] then
                 stop
                   (Printf.sprintf
                      "the candidate survives every stack --prove-refine %d \
@@ -2623,6 +2621,9 @@ let main () =
                   (Printf.sprintf "the round limit (%d) was reached"
                      !refine_rounds)
               else begin
+                List.iter
+                  (fun (state, depth) -> deepen precision preds state depth)
+                  deeper;
                 incr rounds;
                 Printf.printf
                   "Refinement round %d: deepened the stacks behind %s, \

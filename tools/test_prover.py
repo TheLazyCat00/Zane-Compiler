@@ -60,12 +60,19 @@ SITE_STACK_LINE = re.compile(
 # the stack it actually fires from.
 SITE_CONFLICT_LINE = re.compile(r"^     conflict at stack (\d+( \d+)*)?:$", re.MULTILINE)
 SITE_MOVE_LINE = re.compile(r"^       (reduce |shift to |accept)", re.MULTILINE)
+# Matched whole rather than by prefix: the annotation is assembled from a
+# multi-line OCaml literal, where a continuation written without its backslash
+# silently bakes the source indentation into the rendered text.
+PAST_STACK_TAG = re.compile(
+    r"\[pops past the retained stack: goto limited to states \d+ "
+    r"below its deepest\]"
+)
 
 # Refinement reports one line per round, then why it stopped. The round line
 # carries the candidate that provoked it, which is what makes a widening
 # counterexample visible round by round.
 REFINEMENT_ROUND_LINE = re.compile(
-    r"^Refinement round (\d+): deepened the stacks behind (.+), "
+    r"^Refinement round (\d+): deepened the stacks behind (.*), "
     r"retaining up to (\d+)\.$",
     re.MULTILINE,
 )
@@ -436,36 +443,21 @@ class RefinementTests(ProverTestCase):
         # without a proof, refining shallower than the level it starts from, or
         # refining a survey, which walks the whole space and so never produces
         # the single candidate a refinement steers by.
-        for name, arguments in (
-            ("without --prove", ("--prove", "0", "--prove-refine", "4")),
-            ("below --prove", ("--prove", "4", "--prove-refine", "2")),
+        for name, level, extra in (
+            ("without --prove", 0, ("--prove-refine", "4")),
+            ("below --prove", 4, ("--prove-refine", "2")),
             (
                 "with --prove-survey",
-                ("--prove", "1", "--prove-refine", "4", "--prove-survey", "1"),
+                1,
+                ("--prove-refine", "4", "--prove-survey", "1"),
             ),
         ):
             with self.subTest(combination=name):
-                path = self.directory / "grammar.mly"
-                path.write_text(LR1_LIST, encoding="utf-8")
-                result = subprocess.run(
-                    [
-                        str(ENGINE),
-                        *arguments,
-                        "--max-tokens",
-                        "8",
-                        "--timeout",
-                        "30",
-                        "--max-witnesses",
-                        "5",
-                        str(path),
-                    ],
-                    env=self.environment,
-                    text=True,
-                    capture_output=True,
-                    timeout=180,
+                status, output = self.prove(
+                    LR1_LIST, level, extra=extra, expect_verdict=False
                 )
-                self.assertNotIn(result.returncode, VERDICT_STATUSES)
-                self.assertNotRegex(result.stdout, PROVEN_LINE)
+                self.assertNotIn(status, VERDICT_STATUSES)
+                self.assertNotRegex(output, PROVEN_LINE)
 
 
 class ProofStatusTests(ProverTestCase):
@@ -745,7 +737,7 @@ class SurveyTests(ProverTestCase):
         # one-state stack.
         lines = self.conflict_moves(WIDE_REDUCE_REDUCE, 1)
         self.assertTrue(
-            any("pops past the retained stack" in line for line in lines),
+            any(PAST_STACK_TAG.search(line) for line in lines),
             "\n".join(lines),
         )
 

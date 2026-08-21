@@ -746,6 +746,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             raise ConfigurationError("--refine must be non-negative")
         if refine_rounds < 0:
             raise ConfigurationError("--refine-rounds must be non-negative")
+        # Without --refine there is no loop for a round limit to bound, and the
+        # engine never sees the option, so accepting it would run exactly as if
+        # it had not been typed.
+        if refine_rounds > 0 and refine == 0:
+            raise ConfigurationError("--refine-rounds requires --refine")
         # Caught here rather than left to the engine so the message names the
         # option the caller actually typed.
         if refine > 0 and proof_level is not None and refine < proof_level:

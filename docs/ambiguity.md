@@ -188,10 +188,12 @@ the state is triaged into one of these categories.
   grammar this size the level that would close one blind spot is the level that
   makes the proof too expensive to run: level 2 takes about ten minutes and
   level 3 does not finish. Refinement instead deepens the retained stack only
-  behind the candidate that needed it shallow, and tries again, up to `K` states
-  and `--refine-rounds` attempts. Because the retained depth is a property of
-  the state on top rather than of the run, deepening one blind spot leaves the
-  rest of the automaton at the base level.
+  behind the candidate that needed it shallow, and tries again. `K` is a
+  retained stack depth, the same quantity the proof level sets, and bounds how
+  deep refinement may go; `--refine-rounds` bounds how many attempts it makes.
+  Because the retained depth is a property of the state on top rather than of
+  the run, deepening one blind spot leaves the rest of the automaton at the
+  base level.
 
   Asking for depth at the blind spot alone would change nothing, since the
   context was already discarded upstream: a stack can only arrive somewhere
@@ -199,8 +201,9 @@ the state is triaged into one of these categories.
   `D - 1`. Refinement therefore walks backwards through the predecessor
   relation, shrinking the request by one at each step. That backward cone is
   the whole cost, and how much of the automaton it reaches is a property of the
-  grammar — on the current grammar, refining to nine states touches about two
-  thirds of them and still finishes, where a uniform level 3 does not.
+  grammar — on the current grammar, refining to a retained depth of nine
+  deepens about two thirds of the automaton's states and still finishes, where
+  a uniform level 3 does not.
 
   Refining cannot produce a false proof. Every depth assignment
   over-approximates, because truncation is the only thing that ever shortens a
