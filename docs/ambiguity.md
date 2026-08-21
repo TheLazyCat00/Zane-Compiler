@@ -276,6 +276,18 @@ the state is triaged into one of these categories.
   of the reduction chain they sit in, so untagged moves there do not mean the
   step guessed nothing.
 
+  The walk replays the step the way the proof's own joint walk takes it, both
+  sides in lockstep under the same pairing rules, and keeps only the joint nodes
+  that can still reach the outcome the recorded child carries. A reduction is
+  reported when it fires on an edge between two such nodes — taken on a path
+  that demonstrably ends where this pair ended. Scanning each side's chains
+  separately, or asking only whether a chain can reach one of the child's
+  stacks, would report guesses from branches the pair never entered, and a trace
+  that names the wrong state to sharpen is worse than none. Guesses carry no
+  side attribution, because a pair is stored with its two sides ordered and
+  which one became which is not recoverable; labelling them would be a guess
+  about a guess.
+
   `--survey N` answers a different question from a proof. The proof stops at
   the first divergence it can reach, which says nothing about how many more lie
   behind it — and that count is what decides whether sharpening the abstraction

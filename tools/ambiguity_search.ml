@@ -1169,112 +1169,185 @@ let chain_imprecision automaton moves suffix token =
   done;
   !requests
 
-(* The same question as [chain_imprecision], asked of one recorded step instead
-   of every chain leaving a stack.
+(* The imprecise reductions on the joint step a recorded edge actually took.
 
-   [chain_imprecision] explores every reduction chain a stack admits, which is
-   what refinement wants: deepening a state the candidate might not have gone
-   through costs precision it did not need, never a wrong verdict. A trace
-   cannot be read that way. It claims to say what happened on the path this pair
-   actually took, and a guess reported from a branch the pair never entered
-   names the wrong state to sharpen - a reader following it refines somewhere
-   that was never on the path.
+   [chain_imprecision] explores every chain leaving one stack, which is what
+   refinement wants: deepening a state the candidate did not go through costs
+   precision it did not need, never a wrong verdict. A trace cannot be read that
+   way, because it claims to say what happened on this pair's path, and a guess
+   from a branch the pair never entered names the wrong state to sharpen.
 
-   So this keeps only the chains that reach [targets], the stacks the recorded
-   child pair carries. A reduction is reported when it is imprecise *and* its
-   own result still leads to one of them; anything that can only end elsewhere
-   belongs to a branch the search explored and this pair did not take. Both
-   child stacks are accepted because [push] canonicalises a pair by ordering
-   its two sides, so which one a given side became is not recoverable from the
-   node alone.
+   Filtering each side on its own by "can this chain reach one of the recorded
+   child's stacks" is not enough either. It is a reachability test, so a chain
+   that reaches the right stack for the wrong reason still passes, and it says
+   nothing about whether the two sides' chains were taken *together* - which is
+   the only sense in which a joint step has a provenance at all.
 
-   [None] means any termination counts, which is what the closing step needs:
-   acceptance under the end-of-input sentinel has no recorded child to match. *)
-let chain_imprecision_reaching automaton moves suffix token targets =
+   So this replays the step the way [joint_outcomes] walks it, keeping both
+   sides in lockstep and with the same pairing rules, and marks the joint nodes
+   that can still reach an outcome matching the recorded child. A reduction is
+   reported only when it fires on an edge between two marked nodes: taken on a
+   path that demonstrably ends where this pair ended. Any deviation from
+   [joint_outcomes]'s rules here would replay a different graph from the one the
+   search walked, so the pairing logic is deliberately identical.
+
+   The child is matched as an unordered pair, because [push] canonicalises by
+   ordering the two sides and which side became which is not recoverable. That
+   is the one place this stays an approximation: a step whose two sides ended on
+   the same pair of stacks in the opposite arrangement is indistinguishable from
+   the recorded one. It cannot admit a chain that ends somewhere else. *)
+let joint_imprecision automaton moves pair token target =
+  let matches (left, right) =
+    match target with
+    | None -> true
+    | Some (child_left, child_right) ->
+        (left = child_left && right = child_right)
+        || (left = child_right && right = child_left)
+  in
+  let width_of stack prod =
+    match stack with
+    | [] -> None
+    | top :: _ ->
+        Option.map
+          (fun reduction -> reduction.width)
+          (List.find_opt
+             (fun reduction -> reduction.prod = prod)
+             (reductions automaton.states.(top) token))
+  in
+  (* A move is imprecise exactly where [side_moves] had to guess: the reduction
+     reaches or passes the depth the stack retains. *)
+  let imprecision stack move =
+    match move with
+    | Terminate _ -> None
+    | Reduce (prod, _) -> (
+        match width_of stack prod with
+        | Some width when width >= List.length stack ->
+            Some (List.hd stack, width + 1)
+        | _ -> None)
+  in
   let successors = Hashtbl.create 64 in
   let reaches = Hashtbl.create 64 in
   let visited = ref [] in
   let seen = Hashtbl.create 64 in
   let queue = Queue.create () in
   let visits = ref 0 in
-  let push stack =
-    if not (Hashtbl.mem seen stack) then begin
-      Hashtbl.add seen stack ();
-      Queue.add stack queue
+  let push node =
+    if not (Hashtbl.mem seen node) then begin
+      Hashtbl.add seen node ();
+      Queue.add node queue
     end
   in
-  let lands stack =
-    match targets with None -> true | Some targets -> List.mem stack targets
+  let record source target_node found =
+    Hashtbl.replace successors source
+      ((target_node, found)
+      :: Option.value (Hashtbl.find_opt successors source) ~default:[]);
+    push target_node
   in
-  push suffix;
+  let start = (Running (fst pair), Running (snd pair), false) in
+  push start;
   while (not (Queue.is_empty queue)) && !visits < 4096 do
     incr visits;
-    let current = Queue.take queue in
+    let ((left, right, diverged) as current) = Queue.take queue in
     visited := current :: !visited;
-    let available = moves current token in
-    let onward =
-      List.filter_map
-        (function Reduce (_, next) -> Some next | Terminate _ -> None)
-        available
-    in
-    Hashtbl.replace successors current onward;
-    if
-      List.exists
-        (function Terminate landed -> lands landed | Reduce _ -> false)
-        available
-    then Hashtbl.replace reaches current ();
-    List.iter push onward
+    match (left, right) with
+    | Finished result_left, Finished result_right ->
+        if matches (result_left, result_right) then
+          Hashtbl.replace reaches current ()
+    | Running suffix_left, Running suffix_right ->
+        let paired move_left move_right =
+          let found =
+            List.filter_map
+              (fun (stack, move) -> imprecision stack move)
+              [ (suffix_left, move_left); (suffix_right, move_right) ]
+          in
+          match (move_left, move_right) with
+          | Reduce (p, l), Reduce (q, r) ->
+              Some ((Running l, Running r, diverged || p <> q), found)
+          | Reduce (_, l), Terminate r -> Some ((Running l, Finished r, true), found)
+          | Terminate l, Reduce (_, r) -> Some ((Finished l, Running r, true), found)
+          | Terminate l, Terminate r ->
+              Some ((Finished l, Finished r, diverged), found)
+        in
+        if (not diverged) && suffix_left = suffix_right then
+          let all = moves suffix_left token in
+          List.iter
+            (fun move_left ->
+              List.iter
+                (fun move_right ->
+                  let compatible =
+                    match (move_left, move_right) with
+                    | Reduce (p, _), Reduce (q, _) -> p <> q
+                    | Reduce _, Terminate _ | Terminate _, Reduce _ -> true
+                    | Terminate _, Terminate _ -> false
+                  in
+                  if move_left == move_right || compatible then
+                    Option.iter
+                      (fun (next, found) -> record current next found)
+                      (paired move_left move_right))
+                all)
+            all
+        else
+          let moves_left = moves suffix_left token in
+          let moves_right = moves suffix_right token in
+          List.iter
+            (fun move_left ->
+              List.iter
+                (fun move_right ->
+                  Option.iter
+                    (fun (next, found) -> record current next found)
+                    (paired move_left move_right))
+                moves_right)
+            moves_left
+    | Running suffix_left, Finished _ ->
+        List.iter
+          (fun move ->
+            let found =
+              Option.to_list (imprecision suffix_left move)
+            in
+            match move with
+            | Reduce (_, l) -> record current (Running l, right, diverged) found
+            | Terminate l -> record current (Finished l, right, diverged) found)
+          (moves suffix_left token)
+    | Finished _, Running suffix_right ->
+        List.iter
+          (fun move ->
+            let found =
+              Option.to_list (imprecision suffix_right move)
+            in
+            match move with
+            | Reduce (_, r) -> record current (left, Running r, diverged) found
+            | Terminate r -> record current (left, Finished r, diverged) found)
+          (moves suffix_right token)
   done;
-  (* A stack is on a path to the recorded child when it lands there itself or
-     some reduction from it does. The chain graph can cycle, so this is a
-     fixpoint rather than one backward sweep. *)
+  (* Backward from the matching outcomes: a node is on a path to the recorded
+     child when one of its edges leads to a node that is. The joint graph can
+     cycle, so this is a fixpoint rather than one sweep. *)
   let changed = ref true in
   while !changed do
     changed := false;
     List.iter
-      (fun stack ->
-        if not (Hashtbl.mem reaches stack) then
+      (fun node ->
+        if not (Hashtbl.mem reaches node) then
           if
             List.exists
-              (fun next -> Hashtbl.mem reaches next)
-              (Option.value (Hashtbl.find_opt successors stack) ~default:[])
+              (fun (next, _) -> Hashtbl.mem reaches next)
+              (Option.value (Hashtbl.find_opt successors node) ~default:[])
           then begin
-            Hashtbl.replace reaches stack ();
+            Hashtbl.replace reaches node ();
             changed := true
           end)
       !visited
   done;
-  (* One entry per imprecise reduction, not per goto edge it was allowed to take.
-     A reduction popping into the unknown yields a separate move for every
-     admissible source, and reporting each of them would print the same finding
-     several times over - once per possibility the abstraction had to keep. *)
   let requests = Hashtbl.create 16 in
   List.iter
-    (fun current ->
-      if Hashtbl.mem reaches current then
-        match current with
-        | [] -> ()
-        | top :: _ ->
-            let depth = List.length current in
-            List.iter
-              (function
-                | Reduce (prod, next) when Hashtbl.mem reaches next -> (
-                    match
-                      List.find_opt
-                        (fun reduction -> reduction.prod = prod)
-                        (reductions automaton.states.(top) token)
-                    with
-                    | Some reduction when reduction.width >= depth ->
-                        Hashtbl.replace requests
-                          (top, reduction.width + 1)
-                          ()
-                    | _ -> ())
-                | _ -> ())
-              (moves current token))
+    (fun node ->
+      if Hashtbl.mem reaches node then
+        List.iter
+          (fun (next, found) ->
+            if Hashtbl.mem reaches next then
+              List.iter (fun request -> Hashtbl.replace requests request ()) found)
+          (Option.value (Hashtbl.find_opt successors node) ~default:[]))
     !visited;
-  (* Sorted, because a hash table's order is not something a report should
-     inherit: the same run must print the same trace, and a test comparing two
-     builds should see a difference only where the finding differs. *)
   List.sort compare
     (Hashtbl.fold (fun request () found -> request :: found) requests [])
 
@@ -1457,8 +1530,8 @@ let prove engine (precision : precision) pair_limit deadline survey_limit trace
 
      So this replays the recorded path from the site down to the accepting
      node, and asks of each step the only question that distinguishes a real
-     ambiguity from an artifact: did either side need the abstraction to guess
-     a goto here? A walk that guesses nowhere is a pair no extra precision will
+     ambiguity from an artifact: did this step need the abstraction to guess a
+     goto anywhere in it? A walk that guesses nowhere is a pair no extra precision will
      remove, whatever the level, and says the sentence is worth concretizing.
      One that guesses at a particular step names the state to sharpen, which
      the site alone never could. *)
@@ -1468,23 +1541,15 @@ let prove engine (precision : precision) pair_limit deadline survey_limit trace
       String.concat " " (List.map string_of_int suffix)
     in
     let guesses (left, right, _) token child =
-      let targets =
+      let target =
         Option.map
-          (fun (child_left, child_right, _) -> [ child_left; child_right ])
+          (fun (child_left, child_right, _) -> (child_left, child_right))
           child
       in
-      let sides =
-        if left = right then [ ("", left) ]
-        else [ ("left ", left); ("right ", right) ]
-      in
-      List.concat_map
-        (fun (label, stack) ->
-          List.map
-            (fun (top, depth) ->
-              Printf.sprintf "%sguessed at state %d (exact from %d)" label top
-                depth)
-            (chain_imprecision_reaching automaton moves stack token targets))
-        sides
+      List.map
+        (fun (top, depth) ->
+          Printf.sprintf "guessed at state %d (exact from %d)" top depth)
+        (joint_imprecision automaton moves (left, right) token target)
     in
     let step index ((left, right, _) as node) token child =
       let stacks =

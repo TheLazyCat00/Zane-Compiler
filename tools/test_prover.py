@@ -89,9 +89,9 @@ FORWARD_HEADER = re.compile(
 FORWARD_STEP = re.compile(
     r"^ *(\d+)\. on (\S+) +(?:stack|left) ", re.MULTILINE
 )
-FORWARD_GUESS = re.compile(
-    r"^ +(?:left |right )?guessed at state \d+ \(exact from \d+\)$"
-)
+# No side attribution: the pair is stored canonicalised, so which side a guess
+# belongs to is not recoverable, and a label would be a guess about a guess.
+FORWARD_GUESS = re.compile(r"^ +guessed at state \d+ \(exact from \d+\)$")
 # A refinement request for more depth than the ceiling allows is clamped to the
 # ceiling rather than skipped, so the run still makes what progress it can. The
 # clamp has to be reported: silently cutting a request down is how a candidate
