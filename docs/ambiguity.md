@@ -240,14 +240,18 @@ the state is triaged into one of these categories.
   possible predecessor instead of giving up, with a bounded fan-out — was tried
   and is **not** in the tool. On the current grammar it cost 26% more abstract
   pairs (60,423 to 76,143), and 75% more on the palindrome, without changing a
-  verdict or removing a candidate. The reason is worth recording, because it
-  corrects the obvious diagnosis: the candidate that survives refinement,
-  `& ( Foo ) [ ] ;`, stalls at a site whose own conflict is already exact — an
-  empty `list_verb_type_suffix_` reduction against a shift, neither of them
-  tagged — so the pair is not being kept alive by a guessed goto at all.
-  Whatever admits it lies on the forward walk from that site, which none of the
-  current diagnostics show. Deepening the stack, by any means, is the wrong
-  lever for it.
+  verdict or removing a candidate. That much still holds.
+
+  The reading attached to it did not. The candidate that survives refinement,
+  `& ( Foo ) [ ] ;`, stalls at a site whose two *competing* moves are both
+  untagged — an empty `list_verb_type_suffix_` reduction against a shift — and
+  that was taken to mean the pair was not being kept alive by a guessed goto at
+  all, so that stack depth could not be the lever. `--trace` showed otherwise on
+  its first run: the very first step of the walk guesses, at a state exact only
+  from a retained stack of six. `conflict at stack …` prints the two moves in
+  conflict, not the rest of the reduction chain they sit in, so untagged moves
+  there say nothing about whether the step guessed. Read a localized conflict
+  as evidence about precision and this is the mistake it invites.
 
   `--trace` follows a reported candidate from its divergence site down to
   acceptance. Every other diagnostic here reports where a divergence was
