@@ -2717,6 +2717,14 @@ let main () =
         let deadline = Unix.gettimeofday () +. timeout in
         let rounds = ref 0 in
         let stalled = ref None in
+        (* A request for more depth than --prove-refine allows is clamped to the
+           ceiling rather than skipped, so refinement still makes what progress
+           it can. Clamping silently is what made the ceiling invisible: a
+           candidate could need a retained stack of 11, be asked for 9 every
+           round, and survive without a single line of output saying the
+           requirement had been cut down. The deepest request is kept so the
+           report can name the number to raise the ceiling to. *)
+        let capped : (int, int) Hashtbl.t = Hashtbl.create 16 in
         let rec attempt () =
           let result =
             prove engine precision prove_limits.max_frontiers deadline
@@ -2736,6 +2744,13 @@ let main () =
                  the caller set rather than stalling well below it - and makes
                  a candidate that survives all the way to that ceiling mean
                  what --prove-refine says it means. *)
+              List.iter
+                (fun (state, depth) ->
+                  if depth > !refine_max then
+                    match Hashtbl.find_opt capped state with
+                    | Some existing when existing >= depth -> ()
+                    | _ -> Hashtbl.replace capped state depth)
+                requests;
               let wanted depth_of =
                 List.filter_map
                   (fun request ->
@@ -2789,6 +2804,22 @@ let main () =
                 attempt ()
               end
           | result -> result
+        in
+        let capped_summary () =
+          if Hashtbl.length capped = 0 then None
+          else
+            let deepest_state, deepest_depth =
+              Hashtbl.fold
+                (fun state depth ((_, best) as previous) ->
+                  if depth > best then (state, depth) else previous)
+                capped (-1, 0)
+            in
+            Some
+              (Printf.sprintf
+                 "%d state(s) asked for a deeper stack than --prove-refine %d \
+                  allows and were cut down to it; the deepest is state %d, \
+                  which is exact from %d."
+                 (Hashtbl.length capped) !refine_max deepest_state deepest_depth)
         in
         let precision_summary () =
           let deepest = Array.fold_left max 0 precision in
@@ -2884,6 +2915,11 @@ let main () =
                   !rounds reason;
                 Printf.printf "Refinement reached: %s\n" (precision_summary ()))
               !stalled;
+            (* Printed whether or not refinement stalled, because it is the one
+               line that says the ceiling itself was the constraint. *)
+            Option.iter
+              (fun summary -> Printf.printf "Refinement was capped: %s\n" summary)
+              (capped_summary ());
             Printf.printf
               "Attempting to concretize with the bounded search...\n\n"
       end;

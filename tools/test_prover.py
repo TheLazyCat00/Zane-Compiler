@@ -92,6 +92,17 @@ FORWARD_STEP = re.compile(
 FORWARD_GUESS = re.compile(
     r"^ +(?:left |right )?guessed at state \d+ \(exact from \d+\)$"
 )
+# A refinement request for more depth than the ceiling allows is clamped to the
+# ceiling rather than skipped, so the run still makes what progress it can. The
+# clamp has to be reported: silently cutting a request down is how a candidate
+# can need a retained stack of 11, be asked for 9 every round, and survive with
+# nothing in the output saying the ceiling was the constraint.
+REFINEMENT_CAPPED = re.compile(
+    r"^Refinement was capped: (\d+) state\(s\) asked for a deeper stack than "
+    r"--prove-refine (\d+) allows and were cut down to it; the deepest is "
+    r"state (\d+), which is exact from (\d+)\.$",
+    re.MULTILINE,
+)
 REFINEMENT_DEEPEST = re.compile(
     r"to a retained stack of (\d+) at the deepest\.", re.MULTILINE
 )
@@ -465,6 +476,29 @@ class RefinementTests(ProverTestCase):
         self.assertGreater(
             len(candidates[-1].split()), len(candidates[0].split()), output
         )
+
+    def test_a_request_past_the_ceiling_is_reported_not_swallowed(self) -> None:
+        # The palindrome's competing reduction is three symbols wide, so its
+        # chain asks for a retained stack of four. A ceiling of two cannot give
+        # that, and clamping quietly would leave the run looking as though the
+        # depth it asked for had been granted.
+        _, output = self.prove(
+            EVEN_PALINDROME, 1, extra=("--prove-refine", "2")
+        )
+        capped = REFINEMENT_CAPPED.search(output)
+        self.assertIsNotNone(capped, output)
+        self.assertEqual(capped.group(2), "2", output)
+        self.assertGreater(int(capped.group(4)), 2, output)
+
+    def test_no_cap_is_reported_when_every_request_fits(self) -> None:
+        # The guard against the line above appearing whenever refinement runs:
+        # a ceiling of eight covers everything the palindrome's chain asks for,
+        # so there is nothing to cut down and nothing to report.
+        _, output = self.prove(
+            EVEN_PALINDROME, 1, extra=("--prove-refine", "8")
+        )
+        self.assertRegex(output, REFINEMENT_ROUND_LINE)
+        self.assertNotRegex(output, REFINEMENT_CAPPED)
 
     def test_the_round_limit_is_honoured(self) -> None:
         # The loop reruns a whole proof per round, so an unbounded blind spot

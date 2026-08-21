@@ -260,12 +260,13 @@ the state is triaged into one of these categories.
   Each step names the token, the abstract stacks, and either `[exact]` or the
   states where a side had to guess a goto, with the retained depth that would
   have made it exact. That last number is the useful one: it is a refinement
-  request the loop may never have been able to honour, because a request past
-  `--refine K` is clamped to `K` rather than reported, so the depth a candidate
-  actually needs is otherwise invisible. On the current grammar the surviving
-  candidate's walk asks for depth 11 at one state while every run so far
-  capped at 9 — a requirement no other output named, and the reason the
-  conflict-localization line was misread as meaning depth could not help.
+  request the loop may not have been able to honour: a request past `--refine K`
+  is clamped to `K` so the round still makes what progress it can, and the run
+  now says so — `Refinement was capped: … the deepest is state N, which is
+  exact from D` names the depth to raise the ceiling to. Before that line
+  existed the clamp was silent, and a candidate could need a retained stack of
+  11, be asked for 9 every round, and survive with nothing in the output
+  saying the ceiling was the constraint.
   Reading a localized conflict that way is the trap this option exists to
   close: `conflict at stack …` prints the two *competing* moves, not the rest
   of the reduction chain they sit in, so untagged moves there do not mean the
