@@ -1,7 +1,5 @@
 (* A slice of Zane's grammar around the one conflict its unambiguity proof
-   still trips on, kept small enough to sweep the abstraction level over in
-   seconds. The real grammar takes about ten minutes at level 2 and far longer
-   at level 3, so the threshold question cannot be answered on it directly.
+   still trips on, kept small enough to sweep the abstraction level over.
 
    The conflict: after `&Foo`, with `[` as the lookahead, the parser can
 
@@ -9,14 +7,42 @@
      - reduce the empty suffix list, ending the type at `&Foo`, because the
        `[` opens an enum map whose map type has just finished.
 
-   Both are real actions in the automaton. What separates them is the `Enum .
-   prop` prefix that only the enum-map reading has, and that prefix sits below
-   the retained stack, so the abstraction cannot see which reading it is in and
-   lets both walk to acceptance.
+   Menhir's explanation of the real automaton shows this is not two competing
+   items meeting. State 27 holds exactly one item,
 
-   The sentence the prover reports, `& Foo [ ] ;`, is in neither reading: the
-   verb reading needs a name and parameters after the type, and the enum-map
-   reading needs the prefix. That is what makes the candidate spurious.
+     type_expr -> AMPERSAND UIDENT loption_generics_ . list_verb_type_suffix_
+
+   whose lookahead set has been merged across every context that reaches it,
+   and `[` is in that set because one of those contexts is the enum map. The
+   context that would separate the two readings sits below the retained stack,
+   so the abstraction cannot see which reading it is in and lets both walk to
+   acceptance.
+
+   WHAT THIS FILE HAS TO GET RIGHT
+
+   An earlier version of this slice had the same shape as the real grammar but
+   narrower productions, and it proved at level 1 with no accepting pairs --
+   useless as a stand-in. Width is the whole mechanism: the abstraction is
+   exact for a reduction only while the reduction pops less than the retained
+   stack, so a slice whose productions are narrower than the real ones resolves
+   at a level the real grammar cannot reach.
+
+   So the productions here are expanded to exactly the widths Menhir reports
+   for the real ones, which means mirroring the `%inline` markers too --
+   inlining is what flattens `&Foo` into a single four-symbol production rather
+   than a chain of two-symbol ones.
+
+     type_expr  -> AMPERSAND UIDENT loption_generics_ list_verb_type_suffix_
+                                                                     (width 4)
+     simple_decl -> UIDENT loption_generics_ DOT LIDENT type_expr
+                    LBRACKET loption_..._enum_map_entry__ RBRACKET    (width 8)
+
+   The widest reduction on the chain is the eight-symbol enum map, so exact
+   resolution needs a retained stack of nine. That is the prediction this slice
+   exists to test: the accepting-pair count should hold up through the low
+   levels and fall to zero by level 9 at the latest. Anything else -- a count
+   that never falls, or one that falls far earlier -- means the blind spot is
+   not the bounded, width-driven one this file assumes.
 
    Nothing here has semantic actions or precedence declarations: the question
    is about the shape of the automaton, and Zane's precedences do not reach
@@ -28,6 +54,8 @@
 %token AMPERSAND   "&"
 %token LBRACKET    "["
 %token RBRACKET    "]"
+%token LESS        "<"
+%token GREATER     ">"
 %token COMMA       ","
 %token DOT         "."
 %token SEMICOLON   ";"
@@ -42,29 +70,57 @@
 
 main: decls=list(decl) EOF { ignore decls }
 
-decl: value=simple ";" { ignore value }
+decl: value=simple_decl ";" { ignore value }
 
-simple:
-  (* A verb declaration: the return type is followed by the verb's name. *)
-  | ret_type=ret_type name=LIDENT "(" ")" "=>" body=LIDENT {
-      ignore (ret_type, name, body)
+(* Both alternatives are inlined away into `simple_decl` in the real grammar,
+   which is what makes the enum map eight symbols wide rather than a shorter
+   production over a `named_type_expr` nonterminal. *)
+%inline generics: "<" args=separated_nonempty_list(",", UIDENT) ">" {
+    ignore args
+  }
+
+%inline named_type_expr: name=UIDENT generics=loption(generics) {
+    ignore (name, generics)
+  }
+
+simple_decl:
+  (* A verb declaration: the return type is followed by the verb's name. Six
+     symbols, matching the real `body_decl`. *)
+  | ret_type=type_expr name=LIDENT "(" params=loption(param_list) ")"
+    body=body {
+      ignore (ret_type, name, params, body)
     }
   (* An enum map: the map type is followed by the bracketed entry list. This
      alternative is the whole reason the conflict exists -- it is the only
-     context in which a completed type is followed by `[`. *)
-  | enum=named "." property=LIDENT map_type=type_expr
-    "[" entries=separated_list(",", LIDENT) "]" {
+     context in which a completed type is followed by `[` -- and its width is
+     what puts the resolving level out of reach of a narrow window. *)
+  | enum=named_type_expr "." property=LIDENT map_type=type_expr
+    "[" entries=loption(entry_list) "]" {
       ignore (enum, property, map_type, entries)
     }
 
-ret_type: value=type_expr { ignore value }
+param_list: params=separated_nonempty_list(",", LIDENT) { ignore params }
 
-type_expr: atom=type_atom suffixes=list(verb_suffix) { ignore (atom, suffixes) }
+entry_list: entries=separated_nonempty_list(",", LIDENT) { ignore entries }
 
-type_atom:
-  | value=named { ignore value }
-  | "&" value=named { ignore value }
+body: "=>" value=LIDENT { ignore value }
 
-named: name=UIDENT { ignore name }
+%inline type_base:
+  | value=named_type_expr { ignore value }
+  | "(" value=type_expr ")" { ignore value }
 
-verb_suffix: "[" params=separated_list(",", type_expr) "]" { ignore params }
+%inline type_atom:
+  | value=type_base { ignore value }
+  | "&" value=type_base { ignore value }
+
+%inline verb_type_suffix: "[" params=loption(param_type_list) "]" {
+    ignore params
+  }
+
+param_type_list: params=separated_nonempty_list(",", type_expr) {
+    ignore params
+  }
+
+type_expr: atom=type_atom suffixes=list(verb_type_suffix) {
+    ignore (atom, suffixes)
+  }
