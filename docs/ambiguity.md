@@ -202,8 +202,8 @@ the state is triaged into one of these categories.
   relation, shrinking the request by one at each step. That backward cone is
   the whole cost, and how much of the automaton it reaches is a property of the
   grammar — on the current grammar, refining to a retained depth of nine
-  deepens about two thirds of the automaton's states and still finishes, where
-  a uniform level 3 does not.
+  deepens about three fifths of the automaton's states and still finishes,
+  where a uniform level 3 does not.
 
   Refining cannot produce a false proof. Every depth assignment
   over-approximates, because truncation is the only thing that ever shortens a
