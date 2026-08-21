@@ -38,6 +38,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from typing import TextIO
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -216,7 +217,31 @@ def main() -> int:
         default="12",
         help="token bound for the concretization search (default: 12)",
     )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        metavar="PATH",
+        help=(
+            "also write the table and its reading to this file, for a run "
+            "whose terminal output is not kept"
+        ),
+    )
     arguments = parser.parse_args()
+
+    # Rows are printed as each level finishes rather than collected and dumped
+    # at the end: a sweep whose last level runs long is exactly the one whose
+    # earlier rows are worth seeing, and a run killed part-way should leave the
+    # levels it did finish behind it.
+    report: TextIO | None = None
+    if arguments.output is not None:
+        arguments.output.parent.mkdir(parents=True, exist_ok=True)
+        report = arguments.output.open("w", encoding="utf-8")
+
+    def emit(text: str = "") -> None:
+        print(text, flush=True)
+        if report is not None:
+            report.write(text + "\n")
+            report.flush()
 
     if arguments.corpus:
         corpus = corpus_grammars()
@@ -239,10 +264,11 @@ def main() -> int:
     environment = engine_environment()
     results: list[Result] = []
 
-    print(f"Sweeping {arguments.grammar} at {arguments.timeout}s per level.\n")
+    emit(f"Sweeping {arguments.grammar} at {arguments.timeout}s per level.")
+    emit()
     header = f"{'level':>5}  {'verdict':<10}  {'accepting':>9}  {'sites':>6}  {'pairs':>9}  {'walk':<10}  {'seconds':>7}"
-    print(header)
-    print("-" * len(header))
+    emit(header)
+    emit("-" * len(header))
 
     for level in parse_levels(arguments.levels):
         result = run_level(
@@ -254,13 +280,13 @@ def main() -> int:
         )
         results.append(result)
         if result.accepting is None:
-            print(
+            emit(
                 f"{level:>5}  {result.verdict:<10}  {'-':>9}  {'-':>6}  "
                 f"{'-':>9}  {'no survey':<10}  {result.seconds:>7.1f}"
             )
         else:
             walk = "complete" if result.complete else "CUT SHORT"
-            print(
+            emit(
                 f"{level:>5}  {result.verdict:<10}  {result.accepting:>9}  "
                 f"{result.sites:>6}  {result.pairs:>9}  {walk:<10}  "
                 f"{result.seconds:>7.1f}"
@@ -270,10 +296,10 @@ def main() -> int:
         if result.status == PROVEN:
             break
 
-    print()
+    emit()
     proved = next((r for r in results if r.status == PROVEN), None)
     if proved is not None:
-        print(
+        emit(
             f"BOUNDED: the blind spot closes at level {proved.level}. "
             "Refining the abstraction to that depth — globally, or only along "
             "a counterexample's chain — is enough to prove this grammar."
@@ -281,7 +307,7 @@ def main() -> int:
         return 0
 
     if any(r.status == AMBIGUOUS for r in results):
-        print(
+        emit(
             "AMBIGUOUS: a concrete ambiguous sentence was found, so no level "
             "will ever prove this grammar. Fix the grammar."
         )
@@ -289,7 +315,7 @@ def main() -> int:
 
     cut = [r for r in results if r.complete is False]
     if cut:
-        print(
+        emit(
             "INCONCLUSIVE: "
             + ", ".join(f"level {r.level}" for r in cut)
             + " did not finish walking the abstract space, so their counts are "
@@ -299,7 +325,7 @@ def main() -> int:
 
     counts = [r.accepting for r in results if r.accepting is not None]
     if counts and len(set(counts)) == 1 and not cut:
-        print(
+        emit(
             f"FLAT: {counts[0]} accepting pair(s) at every level swept, with "
             "every walk complete. That is the signature of an unbounded blind "
             "spot — one that defeats a wider window by taking a longer "
@@ -309,7 +335,7 @@ def main() -> int:
             "rather than refuted."
         )
     elif counts and not cut:
-        print(
+        emit(
             "FALLING: the accepting-pair count moves with the level, so the "
             "blind spot is sensitive to the window. Extend --levels past the "
             "widest competing reduction before concluding anything."
@@ -317,9 +343,10 @@ def main() -> int:
 
     last = next((r for r in reversed(results) if r.site_block), None)
     if last is not None:
-        print(f"\nSurviving site at level {last.level}:")
+        emit()
+        emit(f"Surviving site at level {last.level}:")
         for line in last.site_block:
-            print(line)
+            emit(line)
     return NOT_PROVEN
 
 
