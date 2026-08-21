@@ -195,6 +195,36 @@ x: A B { () }
 y: A B { () }
 """
 
+# A conflict that is only reached after a reduction has already popped past the
+# retained stack, which is what makes the rebuilt stack observable at all. `w`
+# is six symbols wide, so at proof level 4 reducing it pops into the unknown and
+# the abstraction rebuilds the stack from a goto target and a guessed source.
+#
+# Everything before `w` is a forced chain -- `p q r` can be reached exactly one
+# way -- so the states below that source are determined by the automaton rather
+# than guessed, and the rebuilt stack should reach the full retained depth
+# instead of stopping at the two entries a rebuild starts from.
+REBUILT_STACK = """\
+%token P "p"
+%token Q "q"
+%token R "r"
+%token A "a"
+%token B "b"
+%token C "c"
+%token D "d"
+%token E "e"
+%token F "f"
+%token EOF "<eof>"
+%start <unit> main
+%%
+main:
+  | P Q R w x EOF { () }
+  | P Q R w y EOF { () }
+w: A B C D E F { () }
+x: A { () }
+y: A { () }
+"""
+
 AMBIGUOUS_GRAMMARS = {
     "expression without precedence": AMBIGUOUS_EXPRESSION,
     "dangling else": DANGLING_ELSE,
@@ -740,6 +770,25 @@ class SurveyTests(ProverTestCase):
             any(PAST_STACK_TAG.search(line) for line in lines),
             "\n".join(lines),
         )
+
+    def test_a_rebuilt_stack_recovers_the_context_the_automaton_forces(
+        self,
+    ) -> None:
+        # The reset this abstraction used to take: a reduction popping past the
+        # retained stack rebuilt it as a goto target on a guessed source, two
+        # entries and nothing below, however deep the run was entitled to keep.
+        # Every reduction after that popped into the unknown immediately, so one
+        # imprecise step cost precision for the rest of the run.
+        #
+        # Where the automaton determines what sits below -- one state with a
+        # transition into the source -- that context is recovered, so a rebuilt
+        # stack reaches the retained depth like any other. Level 4 against a
+        # forced chain is the case where every entry below is determined, so
+        # anything shorter than 4 means the recovery stopped early.
+        _, output = self.survey(REBUILT_STACK, 4, examples=1)
+        conflict = SITE_CONFLICT_LINE.search(output)
+        self.assertIsNotNone(conflict, output)
+        self.assertEqual(len(conflict.group(1).split()), 4, output)
 
     def test_a_proving_survey_dumps_no_sites(self) -> None:
         # Nothing accepted means nothing to explain, and a site block printed

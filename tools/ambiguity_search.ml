@@ -756,9 +756,52 @@ let truncate_suffix limit list =
    risk. *)
 type precision = int array
 
-let cap precision = function
+(* The state directly below [s] on any stack, when the automaton leaves no
+   choice about it: exactly one state has a transition to [s], so every stack
+   with [s] on top has that state under it. [-1] where more than one state
+   qualifies, and where none does - the latter being the initial state, which
+   sits at the bottom and has nothing below it at all. *)
+let forced_predecessors preds =
+  Array.map
+    (fun sources ->
+      if IntSet.cardinal sources = 1 then IntSet.choose sources else -1)
+    preds
+
+(* Truncation is only half of what fixes an abstract stack's depth. The other
+   half is that a stack can be *shorter* than its state is entitled to keep,
+   and the shortest ones come from the abstraction itself: a reduction that
+   pops past what is retained rebuilds the stack as a goto target on a guessed
+   source, two entries and nothing under them. Every reduction after that pops
+   into the unknown immediately, so one imprecise step used to cost precision
+   for the rest of the run however much depth had been paid for - the retained
+   depth had no way to reach back below a rebuilt stack.
+
+   It can, when the automaton leaves no choice. Walking [forced_predecessors]
+   downward from the deepest entry adds states that every stack ending there
+   must have, so it is a free deepening: no case split, no branching factor,
+   just context the abstraction was discarding. It stops at the first entry
+   with more than one possible predecessor, and at the bottom of the stack,
+   where there is nothing below to add.
+
+   This only ever lengthens a stack, and a longer stack admits no more moves
+   than a shorter one, so it cannot turn a real parse into a rejected one. *)
+let cap forced (precision : precision) = function
   | [] -> []
-  | top :: _ as states -> truncate_suffix precision.(top) states
+  | top :: _ as states ->
+      let limit = precision.(top) in
+      let kept = truncate_suffix limit states in
+      let rec extend below_first length deepest =
+        if length >= limit then below_first
+        else
+          let source = forced.(deepest) in
+          if source < 0 then below_first
+          else extend (source :: below_first) (length + 1) source
+      in
+      let reversed = List.rev kept in
+      match reversed with
+      | [] -> kept
+      | deepest :: _ ->
+          List.rev (extend reversed (List.length kept) deepest)
 
 let goto_edges automaton =
   let table = Hashtbl.create 256 in
@@ -873,8 +916,8 @@ type side_move =
   | Reduce of int * int list (* production id, suffix afterwards *)
   | Terminate of int list (* suffix after the shift, or at acceptance *)
 
-let side_moves automaton gotos below (precision : precision) cache suffix token
-    =
+let side_moves automaton gotos below forced (precision : precision) cache
+    suffix token =
   match Hashtbl.find_opt cache (suffix, token) with
   | Some moves -> moves
   | None ->
@@ -892,7 +935,7 @@ let side_moves automaton gotos below (precision : precision) cache suffix token
             Option.iter
               (fun target ->
                 moves :=
-                  Terminate (cap precision (target :: suffix)) :: !moves)
+                  Terminate (cap forced precision (target :: suffix)) :: !moves)
               (Hashtbl.find_opt state.transitions token);
           List.iter
             (fun reduction ->
@@ -904,7 +947,7 @@ let side_moves automaton gotos below (precision : precision) cache suffix token
                       (fun target ->
                         moves :=
                           Reduce
-                            (reduction.prod, cap precision (target :: remaining))
+                            (reduction.prod, cap forced precision (target :: remaining))
                           :: !moves)
                       (Hashtbl.find_opt
                          automaton.states.(base).transitions reduction.lhs)
@@ -924,7 +967,7 @@ let side_moves automaton gotos below (precision : precision) cache suffix token
                     if IntSet.mem source sources then
                       moves :=
                         Reduce
-                          (reduction.prod, cap precision [ target; source ])
+                          (reduction.prod, cap forced precision [ target; source ])
                         :: !moves)
                   (Option.value
                      (Hashtbl.find_opt gotos reduction.lhs)
@@ -1180,11 +1223,13 @@ let not_proven_status = 3
 let prove engine (precision : precision) pair_limit deadline survey_limit =
   let automaton = engine.automaton in
   let gotos = goto_edges automaton in
-  let below = below_steps (predecessors automaton) in
+  let preds = predecessors automaton in
+  let below = below_steps preds in
+  let forced = forced_predecessors preds in
   (* Keyed by a single suffix rather than a pair, so this stays small and is
      read by every pair that reaches the same stack: worth keeping whole. *)
   let moves_cache = Hashtbl.create 100_003 in
-  let moves = side_moves automaton gotos below precision moves_cache in
+  let moves = side_moves automaton gotos below forced precision moves_cache in
   (* The pair cache is the opposite. Each node is dequeued once and asks for
      every terminal class exactly once, so the only repeat key is the twin
      node that shares a stack pair and differs in its divergence flag. Left
