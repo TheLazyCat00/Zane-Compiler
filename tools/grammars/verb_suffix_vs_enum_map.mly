@@ -37,33 +37,12 @@
      simple_decl -> UIDENT loption_generics_ DOT LIDENT type_expr
                     LBRACKET loption_..._enum_map_entry__ RBRACKET    (width 8)
 
-   WHAT THAT TURNED OUT NOT TO BE ENOUGH FOR
-
    The widest reduction on the chain is the eight-symbol enum map, so exact
-   resolution needs a retained stack of nine, and the prediction was that the
-   accepting-pair count would hold through the low levels and fall to zero by
-   level nine. Swept over levels 1 to 9, this grammar instead proves at level
-   1, with six divergence sites and no accepting pair.
-
-   So the conflict reproduces -- six sites means there really are stacks here
-   offering two moves -- but the spurious acceptance does not. Matching the
-   widths was necessary and is not sufficient.
-
-   What the small grammar cannot supply is somewhere for an over-approximated
-   goto to land. When a reduction pops past the retained stack the abstraction
-   admits every goto edge, and the blind spot only becomes a false accepting
-   pair if one of those edges leads to a state from which the rest of the
-   sentence still parses. The real grammar has hundreds of states and many
-   declaration forms, so it does; a grammar with nine productions has nowhere
-   for the slop to go, and both branches simply die.
-
-   That makes this file a reduced case of the conflict but not of the proof
-   failure, and it is the reason a slice small enough to sweep cannot measure
-   the level at which the real blind spot closes. It is kept because the
-   negative result is worth keeping: it rules out width alone as the
-   explanation, and it says a useful slice would have to be large enough to
-   give the abstraction room to be wrong in, which is most of the way back to
-   sweeping the real grammar.
+   resolution needs a retained stack of nine. That is the prediction this slice
+   exists to test: the accepting-pair count should hold up through the low
+   levels and fall to zero by level 9 at the latest. Anything else -- a count
+   that never falls, or one that falls far earlier -- means the blind spot is
+   not the bounded, width-driven one this file assumes.
 
    Nothing here has semantic actions or precedence declarations: the question
    is about the shape of the automaton, and Zane's precedences do not reach
