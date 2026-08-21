@@ -1169,6 +1169,115 @@ let chain_imprecision automaton moves suffix token =
   done;
   !requests
 
+(* The same question as [chain_imprecision], asked of one recorded step instead
+   of every chain leaving a stack.
+
+   [chain_imprecision] explores every reduction chain a stack admits, which is
+   what refinement wants: deepening a state the candidate might not have gone
+   through costs precision it did not need, never a wrong verdict. A trace
+   cannot be read that way. It claims to say what happened on the path this pair
+   actually took, and a guess reported from a branch the pair never entered
+   names the wrong state to sharpen - a reader following it refines somewhere
+   that was never on the path.
+
+   So this keeps only the chains that reach [targets], the stacks the recorded
+   child pair carries. A reduction is reported when it is imprecise *and* its
+   own result still leads to one of them; anything that can only end elsewhere
+   belongs to a branch the search explored and this pair did not take. Both
+   child stacks are accepted because [push] canonicalises a pair by ordering
+   its two sides, so which one a given side became is not recoverable from the
+   node alone.
+
+   [None] means any termination counts, which is what the closing step needs:
+   acceptance under the end-of-input sentinel has no recorded child to match. *)
+let chain_imprecision_reaching automaton moves suffix token targets =
+  let successors = Hashtbl.create 64 in
+  let reaches = Hashtbl.create 64 in
+  let visited = ref [] in
+  let seen = Hashtbl.create 64 in
+  let queue = Queue.create () in
+  let visits = ref 0 in
+  let push stack =
+    if not (Hashtbl.mem seen stack) then begin
+      Hashtbl.add seen stack ();
+      Queue.add stack queue
+    end
+  in
+  let lands stack =
+    match targets with None -> true | Some targets -> List.mem stack targets
+  in
+  push suffix;
+  while (not (Queue.is_empty queue)) && !visits < 4096 do
+    incr visits;
+    let current = Queue.take queue in
+    visited := current :: !visited;
+    let available = moves current token in
+    let onward =
+      List.filter_map
+        (function Reduce (_, next) -> Some next | Terminate _ -> None)
+        available
+    in
+    Hashtbl.replace successors current onward;
+    if
+      List.exists
+        (function Terminate landed -> lands landed | Reduce _ -> false)
+        available
+    then Hashtbl.replace reaches current ();
+    List.iter push onward
+  done;
+  (* A stack is on a path to the recorded child when it lands there itself or
+     some reduction from it does. The chain graph can cycle, so this is a
+     fixpoint rather than one backward sweep. *)
+  let changed = ref true in
+  while !changed do
+    changed := false;
+    List.iter
+      (fun stack ->
+        if not (Hashtbl.mem reaches stack) then
+          if
+            List.exists
+              (fun next -> Hashtbl.mem reaches next)
+              (Option.value (Hashtbl.find_opt successors stack) ~default:[])
+          then begin
+            Hashtbl.replace reaches stack ();
+            changed := true
+          end)
+      !visited
+  done;
+  (* One entry per imprecise reduction, not per goto edge it was allowed to take.
+     A reduction popping into the unknown yields a separate move for every
+     admissible source, and reporting each of them would print the same finding
+     several times over - once per possibility the abstraction had to keep. *)
+  let requests = Hashtbl.create 16 in
+  List.iter
+    (fun current ->
+      if Hashtbl.mem reaches current then
+        match current with
+        | [] -> ()
+        | top :: _ ->
+            let depth = List.length current in
+            List.iter
+              (function
+                | Reduce (prod, next) when Hashtbl.mem reaches next -> (
+                    match
+                      List.find_opt
+                        (fun reduction -> reduction.prod = prod)
+                        (reductions automaton.states.(top) token)
+                    with
+                    | Some reduction when reduction.width >= depth ->
+                        Hashtbl.replace requests
+                          (top, reduction.width + 1)
+                          ()
+                    | _ -> ())
+                | _ -> ())
+              (moves current token))
+    !visited;
+  (* Sorted, because a hash table's order is not something a report should
+     inherit: the same run must print the same trace, and a test comparing two
+     builds should see a difference only where the finding differs. *)
+  List.sort compare
+    (Hashtbl.fold (fun request () found -> request :: found) requests [])
+
 (* A survey answers a different question from a proof. The proof stops at the
    first divergence it can reach, which says nothing about how many more lie
    behind it - and that count is what decides whether refining the abstraction
@@ -1354,10 +1463,16 @@ let prove engine (precision : precision) pair_limit deadline survey_limit trace
      One that guesses at a particular step names the state to sharpen, which
      the site alone never could. *)
   let describe_forward node =
+    let node_pair = node in
     let render_stack suffix =
       String.concat " " (List.map string_of_int suffix)
     in
-    let guesses (left, right, _) token =
+    let guesses (left, right, _) token child =
+      let targets =
+        Option.map
+          (fun (child_left, child_right, _) -> [ child_left; child_right ])
+          child
+      in
       let sides =
         if left = right then [ ("", left) ]
         else [ ("left ", left); ("right ", right) ]
@@ -1368,10 +1483,10 @@ let prove engine (precision : precision) pair_limit deadline survey_limit trace
             (fun (top, depth) ->
               Printf.sprintf "%sguessed at state %d (exact from %d)" label top
                 depth)
-            (chain_imprecision automaton moves stack token))
+            (chain_imprecision_reaching automaton moves stack token targets))
         sides
     in
-    let step index ((left, right, _) as node) token =
+    let step index ((left, right, _) as node) token child =
       let stacks =
         if left = right then Printf.sprintf "stack %s" (render_stack left)
         else
@@ -1381,12 +1496,22 @@ let prove engine (precision : precision) pair_limit deadline survey_limit trace
       let line =
         Printf.sprintf "%2d. on %-12s %s" index token stacks
       in
-      match guesses node token with
+      match guesses node token child with
       | [] -> [ line ^ "  [exact]" ]
       | found -> line :: List.map (fun text -> "      " ^ text) found
     in
+    (* Acceptance is not one of the recorded edges - the pair reaches it under
+       the end-of-input sentinel, which the walk takes separately - so it is
+       replayed here rather than left off the end. It has no recorded child, so
+       any termination counts. *)
+    let closing index = step index node "#" None in
     match divergence_origin node with
-    | None -> []
+    (* Not diverged means the pair parted ways on end of input, exactly as
+       [accepting_site] treats it: its own stacks under "#" are the site, and
+       that single step is the whole walk. Returning nothing here printed no
+       trace at all for a candidate whose divergence was born at EOF, while
+       still reporting that one was requested. *)
+    | None -> "forward from the site, to acceptance:" :: closing 1
     | Some origin ->
         let rec from_origin = function
           | [] -> []
@@ -1394,16 +1519,19 @@ let prove engine (precision : precision) pair_limit deadline survey_limit trace
           | _ :: tail -> from_origin tail
         in
         let steps = from_origin (path_steps node) in
-        let rendered =
-          List.concat
-            (List.mapi (fun index (node, token) -> step (index + 1) node token)
-               steps)
+        (* Each recorded step is rendered against the pair it actually produced,
+           which is the next step's node, or the accepting node for the last.
+           An origin that is somehow not on the recorded path leaves no steps to
+           pair up; the closing step still says what happened at acceptance,
+           which is better than a diagnostic that raises. *)
+        let rec render index = function
+          | [] -> []
+          | [ (node, token) ] -> step index node token (Some node_pair)
+          | (node, token) :: ((next, _) :: _ as rest) ->
+              step index node token (Some next) @ render (index + 1) rest
         in
-        (* Acceptance is not one of the recorded edges - the pair reaches it
-           under the end-of-input sentinel, which the walk takes separately -
-           so it is replayed here rather than left off the end. *)
-        let closing = step (List.length steps + 1) node "#" in
-        ("forward from the site, to acceptance:" :: rendered) @ closing
+        ("forward from the site, to acceptance:" :: render 1 steps)
+        @ closing (List.length steps + 1)
   in
   (* Every place along a candidate's path where the abstraction guessed, keyed
      by the state on top there and carrying the deepest request made of it. The

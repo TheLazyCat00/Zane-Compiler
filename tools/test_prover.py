@@ -249,6 +249,40 @@ x: A { () }
 y: A { () }
 """
 
+# Three productions reduced in one state on one lookahead, so a pair walking
+# through it takes two of them and leaves the third unselected. A trace claims
+# to say what happened on the path this pair took, so the chain it never entered
+# must not appear in it.
+THREE_WAY_CONFLICT = """\
+%token A "a"
+%token B "b"
+%token C "c"
+%token EOF "<eof>"
+%start <unit> main
+%%
+main:
+  | p C EOF { () }
+  | q C EOF { () }
+  | r B EOF { () }
+p: A B { () }
+q: A B { () }
+r: A B { () }
+"""
+
+# No end-of-input terminal, so the two parses can only part ways under the
+# sentinel the search appends. That is the case where the walk has no recorded
+# edge to replay and has to fall back to the accepting node's own step.
+SENTINEL_REDUCE_REDUCE = """\
+%token A "a"
+%start <unit> main
+%%
+main:
+  | x { () }
+  | y { () }
+x: A { () }
+y: A { () }
+"""
+
 AMBIGUOUS_GRAMMARS = {
     "expression without precedence": AMBIGUOUS_EXPRESSION,
     "dangling else": DANGLING_ELSE,
@@ -590,6 +624,42 @@ class ForwardTraceTests(ProverTestCase):
                 continue
             self.assertLess(index + 1, len(lines), output)
             self.assertRegex(lines[index + 1], FORWARD_GUESS, output)
+
+    def test_each_guess_is_reported_once_per_step(self) -> None:
+        # A reduction popping into the unknown yields one move per goto edge it
+        # is allowed to take, and reporting each of them prints the same finding
+        # several times over -- once per possibility the abstraction kept, which
+        # reads as several separate problems. Three competing reductions in one
+        # state is the case that produced it.
+        _, output = self.prove(
+            THREE_WAY_CONFLICT, 1, extra=("--prove-trace",)
+        )
+        lines = output.splitlines()
+        starts = [
+            index for index, line in enumerate(lines) if FORWARD_STEP.match(line)
+        ]
+        self.assertGreaterEqual(len(starts), 1, output)
+        for position, start in enumerate(starts):
+            stop = starts[position + 1] if position + 1 < len(starts) else len(lines)
+            guesses = [
+                line.strip()
+                for line in lines[start + 1 : stop]
+                if FORWARD_GUESS.match(line)
+            ]
+            self.assertCountEqual(guesses, set(guesses), output)
+
+    def test_a_divergence_born_at_end_of_input_still_traces(self) -> None:
+        # The walk replays recorded edges, and a pair that parts ways under the
+        # sentinel has none: its divergence is born at the step the search takes
+        # separately. That printed no trace at all, while still reporting that
+        # one had been asked for.
+        _, output = self.prove(
+            SENTINEL_REDUCE_REDUCE, 1, extra=("--prove-trace",)
+        )
+        self.assertRegex(output, FORWARD_HEADER)
+        steps = FORWARD_STEP.findall(output)
+        self.assertEqual(len(steps), 1, output)
+        self.assertEqual(steps[0][1], "#", output)
 
     def test_rejected_combinations_do_not_run(self) -> None:
         for name, level, extra in (
