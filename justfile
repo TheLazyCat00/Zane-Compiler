@@ -20,3 +20,15 @@ test:
 	@command -v menhir >/dev/null || { echo "menhir not found on PATH; enter the devbox shell first" >&2; exit 1; }
 	dune build tools/ambiguity_search.exe tools/parser_shape.exe tools/parser_accept.exe
 	python3 -m unittest tools.test_ambiguity_cli tools.test_parser_ambiguity tools.test_parser_syntax tools.test_prover -v
+
+# Sweep the prover's abstraction level over a grammar to tell a bounded blind
+# spot from an unbounded one. A bounded one keeps its shape and disappears once
+# the window is wider than the widest competing reduction; an unbounded one
+# holds its accepting-pair count flat at every level and never proves. Defaults
+# to Zane's own grammar; pass a path or `--corpus NAME` for anything else.
+#
+# Levels cost roughly an order of magnitude each, so start narrow and widen.
+sweep GRAMMAR="lib/cst/parser.mly" *ARGS:
+	@command -v menhir >/dev/null || { echo "menhir not found on PATH; enter the devbox shell first" >&2; exit 1; }
+	dune build tools/ambiguity_search.exe
+	python3 tools/precision_sweep.py {{GRAMMAR}} {{ARGS}}
