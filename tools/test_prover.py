@@ -61,6 +61,21 @@ SITE_STACK_LINE = re.compile(
 SITE_CONFLICT_LINE = re.compile(r"^     conflict at stack (\d+( \d+)*)?:$", re.MULTILINE)
 SITE_MOVE_LINE = re.compile(r"^       (reduce |shift to |accept)", re.MULTILINE)
 
+# Refinement reports one line per round, then why it stopped. The round line
+# carries the candidate that provoked it, which is what makes a widening
+# counterexample visible round by round.
+REFINEMENT_ROUND_LINE = re.compile(
+    r"^Refinement round (\d+): deepened the stacks behind (.+), "
+    r"retaining up to (\d+)\.$",
+    re.MULTILINE,
+)
+REFINEMENT_STOPPED_LINE = re.compile(
+    r"^Refinement stopped after (\d+) round\(s\): (.+)\.$", re.MULTILINE
+)
+REFINEMENT_DEEPEST = re.compile(
+    r"to a retained stack of (\d+) at the deepest\.", re.MULTILINE
+)
+
 
 # Ambiguous: `a + a + a` groups two ways with nothing to choose between them.
 AMBIGUOUS_EXPRESSION = """\
@@ -227,6 +242,8 @@ class ProverTestCase(unittest.TestCase):
         *,
         environment: dict[str, str] | None = None,
         timeout: str = "30",
+        extra: tuple[str, ...] = (),
+        expect_verdict: bool = True,
     ) -> tuple[int, str]:
         path = self.directory / "grammar.mly"
         path.write_text(grammar, encoding="utf-8")
@@ -238,6 +255,7 @@ class ProverTestCase(unittest.TestCase):
                 str(ENGINE),
                 "--prove",
                 str(level),
+                *extra,
                 "--max-tokens",
                 "8",
                 "--timeout",
@@ -252,10 +270,12 @@ class ProverTestCase(unittest.TestCase):
             timeout=180,
         )
         # Any status outside the verdict set means the run itself failed, which
-        # would make every assertion below vacuous.
-        self.assertIn(
-            result.returncode, VERDICT_STATUSES, result.stdout + result.stderr
-        )
+        # would make every assertion below vacuous. Argument-validation tests
+        # are the exception: a rejected invocation is what they assert.
+        if expect_verdict:
+            self.assertIn(
+                result.returncode, VERDICT_STATUSES, result.stdout + result.stderr
+            )
         return result.returncode, result.stdout
 
 
@@ -308,6 +328,144 @@ class ProverPrecisionTests(ProverTestCase):
             self.assertIn(status, (PROVEN, NOT_PROVEN), output)
             verdict = "proven" if status == PROVEN else "not proven"
             print(f"even-length palindrome at level {level}: {verdict}")
+
+
+class RefinementTests(ProverTestCase):
+    """`--prove-refine` treats a candidate as a question, not as an answer.
+
+    A uniform abstraction level has to be paid for everywhere it is raised, so
+    the level that would close one blind spot is usually the level that makes
+    the proof too expensive to run. Refinement deepens the retained stack only
+    behind the candidate that needed it shallow, and tries again.
+
+    The property that matters is the one that would be worst to lose: sharper
+    is still sound. Every depth assignment over-approximates, because
+    truncation is the only thing that shortens a suffix and nothing invents
+    one, so refining can remove spurious pairs but never a real parse. These
+    tests pin that, and pin the report that says how far refinement got --
+    which is the part a regression run has to reproduce.
+    """
+
+    def test_refinement_never_proves_an_ambiguous_grammar(self) -> None:
+        # The direction worth guarding. Refinement exists to remove candidates,
+        # and a candidate removed too eagerly is a false proof of an ambiguous
+        # grammar -- the worst output this tool has. Refining hard on grammars
+        # known ambiguous by construction is the cheapest place to catch it.
+        for name, grammar in AMBIGUOUS_GRAMMARS.items():
+            with self.subTest(grammar=name):
+                status, output = self.prove(
+                    grammar, 1, extra=("--prove-refine", "6")
+                )
+                self.assertNotRegex(output, PROVEN_LINE)
+                self.assertNotEqual(status, PROVEN, output)
+
+    def test_refinement_leaves_a_conflict_free_proof_alone(self) -> None:
+        # Nothing to refine: a conflict-free automaton offers one action per
+        # state and lookahead, so no pair ever diverges and no candidate is
+        # ever raised. The proof must come out the same as without the flag,
+        # and must not report rounds it did not run.
+        for name, grammar in CONFLICT_FREE_GRAMMARS.items():
+            with self.subTest(grammar=name):
+                status, output = self.prove(
+                    grammar, 1, extra=("--prove-refine", "6")
+                )
+                self.assertEqual(status, PROVEN, output)
+                self.assertRegex(output, PROVEN_LINE)
+                self.assertNotRegex(output, REFINEMENT_ROUND_LINE)
+
+    def test_refinement_deepens_the_stack_it_retains(self) -> None:
+        # The mechanism itself. The palindrome is the standing example of a
+        # grammar the abstraction cannot prove, so it is guaranteed to raise a
+        # candidate, and a round that ran must show up as a retained stack
+        # deeper than the level the run started from.
+        status, output = self.prove(
+            EVEN_PALINDROME, 1, extra=("--prove-refine", "5")
+        )
+        self.assertIn(status, (PROVEN, NOT_PROVEN), output)
+        self.assertRegex(output, REFINEMENT_ROUND_LINE)
+        deepest = REFINEMENT_DEEPEST.search(output)
+        self.assertIsNotNone(deepest, output)
+        self.assertGreater(int(deepest.group(1)), 1, output)
+
+    def test_refinement_says_why_it_stopped(self) -> None:
+        # A refinement that gives up without saying so reads as a proof that
+        # was never attempted. The palindrome cannot be closed at any depth, so
+        # this run always ends in a stop reason rather than a proof.
+        status, output = self.prove(
+            EVEN_PALINDROME, 1, extra=("--prove-refine", "5")
+        )
+        self.assertEqual(status, NOT_PROVEN, output)
+        self.assertRegex(output, REFINEMENT_STOPPED_LINE)
+
+    def test_an_unbounded_blind_spot_widens_its_counterexample(self) -> None:
+        # What refinement is worth beyond the proof. A bounded blind spot
+        # closes once the retained stack outgrows it; an unbounded one answers
+        # every widening with a longer sentence, and the round lines make that
+        # answer visible directly -- the palindrome pushes its counterexample
+        # out by one `A p A` nesting per round. Reading that off a handful of
+        # rounds is the same conclusion the level sweep reaches by running the
+        # whole proof once per level.
+        _, output = self.prove(
+            EVEN_PALINDROME, 1, extra=("--prove-refine", "8")
+        )
+        candidates = [
+            match.group(2) for match in REFINEMENT_ROUND_LINE.finditer(output)
+        ]
+        self.assertGreaterEqual(len(candidates), 2, output)
+        self.assertGreater(
+            len(candidates[-1].split()), len(candidates[0].split()), output
+        )
+
+    def test_the_round_limit_is_honoured(self) -> None:
+        # The loop reruns a whole proof per round, so an unbounded blind spot
+        # would otherwise refine until the clock stopped it, reporting a
+        # timeout in place of the reason it actually failed.
+        _, output = self.prove(
+            EVEN_PALINDROME,
+            1,
+            extra=("--prove-refine", "8", "--prove-refine-rounds", "1"),
+        )
+        rounds = REFINEMENT_ROUND_LINE.findall(output)
+        self.assertEqual(len(rounds), 1, output)
+        stopped = REFINEMENT_STOPPED_LINE.search(output)
+        self.assertIsNotNone(stopped, output)
+        self.assertIn("round limit", stopped.group(2), output)
+
+    def test_rejected_combinations_do_not_run(self) -> None:
+        # Each of these would otherwise look like it did something: refining
+        # without a proof, refining shallower than the level it starts from, or
+        # refining a survey, which walks the whole space and so never produces
+        # the single candidate a refinement steers by.
+        for name, arguments in (
+            ("without --prove", ("--prove", "0", "--prove-refine", "4")),
+            ("below --prove", ("--prove", "4", "--prove-refine", "2")),
+            (
+                "with --prove-survey",
+                ("--prove", "1", "--prove-refine", "4", "--prove-survey", "1"),
+            ),
+        ):
+            with self.subTest(combination=name):
+                path = self.directory / "grammar.mly"
+                path.write_text(LR1_LIST, encoding="utf-8")
+                result = subprocess.run(
+                    [
+                        str(ENGINE),
+                        *arguments,
+                        "--max-tokens",
+                        "8",
+                        "--timeout",
+                        "30",
+                        "--max-witnesses",
+                        "5",
+                        str(path),
+                    ],
+                    env=self.environment,
+                    text=True,
+                    capture_output=True,
+                    timeout=180,
+                )
+                self.assertNotIn(result.returncode, VERDICT_STATUSES)
+                self.assertNotRegex(result.stdout, PROVEN_LINE)
 
 
 class ProofStatusTests(ProverTestCase):
@@ -576,12 +734,14 @@ class SurveyTests(ProverTestCase):
             "\n".join(lines),
         )
 
-    def test_a_reduction_that_pops_past_the_retained_stack_is_unconstrained(
+    def test_a_reduction_that_pops_past_the_retained_stack_is_reported_as_such(
         self,
     ) -> None:
-        # The case a refinement could actually close: the reduction lands where
-        # the retained stack says nothing, so every goto edge on the reduced
-        # nonterminal stays admissible. `x: A B` is two symbols wide against a
+        # The case a refinement could actually close. The reduction lands below
+        # the retained stack, so the goto source is narrowed by walking the
+        # predecessor relation as far as the pop went rather than pinned to one
+        # state -- looser than the exact-pop case, and the looseness is what a
+        # deeper stack would buy back. `x: A B` is two symbols wide against a
         # one-state stack.
         lines = self.conflict_moves(WIDE_REDUCE_REDUCE, 1)
         self.assertTrue(

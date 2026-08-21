@@ -455,6 +455,30 @@ class SurveyFlagTests(unittest.TestCase):
             arguments[arguments.index("--prove-survey") + 1], "5"
         )
 
+    def test_refinement_is_absent_unless_requested(self) -> None:
+        arguments = ambiguity.engine_arguments(self.profile(), 3)
+        self.assertNotIn("--prove-refine", arguments)
+        self.assertNotIn("--prove-refine-rounds", arguments)
+
+    def test_requested_refinement_reaches_the_engine(self) -> None:
+        arguments = ambiguity.engine_arguments(self.profile(), 3, refine=9)
+        self.assertIn("--prove-refine", arguments)
+        self.assertEqual(arguments[arguments.index("--prove-refine") + 1], "9")
+
+    def test_a_round_limit_only_travels_with_refinement(self) -> None:
+        # The engine has its own default, so passing a round limit without
+        # refinement would set a bound on something that is not running.
+        arguments = ambiguity.engine_arguments(
+            self.profile(), 3, refine=0, refine_rounds=4
+        )
+        self.assertNotIn("--prove-refine-rounds", arguments)
+        arguments = ambiguity.engine_arguments(
+            self.profile(), 3, refine=9, refine_rounds=4
+        )
+        self.assertEqual(
+            arguments[arguments.index("--prove-refine-rounds") + 1], "4"
+        )
+
 
 class TerminalClassEngineTests(unittest.TestCase):
     """End-to-end checks that the search collapses interchangeable terminals

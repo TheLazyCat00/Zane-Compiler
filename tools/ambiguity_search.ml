@@ -740,6 +740,26 @@ let truncate_suffix limit list =
   in
   take limit list
 
+(* How much stack to retain, as a property of the state on top rather than of
+   the whole run. A uniform level pays for depth in every corner of the
+   automaton to buy it in the one corner that needs it, and on a grammar this
+   size that is the difference between a proof that finishes and one that does
+   not. Keeping the depth per state lets a refinement deepen only the stacks
+   that reach a blind spot.
+
+   Soundness does not depend on the assignment. Truncation is the only thing
+   that ever shortens a suffix and nothing ever invents one, so every concrete
+   stack still projects onto the abstract stack its run carries, whatever
+   depths are in force; a shallower entry admits more moves and a deeper one
+   fewer, and only the second direction could lose a real parse. That is why
+   refinement can be driven by a heuristic without putting the verdict at
+   risk. *)
+type precision = int array
+
+let cap precision = function
+  | [] -> []
+  | top :: _ as states -> truncate_suffix precision.(top) states
+
 let goto_edges automaton =
   let table = Hashtbl.create 256 in
   Array.iteri
@@ -770,6 +790,80 @@ let predecessors automaton =
     automaton.states;
   table
 
+(* The states that can sit [steps] entries below [state] on a parser stack.
+   One step is [predecessors]; further steps compose it, because a stack is a
+   chain of adjacent states and each entry is pushed onto the one below by a
+   shift or a goto.
+
+   This is what a reduction popping past the retained stack lands on. Popping
+   [width] entries off a suffix that only knows [depth] of them leaves the
+   parser on the state [width - depth + 1] entries below the deepest one
+   retained, so that is the set the goto source has to come from - never
+   "anywhere", which is what the abstraction used to assume once the pop went
+   further than one entry past the suffix. The set widens quickly with the
+   number of steps and often saturates, but it starts out small, and it is
+   empty exactly when the suffix reaches the bottom of the stack: nothing sits
+   below the initial state, so a reduction that would pop past it is not a move
+   any parse can make.
+
+   Memoized because the same (state, steps) pair is asked for by every stack
+   that ends there, and both arguments are small. *)
+let below_steps preds =
+  let cache = Hashtbl.create 1_024 in
+  let rec walk state steps =
+    if steps <= 0 then IntSet.singleton state
+    else
+      match Hashtbl.find_opt cache (state, steps) with
+      | Some states -> states
+      | None ->
+          let nearer = walk state (steps - 1) in
+          let states =
+            IntSet.fold
+              (fun state below -> IntSet.union below preds.(state))
+              nearer IntSet.empty
+          in
+          Hashtbl.add cache (state, steps) states;
+          states
+  in
+  walk
+
+(* Deepen [state] to [depth], and everything behind it far enough that a stack
+   arriving there can actually carry that many entries.
+
+   A suffix grows one entry at a time under the cap of whatever ends up on top,
+   so a stack can only reach [state] holding [depth] entries if every state
+   that can sit directly below it retains at least [depth - 1]. Asking for
+   depth at the blind spot alone would change nothing: the information was
+   already thrown away upstream. Refinement therefore walks backwards through
+   predecessors, shrinking the request by one at each step, and stops wherever
+   it asks for nothing a state does not already keep.
+
+   That backward cone is the entire cost of a refinement. It is also the reason
+   refinement is not free: a cone of radius nine can reach a large part of a
+   dense automaton, and how much it reaches is a property of the grammar rather
+   than something this function can bound. What it does bound is everything
+   outside the cone, which stays at the base level.
+
+   The predecessor graph has cycles, so the guard doing the work is the depth
+   comparison: a state is re-expanded only when its retained depth actually
+   grows, and it can only grow to the depth first requested, so the walk
+   terminates on any automaton. *)
+let deepen (precision : precision) preds state depth =
+  let changed = ref false in
+  let queue = Queue.create () in
+  Queue.add (state, depth) queue;
+  while not (Queue.is_empty queue) do
+    let state, depth = Queue.take queue in
+    if depth > precision.(state) then begin
+      precision.(state) <- depth;
+      changed := true;
+      if depth > 1 then
+        IntSet.iter (fun source -> Queue.add (source, depth - 1) queue)
+          preds.(state)
+    end
+  done;
+  !changed
+
 let rec last_state = function
   | [] -> invalid_arg "last_state: empty suffix"
   | [ state ] -> state
@@ -782,7 +876,8 @@ type side_move =
   | Reduce of int * int list (* production id, suffix afterwards *)
   | Terminate of int list (* suffix after the shift, or at acceptance *)
 
-let side_moves automaton gotos preds limit cache suffix token =
+let side_moves automaton gotos below (precision : precision) cache suffix token
+    =
   match Hashtbl.find_opt cache (suffix, token) with
   | Some moves -> moves
   | None ->
@@ -800,7 +895,7 @@ let side_moves automaton gotos preds limit cache suffix token =
             Option.iter
               (fun target ->
                 moves :=
-                  Terminate (truncate_suffix limit (target :: suffix)) :: !moves)
+                  Terminate (cap precision (target :: suffix)) :: !moves)
               (Hashtbl.find_opt state.transitions token);
           List.iter
             (fun reduction ->
@@ -812,31 +907,27 @@ let side_moves automaton gotos preds limit cache suffix token =
                       (fun target ->
                         moves :=
                           Reduce
-                            ( reduction.prod,
-                              truncate_suffix limit (target :: remaining) )
+                            (reduction.prod, cap precision (target :: remaining))
                           :: !moves)
                       (Hashtbl.find_opt
                          automaton.states.(base).transitions reduction.lhs)
               else
                 (* The reduction pops into the unknown part of the stack; the
-                   goto source is the state left on top afterwards.
-
-                   Popping exactly the known suffix exposes whatever sits
-                   directly below its deepest entry, so only that entry's
-                   predecessors are possible goto sources. Popping further
-                   reaches a state the suffix constrains in no way, and every
-                   goto edge on the reduced nonterminal stays admissible. *)
+                   goto source is the state left on top afterwards, which sits
+                   one entry below the last one popped. Counting from the
+                   deepest entry the suffix does know, that is
+                   [width - depth + 1] entries further down, and the states
+                   that can be there are exactly the ones that many predecessor
+                   steps away. Popping exactly the suffix is the one-step case
+                   of the same rule. *)
                 let deepest = last_state suffix in
+                let sources = below deepest (reduction.width - depth + 1) in
                 List.iter
                   (fun (source, target) ->
-                    if
-                      reduction.width > depth
-                      || IntSet.mem source preds.(deepest)
-                    then
+                    if IntSet.mem source sources then
                       moves :=
                         Reduce
-                          ( reduction.prod,
-                            truncate_suffix limit [ target; source ] )
+                          (reduction.prod, cap precision [ target; source ])
                         :: !moves)
                   (Option.value
                      (Hashtbl.find_opt gotos reduction.lhs)
@@ -988,6 +1079,56 @@ let conflicting_moves moves suffix token =
   done;
   !found
 
+(* What a refinement would have to fix, at one stack under one lookahead.
+
+   The abstraction is exact for a reduction exactly while the reduction pops
+   less than the retained stack. At or past that boundary the goto source is a
+   set rather than a state - the states the right number of predecessor steps
+   below the deepest entry retained - and picking the wrong member of that set
+   is the only way a pair of runs that no real sentence separates can stay
+   alive. So the places worth deepening are the stacks where a reduction
+   reaches or passes the retained depth, and the depth that would make it exact
+   is one more than the reduction is wide.
+
+   Walking the reduction chain, rather than only the stack it starts from, is
+   what makes this useful: a chain reduces several times before it shifts, and
+   the reduction that loses the context is rarely the first one.
+
+   Like [conflicting_moves] this is diagnostic and runs only when a candidate
+   has already been found, so it recomputes the chain instead of making the hot
+   path carry provenance. The visit bound is a guard rather than a limit that
+   is expected to bite: a refinement request this walk misses costs precision
+   on the next round, never soundness. *)
+let chain_imprecision automaton moves suffix token =
+  let seen = Hashtbl.create 64 in
+  let queue = Queue.create () in
+  let requests = ref [] in
+  let visits = ref 0 in
+  let push stack =
+    if not (Hashtbl.mem seen stack) then begin
+      Hashtbl.add seen stack ();
+      Queue.add stack queue
+    end
+  in
+  push suffix;
+  while (not (Queue.is_empty queue)) && !visits < 4096 do
+    incr visits;
+    let current = Queue.take queue in
+    (match current with
+    | [] -> ()
+    | top :: _ ->
+        let depth = List.length current in
+        List.iter
+          (fun reduction ->
+            if reduction.width >= depth then
+              requests := (top, reduction.width + 1) :: !requests)
+          (reductions automaton.states.(top) token));
+    List.iter
+      (function Reduce (_, next) -> push next | Terminate _ -> ())
+      (moves current token)
+  done;
+  !requests
+
 (* A survey answers a different question from a proof. The proof stops at the
    first divergence it can reach, which says nothing about how many more lie
    behind it - and that count is what decides whether refining the abstraction
@@ -1012,9 +1153,16 @@ type prove_survey = {
   covered : bool;
 }
 
+(* A candidate carries the site it was born at and the refinement requests its
+   own path justifies: the states where the abstraction had to invent a goto to
+   keep the pair alive, each with the depth that would have made that step
+   exact. An empty request list is the interesting case -- the pair survived an
+   abstraction that was exact everywhere along its path, so no amount of extra
+   depth will remove it. The site is what says where refinement stalled, in the
+   same form a survey prints. *)
 type prove_result =
   | Proven of int
-  | Abstract_candidate of string list * int
+  | Abstract_candidate of string list * int * survey_example * (int * int) list
   | Pair_overflow of int
   | Prove_timeout of int
   | Surveyed of prove_survey
@@ -1028,15 +1176,18 @@ type prove_result =
 let ambiguous_status = 1
 let not_proven_status = 3
 
-let prove engine limit pair_limit timeout survey_limit =
-  let deadline = Unix.gettimeofday () +. timeout in
+(* [deadline] is absolute rather than a duration because refinement runs this
+   several times over: the rounds share one budget for the abstract phase, so a
+   proof that needed four of them is not four times as patient as one that
+   needed none. *)
+let prove engine (precision : precision) pair_limit deadline survey_limit =
   let automaton = engine.automaton in
   let gotos = goto_edges automaton in
-  let preds = predecessors automaton in
+  let below = below_steps (predecessors automaton) in
   (* Keyed by a single suffix rather than a pair, so this stays small and is
      read by every pair that reaches the same stack: worth keeping whole. *)
   let moves_cache = Hashtbl.create 100_003 in
-  let moves = side_moves automaton gotos preds limit moves_cache in
+  let moves = side_moves automaton gotos below precision moves_cache in
   (* The pair cache is the opposite. Each node is dequeued once and asks for
      every terminal class exactly once, so the only repeat key is the twin
      node that shares a stack pair and differs in its divergence flag. Left
@@ -1117,6 +1268,34 @@ let prove engine limit pair_limit timeout survey_limit =
     | Some site -> site
     | None -> (left, right, "#")
   in
+  (* Every place along a candidate's path where the abstraction guessed, keyed
+     by the state on top there and carrying the deepest request made of it. The
+     scan covers both sides of every step and then the end of input, which is
+     where a pair that parted ways on "#" did its guessing. Runs once, on a
+     path bounded by the token budget. *)
+  let candidate_refinements node =
+    let wanted = Hashtbl.create 64 in
+    let record (top, depth) =
+      match Hashtbl.find_opt wanted top with
+      | Some existing when existing >= depth -> ()
+      | _ -> Hashtbl.replace wanted top depth
+    in
+    let scan (left, right, _) token =
+      List.iter
+        (fun stack -> List.iter record (chain_imprecision automaton moves stack token))
+        (if left = right then [ left ] else [ left; right ])
+    in
+    let rec walk node =
+      match Hashtbl.find parents node with
+      | None -> ()
+      | Some (token, parent) ->
+          scan parent token;
+          walk parent
+    in
+    walk node;
+    scan node "#";
+    Hashtbl.fold (fun top depth result -> (top, depth) :: result) wanted []
+  in
   (* One representative per terminal class: interchangeable lookaheads drive
      the same abstract reduction chains, so exploring one covers the class and
      shrinks the abstract pair space by the same factor as the search. *)
@@ -1132,11 +1311,13 @@ let prove engine limit pair_limit timeout survey_limit =
      goto exactly and needs no tag. Popping the stack exactly exposes whatever
      sat directly below its deepest entry, so the goto source is narrowed to
      that entry's predecessors - constrained, but no longer known. Popping
-     further lands somewhere the stack constrains in no way, and every goto
-     edge stays admissible; that is the case a sharper abstraction could close.
-     The middle case must not borrow the third's tag: it is already narrowed by
-     the predecessor filter, and reading it as unconstrained would point a
-     refinement at a gap that is not there. *)
+     further is the same rule applied further down: the source is narrowed to
+     the states that many entries below the deepest one retained, a set that
+     widens with every step past the suffix and is what a deeper stack would
+     replace with a single state. The two must not share a tag: they say
+     different things about how much room a refinement has, and reading the
+     exact-pop case as the looser one would point a refinement at a gap the
+     predecessor filter already closed. *)
   let describe_move suffix lookahead move =
     match move with
     | Terminate next ->
@@ -1161,7 +1342,9 @@ let prove engine limit pair_limit timeout survey_limit =
           (production_name automaton prod)
           (match width with
           | Some width when width > depth ->
-              " [pops past the retained stack: any goto edge]"
+              Printf.sprintf
+                " [pops past the retained stack: goto limited to states %d                  below its deepest]"
+                (width - depth + 1)
           | Some width when width = depth ->
               " [pops the retained stack exactly: goto limited to predecessors]"
           | _ -> "")
@@ -1221,7 +1404,7 @@ let prove engine limit pair_limit timeout survey_limit =
     then Hashtbl.replace sites (left, right, "#") ();
     if accepts_diverged then begin
       incr accepting;
-      if !candidate = None then candidate := Some (List.rev (trail node));
+      if !candidate = None then candidate := Some node;
       if surveying && !example_count < survey_limit then begin
         examples :=
           {
@@ -1267,7 +1450,15 @@ let prove engine limit pair_limit timeout survey_limit =
       }
   else
     match !candidate with
-    | Some tokens -> Abstract_candidate (tokens, explored)
+    | Some node ->
+        Abstract_candidate
+          ( List.rev (trail node),
+            explored,
+            {
+              example_tokens = List.rev (trail node);
+              example_site = describe_site (accepting_site node);
+            },
+            candidate_refinements node )
     | None ->
         if !overflow then Pair_overflow explored
         else if ran_out_of_time then Prove_timeout explored
@@ -2088,6 +2279,8 @@ let max_witnesses = ref None
 let check_tokens = ref []
 let prove_level = ref 0
 let survey_limit = ref 0
+let refine_max = ref 0
+let refine_rounds = ref 12
 let dump_classes = ref false
 
 type memory_limits = {
@@ -2159,6 +2352,14 @@ let options =
        exits 0 proven, 1 a concrete ambiguous sentence, 3 neither, \
        2 a failed run \
        (the derived dedup-frontier limit also bounds the abstract pair count)" );
+    ( "--prove-refine",
+      Arg.Set_int refine_max,
+      "K with --prove, treat a candidate as a reason to sharpen the \
+       abstraction rather than as an answer: deepen the retained stack along \
+       the candidate's own chain, up to K states, and try again (0 disables)" );
+    ( "--prove-refine-rounds",
+      Arg.Set_int refine_rounds,
+      "N give up after N refinement rounds (default 12)" );
     ( "--prove-survey",
       Arg.Set_int survey_limit,
       "N with --prove, do not stop at the first divergence: walk the whole \
@@ -2212,6 +2413,19 @@ let main () =
     invalid_arg "--prove-survey must be non-negative";
   if !survey_limit > 0 && !prove_level <= 0 then
     invalid_arg "--prove-survey requires --prove";
+  if !refine_max < 0 then invalid_arg "--prove-refine must be non-negative";
+  if !refine_max > 0 && !prove_level <= 0 then
+    invalid_arg "--prove-refine requires --prove";
+  if !refine_max > 0 && !refine_max < !prove_level then
+    invalid_arg "--prove-refine must be at least --prove";
+  (* A survey walks the whole abstract space and reports every site rather than
+     stopping at one, so it never produces the single candidate a refinement
+     would be guided by. Refusing the combination is better than accepting it
+     and silently refining nothing. *)
+  if !refine_max > 0 && !survey_limit > 0 then
+    invalid_arg "--prove-refine cannot be combined with --prove-survey";
+  if !refine_rounds < 1 then
+    invalid_arg "--prove-refine-rounds must be at least 1";
   let search_limits =
     if !check_tokens <> [] || !dump_classes then None
     else
@@ -2333,16 +2547,118 @@ let main () =
           "Proof budget: %d abstract pairs (single-threaded; the %d-worker \
            split does not apply).\n"
           prove_limits.max_frontiers jobs;
-        match
-          prove engine !prove_level prove_limits.max_frontiers timeout
-            !survey_limit
-        with
+        (* Refinement's loop. A candidate is a question rather than an
+           answer -- it may be a real ambiguity or a gap the abstraction left
+           -- and the two are told apart by sharpening the abstraction exactly
+           where this candidate needed it blunt. A spurious pair dies once the
+           gotos along its path are exact; a real one survives every round and
+           stops the loop by asking for nothing more, which is a far more
+           informative way to fail than stopping at the first candidate.
+
+           The rounds share the pair budget and the clock rather than each
+           getting their own, so refining is bounded by the same limits an
+           unrefined proof answers to. *)
+        let precision =
+          Array.make (Array.length automaton.states) !prove_level
+        in
+        let preds = predecessors automaton in
+        let deadline = Unix.gettimeofday () +. timeout in
+        let rounds = ref 0 in
+        let stalled = ref None in
+        let rec attempt () =
+          let result =
+            prove engine precision prove_limits.max_frontiers deadline
+              !survey_limit
+          in
+          match result with
+          | Abstract_candidate (tokens, _, _, requests) when !refine_max > 0 ->
+              (* What the chain asks for is the depth that would make each of
+                 its guessed gotos exact. That is the right first request and
+                 not always a sufficient one: a reduction consumes the entries
+                 it pops, so a stack made deep enough for one reduction can be
+                 too shallow for the next, and a blind spot whose appetite
+                 grows that way is not something a local rule can name. When
+                 the chain's own request buys nothing new, the loop widens by
+                 one instead of stopping, which lets it climb to the ceiling
+                 the caller set rather than stalling well below it - and makes
+                 a candidate that survives all the way to that ceiling mean
+                 what --prove-refine says it means. *)
+              let wanted depth_of =
+                List.filter_map
+                  (fun request ->
+                    let depth = min !refine_max (depth_of request) in
+                    if depth > precision.(fst request) then
+                      Some (fst request, depth)
+                    else None)
+                  requests
+              in
+              let exact = wanted snd in
+              let deeper =
+                if exact <> [] then exact
+                else wanted (fun (state, _) -> precision.(state) + 1)
+              in
+              let changed =
+                List.fold_left
+                  (fun changed (state, depth) ->
+                    let moved = deepen precision preds state depth in
+                    moved || changed)
+                  false deeper
+              in
+              let stop reason =
+                stalled := Some reason;
+                result
+              in
+              if requests = [] then
+                stop
+                  "the candidate's chain never needed the abstraction to \
+                   invent a goto, so no retained stack rules it out"
+              else if not changed then
+                stop
+                  (Printf.sprintf
+                     "the candidate survives every stack --prove-refine %d \
+                      allows"
+                     !refine_max)
+              else if !rounds >= !refine_rounds then
+                stop
+                  (Printf.sprintf "the round limit (%d) was reached"
+                     !refine_rounds)
+              else begin
+                incr rounds;
+                Printf.printf
+                  "Refinement round %d: deepened the stacks behind %s, \
+                   retaining up to %d.\n"
+                  !rounds
+                  (String.concat " " tokens)
+                  (Array.fold_left max 0 precision);
+                flush stdout;
+                attempt ()
+              end
+          | result -> result
+        in
+        let precision_summary () =
+          let deepest = Array.fold_left max 0 precision in
+          let deepened =
+            Array.fold_left
+              (fun count depth -> if depth > !prove_level then count + 1 else count)
+              0 precision
+          in
+          Printf.sprintf
+            "%d refinement round(s); %d of %d state(s) deepened past level \
+             %d, to a retained stack of %d at the deepest."
+            !rounds deepened (Array.length precision) !prove_level deepest
+        in
+        match attempt () with
         | Proven pairs ->
             Printf.printf
               "PROVEN UNAMBIGUOUS: no diverging pair of accepting parses \
                exists in the top-%d stack abstraction (%d abstract pairs \
                explored).\n"
               !prove_level pairs;
+            (* What a regression run has to reproduce. A refined proof holds of
+               a sharper abstraction than the level alone names, so the level
+               alone does not identify it. *)
+            if !rounds > 0 then
+              Printf.printf "Refinement: %s\n" (precision_summary ());
             exit 0
         | Surveyed survey ->
             Printf.printf
@@ -2389,12 +2705,29 @@ let main () =
                --prove.\n"
               timeout !prove_level pairs;
             exit not_proven_status
-        | Abstract_candidate (tokens, pairs) ->
+        | Abstract_candidate (tokens, pairs, example, _) ->
             Printf.printf
               "Abstract ambiguity candidate at level %d after %d pairs \
                (possibly spurious): %s\n"
               !prove_level pairs
               (String.concat " " tokens);
+            (* Where it stalled, not just what it stalled on. A candidate
+               sentence says nothing about which context the abstraction lost,
+               and after a refinement has run it is the only way to see whether
+               deepening moved the blind spot or merely paid for it. *)
+            List.iter
+              (fun line -> Printf.printf "  %s\n" line)
+              example.example_site;
+            (* Why refinement gave up is the part worth reading. A candidate
+               that outlived an abstraction made exact along its own path is
+               evidence of a real ambiguity, and reads very differently from
+               one that only ran out of rounds or depth. *)
+            Option.iter
+              (fun reason ->
+                Printf.printf "Refinement stopped after %d round(s): %s.\n"
+                  !rounds reason;
+                Printf.printf "Refinement reached: %s\n" (precision_summary ()))
+              !stalled;
             Printf.printf
               "Attempting to concretize with the bounded search...\n\n"
       end;

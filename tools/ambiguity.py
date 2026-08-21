@@ -470,7 +470,11 @@ def apply_overrides(
 
 
 def engine_arguments(
-    profile: SearchProfile, prove: int | None = None, survey: int = 0
+    profile: SearchProfile,
+    prove: int | None = None,
+    survey: int = 0,
+    refine: int = 0,
+    refine_rounds: int = 0,
 ) -> list[str]:
     arguments: list[str] = []
     for setting in SETTINGS:
@@ -479,9 +483,14 @@ def engine_arguments(
     if prove is not None:
         arguments.extend(["--prove", str(prove)])
     # A survey is a property of one invocation rather than of a saved search
-    # intent, so it stays a flag and never becomes a profile key.
+    # intent, so it stays a flag and never becomes a profile key. Refinement is
+    # the same: it says how hard to push on one run, not what the run is for.
     if survey > 0:
         arguments.extend(["--prove-survey", str(survey)])
+    if refine > 0:
+        arguments.extend(["--prove-refine", str(refine)])
+        if refine_rounds > 0:
+            arguments.extend(["--prove-refine-rounds", str(refine_rounds)])
     return arguments
 
 
@@ -581,6 +590,24 @@ def parser() -> argparse.ArgumentParser:
             "do not stop at the first divergence: count every distinct site "
             "the abstraction cannot separate, showing up to N examples"
         ),
+    )
+    prove.add_argument(
+        "--refine",
+        type=int,
+        default=0,
+        metavar="K",
+        help=(
+            "treat a candidate as a reason to sharpen the abstraction rather "
+            "than as an answer: deepen the retained stack behind it, up to K "
+            "states, and try again"
+        ),
+    )
+    prove.add_argument(
+        "--refine-rounds",
+        type=int,
+        default=0,
+        metavar="N",
+        help="give up refining after N rounds (default: the engine's own)",
     )
     add_overrides(prove)
 
@@ -713,7 +740,21 @@ def main(argv: Sequence[str] | None = None) -> int:
         survey = getattr(arguments, "survey", 0)
         if survey < 0:
             raise ConfigurationError("--survey must be non-negative")
-        engine_args = engine_arguments(profile, proof_level, survey)
+        refine = getattr(arguments, "refine", 0)
+        refine_rounds = getattr(arguments, "refine_rounds", 0)
+        if refine < 0:
+            raise ConfigurationError("--refine must be non-negative")
+        if refine_rounds < 0:
+            raise ConfigurationError("--refine-rounds must be non-negative")
+        # Caught here rather than left to the engine so the message names the
+        # option the caller actually typed.
+        if refine > 0 and proof_level is not None and refine < proof_level:
+            raise ConfigurationError("--refine must be at least the proof level")
+        if refine > 0 and survey > 0:
+            raise ConfigurationError("--refine cannot be combined with --survey")
+        engine_args = engine_arguments(
+            profile, proof_level, survey, refine, refine_rounds
+        )
         if arguments.dry_run:
             print(summary)
             print("\nEngine arguments:")
