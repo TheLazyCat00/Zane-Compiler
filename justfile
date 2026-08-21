@@ -32,3 +32,15 @@ sweep GRAMMAR="lib/cst/parser.mly" *ARGS:
 	@command -v menhir >/dev/null || { echo "menhir not found on PATH; enter the devbox shell first" >&2; exit 1; }
 	dune build tools/ambiguity_search.exe
 	python3 tools/precision_sweep.py {{GRAMMAR}} {{ARGS}}
+
+# Dump Menhir's LR automaton or its conflict explanations -- the obligation
+# ledger docs/ambiguity.md refers to. Expanded exactly as the ambiguity tools
+# expand it, so a state number cited by a proof report selects the state that
+# produced it; running menhir on the unexpanded grammar renumbers everything.
+#
+#   just explain --state 27
+#   just explain --conflicts
+#   just explain --search list_verb_type_suffix_
+explain *ARGS:
+	@command -v menhir >/dev/null || { echo "menhir not found on PATH; enter the devbox shell first" >&2; exit 1; }
+	python3 tools/explain_automaton.py {{ARGS}}
