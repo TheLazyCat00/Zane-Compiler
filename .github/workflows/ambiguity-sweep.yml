@@ -42,8 +42,10 @@ on:
         type: string
         # A selection whose worst case outruns the job's sweeping budget is
         # refused before any work starts, rather than being killed part-way
-        # with its reading lost. Eight levels at the longest per-level timeout
-        # is exactly the budget; anything wider needs a shorter timeout.
+        # with its reading lost. A level costs its timeout plus the slack the
+        # sweep allows the process past it, so at the longest per-level timeout
+        # seven levels fit and eight do not; wider sweeps need a shorter one.
+        # The default eight at 600s costs 5760s, well inside the budget.
       level_timeout:
         # Per level, not per run: the job's own cap below has to cover this
         # multiplied by the number of levels swept.
@@ -97,7 +99,10 @@ jobs:
       AMBIGUITY_JOBS: "1"
       AMBIGUITY_MENHIR: menhir
       # Kept in step with timeout-minutes above: the sweeping share of the cap,
-      # in seconds. A request whose worst case exceeds it is refused up front.
+      # in seconds. A request whose worst case exceeds it is refused up front,
+      # counting each level as its timeout plus the process slack the sweep
+      # allows past it -- the engine's timeout alone under-counts a level, and
+      # across eight of them by half an hour.
       SWEEP_BUDGET: "14400"
       REPORT: reports/actions/sweep-${{ github.run_id }}-${{ github.run_attempt }}.txt
 

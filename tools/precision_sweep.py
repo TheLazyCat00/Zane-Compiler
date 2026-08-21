@@ -51,6 +51,13 @@ AMBIGUOUS = 1
 BROKEN = 2
 NOT_PROVEN = 3
 
+# How far past its own timeout the engine is allowed to run before the process
+# is killed. Slack, not a second deadline: only a stuck process should ever
+# reach it, never a level that is merely slow. It is also what a level really
+# costs in the worst case, so the budget arithmetic below counts it too --
+# budgeting the engine timeout alone would under-count every level.
+PROCESS_SLACK_SECONDS = 120.0
+
 SURVEY_RE = re.compile(
     r"^Survey at level (\d+): (\d+) distinct divergence site\(s\), "
     r"(\d+) accepting abstract pair\(s\), (\d+) pairs explored(.*)$",
@@ -131,10 +138,8 @@ def run_level(
     started = time.monotonic()
     # `--timeout` bounds the engine's own search phases, not the process around
     # them: a hang in startup, in the menhir invocation, or in cleanup would
-    # block here forever and take the rest of the sweep with it. The outer
-    # bound is deliberately slack, so it can only fire on a process that is
-    # stuck rather than on a level that is merely slow.
-    process_timeout = float(timeout) + 120.0
+    # block here forever and take the rest of the sweep with it.
+    process_timeout = float(timeout) + PROCESS_SLACK_SECONDS
     try:
         completed = subprocess.run(
             [
@@ -278,10 +283,16 @@ def main() -> int:
         levels = parse_levels(arguments.levels)
     except ValueError as error:
         parser.error(str(error))
-    worst_case = len(levels) * float(arguments.timeout)
+    # The engine timeout is not what a level costs: the process outlives it by
+    # the slack above, and budgeting without that under-counts every level -
+    # which at eight levels is half an hour, enough to be killed by the very
+    # cap this budget exists to stay inside.
+    per_level = float(arguments.timeout) + PROCESS_SLACK_SECONDS
+    worst_case = len(levels) * per_level
     if arguments.budget is not None and worst_case > arguments.budget:
         parser.error(
-            f"{len(levels)} level(s) at {arguments.timeout}s each is "
+            f"{len(levels)} level(s) at {arguments.timeout}s each, plus "
+            f"{PROCESS_SLACK_SECONDS:.0f}s of process slack apiece, is "
             f"{worst_case:.0f}s in the worst case, past the "
             f"{arguments.budget:.0f}s budget. Narrow --levels, lower "
             "--timeout, or raise the cap the budget was derived from."
