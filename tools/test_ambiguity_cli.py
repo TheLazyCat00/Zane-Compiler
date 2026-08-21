@@ -455,6 +455,54 @@ class SurveyFlagTests(unittest.TestCase):
             arguments[arguments.index("--prove-survey") + 1], "5"
         )
 
+    def test_refinement_is_absent_unless_requested(self) -> None:
+        arguments = ambiguity.engine_arguments(self.profile(), 3)
+        self.assertNotIn("--prove-refine", arguments)
+        self.assertNotIn("--prove-refine-rounds", arguments)
+
+    def test_requested_refinement_reaches_the_engine(self) -> None:
+        arguments = ambiguity.engine_arguments(self.profile(), 3, refine=9)
+        self.assertIn("--prove-refine", arguments)
+        self.assertEqual(arguments[arguments.index("--prove-refine") + 1], "9")
+
+    def test_a_round_limit_only_travels_with_refinement(self) -> None:
+        # The engine has its own default, so passing a round limit without
+        # refinement would set a bound on something that is not running.
+        arguments = ambiguity.engine_arguments(
+            self.profile(), 3, refine=0, refine_rounds=4
+        )
+        self.assertNotIn("--prove-refine-rounds", arguments)
+        arguments = ambiguity.engine_arguments(
+            self.profile(), 3, refine=9, refine_rounds=4
+        )
+        self.assertEqual(
+            arguments[arguments.index("--prove-refine-rounds") + 1], "4"
+        )
+
+    def test_the_wrapper_rejects_its_own_invalid_refinements(self) -> None:
+        # The wrapper repeats two checks the engine also makes, so that the
+        # message names the option the caller typed rather than the engine's
+        # spelling of it. Without a test the duplication can rot away silently:
+        # the run still fails, just with the wrong option name in the error.
+        for name, argv in (
+            ("below the proof level", ["prove", "4", "--refine", "2"]),
+            ("with a survey", ["prove", "1", "--refine", "4", "--survey", "1"]),
+            ("rounds without refinement", ["prove", "1", "--refine-rounds", "4"]),
+        ):
+            with self.subTest(combination=name):
+                with self.assertRaises(SystemExit):
+                    ambiguity.main([*argv, "--dry-run"])
+
+    def test_the_wrapper_accepts_a_valid_refinement(self) -> None:
+        # The guard against the test above passing because every prove
+        # invocation is rejected.
+        self.assertEqual(
+            ambiguity.main(
+                ["prove", "1", "--refine", "4", "--refine-rounds", "2", "--dry-run"]
+            ),
+            0,
+        )
+
 
 class TerminalClassEngineTests(unittest.TestCase):
     """End-to-end checks that the search collapses interchangeable terminals

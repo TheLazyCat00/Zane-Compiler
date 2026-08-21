@@ -164,18 +164,65 @@ the state is triaged into one of these categories.
 
   Three things bound the abstraction's reach, and they are independent. **Its
   precision** is the proof level: below the top K states the stack is unknown,
-  and a reduction popping into the unknown re-enters through every goto edge on
-  the reduced nonterminal, which is where spurious candidates come from. When a
-  reduction pops exactly the known suffix, the state it exposes must be one that
-  can sit directly below the suffix's deepest entry, so only that entry's
-  predecessors are admitted; popping further reaches a state the suffix
-  constrains in no way, and every goto edge stays admissible. **Its budget** is
+  and a reduction popping into the unknown has to guess where it lands, which is
+  where spurious candidates come from. The guess is narrowed by the shape of the
+  automaton rather than left open. A stack is a chain of adjacent states — each
+  entry is pushed onto the one below it by a shift or a goto — so a reduction
+  popping `W` entries off a suffix that knows `D` of them lands on a state
+  `W - D + 1` entries below the deepest one retained, and only states that many
+  predecessor steps away are admitted. Popping exactly the known suffix is the
+  one-step case, narrowed to that entry's predecessors. The set widens with
+  every step past the suffix, which is the precision a deeper stack buys back,
+  and it is empty exactly where the suffix reaches the bottom of the stack:
+  nothing sits below the initial state, so a reduction that would pop past it is
+  not a move any parse can make. **Its budget** is
   the abstract pair limit, derived from `AMBIGUITY_MEMORY_MB` and
   `AMBIGUITY_MAX_FRONTIER_RATIO`. The abstract phase is a single sequential
   search, so the budget is derived for one worker and `AMBIGUITY_JOBS` does not
   divide it; the concretization search that may follow still uses every worker.
   The profile's token bound feeds the same estimate, so a narrower
   concretization profile also buys a larger pair budget.
+
+  `--refine K` treats a candidate as a question rather than as an answer. A
+  uniform proof level has to be paid for everywhere it is raised, and on a
+  grammar this size the level that would close one blind spot is the level that
+  makes the proof too expensive to run: level 2 takes about ten minutes and
+  level 3 does not finish. Refinement instead deepens the retained stack only
+  behind the candidate that needed it shallow, and tries again. `K` is a
+  retained stack depth, the same quantity the proof level sets, and bounds how
+  deep refinement may go; `--refine-rounds` bounds how many attempts it makes.
+  Because the retained depth is a property of the state on top rather than of
+  the run, deepening one blind spot leaves the rest of the automaton at the
+  base level.
+
+  Asking for depth at the blind spot alone would change nothing, since the
+  context was already discarded upstream: a stack can only arrive somewhere
+  holding `D` entries if everything that can sit below it retains at least
+  `D - 1`. Refinement therefore walks backwards through the predecessor
+  relation, shrinking the request by one at each step. That backward cone is
+  the whole cost, and how much of the automaton it reaches is a property of the
+  grammar — on the current grammar, refining to a retained depth of nine
+  deepens about three fifths of the automaton's states and still finishes,
+  where a uniform level 3 does not.
+
+  Refining cannot produce a false proof. Every depth assignment
+  over-approximates, because truncation is the only thing that ever shortens a
+  suffix and nothing ever invents one, so a sharper abstraction can remove
+  spurious pairs but never a real parse. That is what lets the choice of where
+  to deepen be a heuristic without putting the verdict at risk, and it is
+  pinned in `tools/test_prover.py` against grammars known ambiguous by
+  construction.
+
+  The round lines are worth as much as the verdict. Each names the candidate
+  that provoked it and the deepest stack then retained, so a run shows directly
+  whether a blind spot is bounded — the candidate changes, and eventually
+  disappears — or unbounded, which answers every widening with a longer
+  sentence. The palindrome does the latter unmistakably, pushing its
+  counterexample out by one `A p A` nesting per round. That is the same
+  conclusion a level sweep reaches by running a whole proof once per level, at a
+  fraction of the cost. When refinement gives up it says why, and prints the
+  surviving candidate's site in the same form a survey uses, so a stall can be
+  read rather than guessed at.
 
   `--survey N` answers a different question from a proof. The proof stops at
   the first divergence it can reach, which says nothing about how many more lie
