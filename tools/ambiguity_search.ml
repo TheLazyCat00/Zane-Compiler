@@ -3026,6 +3026,19 @@ let main () =
              %d, to a retained stack of %d at the deepest."
             !rounds deepened (Array.length precision) !prove_level deepest
         in
+        (* Refinement's own state, for the outcomes that are not a verdict about
+           the grammar. A run that deepened the abstraction and then ran out of
+           pairs or clock is a different situation from one that never refined,
+           and the ceiling may be part of why: reporting neither leaves the
+           reader to guess whether raising --prove-refine would have helped or
+           was already the thing making the run expensive. *)
+        let report_refinement () =
+          if !rounds > 0 then
+            Printf.printf "Refinement reached: %s\n" (precision_summary ());
+          Option.iter
+            (fun summary -> Printf.printf "Refinement was capped: %s\n" summary)
+            (capped_summary ())
+        in
         match attempt () with
         | Proven pairs ->
             Printf.printf
@@ -3076,6 +3089,7 @@ let main () =
                abstraction level %d. Raise AMBIGUITY_MEMORY_MB or \
                AMBIGUITY_MAX_FRONTIER_RATIO, or lower --prove.\n"
               pairs !prove_level;
+            report_refinement ();
             exit not_proven_status
         | Prove_timeout pairs ->
             Printf.printf
@@ -3083,6 +3097,7 @@ let main () =
                phase at level %d, after %d pairs. Raise --timeout, or lower \
                --prove.\n"
               timeout !prove_level pairs;
+            report_refinement ();
             exit not_proven_status
         | Abstract_candidate (tokens, pairs, example, forward, _) ->
             Printf.printf

@@ -549,6 +549,32 @@ class RefinementTests(ProverTestCase):
         self.assertIsNotNone(stopped, output)
         self.assertIn("round limit", stopped.group(2), output)
 
+    def test_a_curtailed_run_still_reports_what_refinement_did(self) -> None:
+        # Running out of pairs after refining is a different situation from
+        # never having refined, and the report used to look identical: the
+        # pair-limit message alone, with no sign that the abstraction it
+        # overflowed on was one refinement had already deepened. A reader
+        # cannot tell from that whether to raise the budget or lower the
+        # ceiling.
+        #
+        # The ratio admits the first round and not a later one, so the run
+        # refines and then overflows rather than overflowing outright.
+        status, output = self.prove(
+            EVEN_PALINDROME,
+            1,
+            extra=("--prove-refine", "8"),
+            environment={
+                **self.environment,
+                "AMBIGUITY_MAX_FRONTIER_RATIO": "0.0008",
+            },
+        )
+        self.assertEqual(status, NOT_PROVEN, output)
+        self.assertRegex(output, NOT_PROVEN_LINE)
+        self.assertRegex(output, REFINEMENT_ROUND_LINE)
+        self.assertRegex(
+            output, re.compile(r"^Refinement reached: ", re.MULTILINE)
+        )
+
     def test_rejected_combinations_do_not_run(self) -> None:
         # Each of these would otherwise look like it did something: refining
         # without a proof, refining shallower than the level it starts from, or
