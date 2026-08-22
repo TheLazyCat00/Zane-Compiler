@@ -849,14 +849,23 @@ type stack = { suffix : int list; height : int }
    its states, and a forced level adds depth without adding a variant, so a
    small bound still reaches a long way down a chain that never branches.
 
+   The height steers the split as well as ending it. Every stack starts at the
+   initial state, so when the height is exact it says precisely how many
+   entries are still missing, and a candidate for one of them is only real if
+   the bottom is still that many predecessor steps below it. Variants that
+   cannot get there are dropped before they are ever carried, which is what
+   keeps the split narrow enough to be worth taking: a chain that has to land
+   on the initial state in three more entries has far fewer ways to do it than
+   the automaton's shape alone suggests.
+
    The split is what makes the bottom of the stack reachable again. A variant
    that descends to the initial state has nothing below it, and a reduction
    wider than it can pop is then not a move any parse can make - a conclusion
    the abstraction could not draw while the stack was stranded above the
    branch. *)
-let descent_limit = 8
+let descent_limit = 512
 
-let cap_variants preds (precision : precision) ceiling height states =
+let cap_variants preds below (precision : precision) ceiling height states =
   match states with
   | [] -> [ { suffix = []; height } ]
   | top :: _ ->
@@ -888,8 +897,17 @@ let cap_variants preds (precision : precision) ceiling height states =
                     held := variant :: !held;
                     IntSet.iter
                       (fun source ->
-                        growing :=
-                          (source :: below_first, length + 1, source) :: !growing)
+                        (* When the height is exact it says how many entries
+                           are still missing, and every stack bottoms out at
+                           the initial state, so a candidate that cannot reach
+                           it in exactly that many more steps is not one. *)
+                        if
+                          height >= ceiling
+                          || IntSet.mem 0 (below source (height - length - 1))
+                        then
+                          growing :=
+                            (source :: below_first, length + 1, source)
+                            :: !growing)
                       sources
                   end)
               !frontier;
@@ -1072,7 +1090,7 @@ let side_moves automaton gotos below preds (precision : precision) ceiling cache
                     List.rev_append
                       (List.rev_map
                          (fun variant -> Terminate variant)
-                         (cap_variants preds precision ceiling
+                         (cap_variants preds below precision ceiling
                             (raise_height height) (target :: suffix)))
                       !moves)
               (Hashtbl.find_opt state.transitions token);
@@ -1108,7 +1126,7 @@ let side_moves automaton gotos below preds (precision : precision) ceiling cache
                                 (List.rev_map
                                    (fun variant ->
                                      Reduce (reduction.prod, variant))
-                                   (cap_variants preds precision ceiling after
+                                   (cap_variants preds below precision ceiling after
                                       (target :: remaining)))
                                 !moves)
                         (Hashtbl.find_opt
@@ -1131,7 +1149,7 @@ let side_moves automaton gotos below preds (precision : precision) ceiling cache
                           List.rev_append
                             (List.rev_map
                                (fun variant -> Reduce (reduction.prod, variant))
-                               (cap_variants preds precision ceiling after
+                               (cap_variants preds below precision ceiling after
                                   [ target; source ]))
                             !moves)
                     (Option.value
@@ -1807,6 +1825,41 @@ let prove engine (precision : precision) pair_limit deadline survey_limit trace
     in
     walk node;
     scan node "#";
+    if Hashtbl.length wanted = 0 then begin
+      (* Nowhere on the path did the abstraction have to invent a goto, and yet
+         the pair is still here. Imprecision is not only invented gotos: a
+         truncated stack conflates every real stack that ends the same way, and
+         two of those can differ in what happens next. Nothing asks for depth
+         in that case, so refinement used to give up on exactly the candidates
+         whose chains were already clean.
+
+         So ask for one more entry than each truncated stack on the path is
+         carrying. Truncated is the whole condition: a stack as long as its own
+         height is the entire stack, and asking for depth past the bottom is a
+         request no ceiling can ever satisfy, which would leave refinement
+         re-running the proof until the clock stopped. When every stack on the
+         path is complete there is nothing left to sharpen, and the run says so
+         rather than pretending another round would help. *)
+      let widen (left, right, _) =
+        List.iter
+          (fun stack ->
+            let depth = List.length stack.suffix in
+            match stack.suffix with
+            | [] -> ()
+            | top :: _ ->
+                if depth < stack.height then record (top, depth + 1))
+          (if left = right then [ left ] else [ left; right ])
+      in
+      let rec walk node =
+        match Hashtbl.find parents node with
+        | None -> ()
+        | Some (_, parent) ->
+            widen parent;
+            walk parent
+      in
+      walk node;
+      widen node
+    end;
     Hashtbl.fold (fun top depth result -> (top, depth) :: result) wanted []
   in
   (* One representative per terminal class: interchangeable lookaheads drive

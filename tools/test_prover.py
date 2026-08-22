@@ -567,11 +567,12 @@ class RefinementTests(ProverTestCase):
         self.assertGreater(int(capped.group(4)), 2, output)
 
     def test_no_cap_is_reported_when_every_request_fits(self) -> None:
-        # The guard against the line above appearing whenever refinement runs:
-        # a ceiling of eight covers everything the palindrome's chain asks for,
-        # so there is nothing to cut down and nothing to report.
+        # The guard against the line above appearing whenever refinement runs.
+        # This grammar's blind spot is bounded -- refinement walks it and the
+        # concretization search then finds the real sentence -- so a ceiling of
+        # eight covers every request and there is nothing to cut down.
         _, output = self.prove(
-            EVEN_PALINDROME, 1, extra=("--prove-refine", "8")
+            AMBIGUOUS_EXPRESSION, 1, extra=("--prove-refine", "8")
         )
         self.assertRegex(output, REFINEMENT_ROUND_LINE)
         self.assertNotRegex(output, REFINEMENT_CAPPED)

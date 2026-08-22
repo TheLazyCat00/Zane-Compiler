@@ -268,6 +268,18 @@ the state is triaged into one of these categories.
   deepens about three fifths of the automaton's states and still finishes,
   where a uniform level 3 does not.
 
+  A candidate whose chain never guessed is refined too. Imprecision is not
+  only invented gotos: a truncated stack conflates every real stack that ends
+  the same way, and two of those can differ in what happens next, so a pair can
+  survive an abstraction that guessed nowhere along its path. Nothing asks for
+  depth in that case, and refinement used to give up on exactly the candidates
+  whose chains were already clean. It now asks for one more entry than each
+  *truncated* stack on the path is carrying — truncated being the whole
+  condition, because a stack as long as its own height is the entire stack and
+  asking for depth past the bottom is a request no ceiling can satisfy. When
+  every stack on the path is complete there is nothing left to sharpen, and the
+  run says so instead of pretending another round would help.
+
   Refining cannot produce a false proof. Every depth assignment
   over-approximates, because truncation is the only thing that ever shortens a
   suffix and nothing ever invents one, so a sharper abstraction can remove
