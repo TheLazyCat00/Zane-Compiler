@@ -253,6 +253,19 @@ the state is triaged into one of these categories.
   there say nothing about whether the step guessed. Read a localized conflict
   as evidence about precision and this is the mistake it invites.
 
+  That cost was measured with the refinement ceiling at nine, where the
+  candidate's request was still moving. At fifteen it stops moving: refinement
+  runs twelve rounds, reaches a retained stack of fifteen, clamps nothing, and
+  the trace's deepest request is still a retained stack of twelve at state 661.
+  Refinement gives up only when every request has been honoured, so the depth
+  asked for is there and goes unspent. What the walk shows is why: the stack
+  that reaches 661 carries seven entries, rebuilt by the preceding reduction
+  and extended downward as far as the forced-predecessor chain runs, and the
+  reduction that fires there is eleven wide. Depth beyond seven cannot be
+  spent on a stack that never arrives holding it. Where that chain stops is
+  what splitting the rebuild addresses, and the split has not been measured
+  with the request pinned this way.
+
   `--trace` follows a reported candidate from its divergence site down to
   acceptance. Every other diagnostic here reports where a divergence was
   *born*, which explains a candidate only when the site is also the reason it
