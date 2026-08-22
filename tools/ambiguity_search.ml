@@ -32,6 +32,18 @@ type automaton = {
      productions a conflict is between is what makes the conflict findable in
      the grammar, so the mapping is kept rather than discarded after parsing. *)
   production_text : (int, string) Hashtbl.t;
+  (* The fewest terminals any parse must have consumed before a state can sit
+     on top of the stack. Unreachable states hold [max_int].
+
+     This is the one thing about a stack that the retained suffix never says.
+     A suffix is a chain of adjacent states and nothing more, so an abstract
+     stack rebuilt on a guessed goto source can name a state belonging to a
+     part of the grammar the sentence read so far cannot have reached - the
+     chain is a valid path through the automaton, just not one this prefix can
+     walk. Comparing a state's requirement against the tokens actually
+     consumed rejects exactly those, and it is a property of the automaton, so
+     it costs one table built once. *)
+  min_terminals : int array;
 }
 
 let production_name automaton prod =
@@ -211,6 +223,64 @@ let prepare_automaton ~menhir ~grammar ~directory =
   end;
   automaton
 
+(* How few terminals a parse can have read by the time each state is on top.
+
+   Two least fixpoints, both over quantities that only ever fall, so both
+   terminate: first the fewest terminals each nonterminal can derive, then the
+   fewest a path from the initial state to each state can spell. A terminal
+   edge costs one; a goto on a nonterminal costs whatever that nonterminal can
+   derive at its shortest, which is zero for the ones that can vanish.
+
+   Relaxation is repeated over the whole edge set rather than ordered as a
+   shortest-path walk. The costs are non-negative so an ordered walk would
+   work, but the edge count here is small and a fixpoint is harder to get
+   wrong. [max_int] marks both "not solved yet" and "cannot happen", which is
+   the same thing for every use: a nonterminal deriving no finite sentence, and
+   a state no parse can reach.
+
+   The bound is sound in the direction it is used. It is a minimum over all
+   paths, so a state whose minimum exceeds the tokens consumed cannot be on the
+   stack at all; a state whose minimum is smaller may or may not be. Rejecting
+   on it can therefore remove impossible stacks and never a possible one. *)
+let solve_min_terminals states terminals grammar =
+  let add a b = if a = max_int || b = max_int then max_int else a + b in
+  let yields = Hashtbl.create 256 in
+  let yield_of symbol =
+    if StringSet.mem symbol terminals then 1
+    else Option.value (Hashtbl.find_opt yields symbol) ~default:max_int
+  in
+  let changed = ref true in
+  while !changed do
+    changed := false;
+    List.iter
+      (fun (lhs, symbols) ->
+        let total = List.fold_left (fun sum s -> add sum (yield_of s)) 0 symbols in
+        if total < yield_of lhs then begin
+          Hashtbl.replace yields lhs total;
+          changed := true
+        end)
+      grammar
+  done;
+  let distance = Array.make (Array.length states) max_int in
+  if Array.length states > 0 then distance.(0) <- 0;
+  let changed = ref true in
+  while !changed do
+    changed := false;
+    Array.iteri
+      (fun source state ->
+        if distance.(source) < max_int then
+          Hashtbl.iter
+            (fun symbol target ->
+              let reached = add distance.(source) (yield_of symbol) in
+              if reached < distance.(target) then begin
+                distance.(target) <- reached;
+                changed := true
+              end)
+            state.transitions)
+      states
+  done;
+  distance
+
 (* Terminal equivalence classes.
 
    Two terminals are interchangeable when replacing every occurrence of one by
@@ -362,6 +432,11 @@ let parse_automaton path terminals aliases =
   let current = ref None in
   let lookaheads = ref [] in
   let productions = Hashtbl.create 512 in
+  (* Every production, as it was printed, so the minimum terminal yield of each
+     nonterminal can be solved for once the whole file has been read. The same
+     production is printed at every state that reduces it, and duplicates only
+     cost a redundant relaxation, so they are not filtered out here. *)
+  let grammar = ref [] in
   let intern_production text =
     match Hashtbl.find_opt productions text with
     | Some id -> id
@@ -400,13 +475,15 @@ let parse_automaton path terminals aliases =
             else if Str.string_match reduction_re line 0 then begin
               let lhs = String.trim (Str.matched_group 1 line) in
               let rhs = String.trim (Str.matched_group 2 line) in
+              let symbols = words rhs in
               let reduction =
                 {
                   lhs;
-                  width = List.length (words rhs);
+                  width = List.length symbols;
                   prod = intern_production (lhs ^ " -> " ^ rhs);
                 }
               in
+              grammar := (lhs, symbols) :: !grammar;
               List.iter
                 (fun token ->
                   let previous =
@@ -430,7 +507,8 @@ let parse_automaton path terminals aliases =
   Hashtbl.iter
     (fun text id -> Hashtbl.replace production_text id text)
     productions;
-  { states; terminals; aliases; terminal_class; production_text }
+  let min_terminals = solve_min_terminals states terminals !grammar in
+  { states; terminals; aliases; terminal_class; production_text; min_terminals }
 
 module Stack_pool = struct
   type node = {
@@ -1399,6 +1477,18 @@ type prove_result =
 let ambiguous_status = 1
 let not_proven_status = 3
 
+(* How many stacks the prefix-reachability test refused during the last abstract
+   run, and how far the token count was tracked before it stopped mattering.
+
+   Held beside the proof rather than carried through [prove_result], because
+   every outcome wants them and none of them is a verdict. A test that silently
+   removes stacks is the same trap as a ceiling that silently clamps a request:
+   the run looks like it explored a space it did not, and nothing in the output
+   says which. Refinement re-runs the proof, so these describe its final round.
+*)
+let refused_stacks = ref 0
+let tracked_terminals = ref 0
+
 (* [deadline] is absolute rather than a duration because refinement runs this
    several times over: the rounds share one budget for the abstract phase, so a
    proof that needed four of them is not four times as patient as one that
@@ -1437,8 +1527,8 @@ let prove engine (precision : precision) pair_limit deadline survey_limit trace
         outcomes
   in
   let parents :
-      ( int list * int list * bool,
-        (string * (int list * int list * bool)) option )
+      ( int list * int list * bool * int,
+        (string * (int list * int list * bool * int)) option )
       Hashtbl.t =
     Hashtbl.create 100_003
   in
@@ -1455,18 +1545,38 @@ let prove engine (precision : precision) pair_limit deadline survey_limit trace
   let examples = ref [] in
   let example_count = ref 0 in
   let surveying = survey_limit > 0 in
-  let canonical (left, right, diverged) =
-    if compare left right <= 0 then (left, right, diverged)
-    else (right, left, diverged)
+  let canonical (left, right, diverged, consumed) =
+    if compare left right <= 0 then (left, right, diverged, consumed)
+    else (right, left, diverged, consumed)
+  in
+  (* Past this many terminals no state can be ruled out, so the count stops
+     being tracked and every longer prefix shares one identity. Without a
+     ceiling the count would make the pair space infinite and the search would
+     never close; with it the space grows by a bounded factor and only over the
+     opening tokens, which is where the count still decides anything. *)
+  let terminal_ceiling =
+    Array.fold_left
+      (fun highest required ->
+        if required = max_int then highest else max highest required)
+      0 automaton.min_terminals
+  in
+  refused_stacks := 0;
+  tracked_terminals := terminal_ceiling;
+  let reachable_within consumed = function
+    | [] -> true
+    | top :: _ -> automaton.min_terminals.(top) <= consumed
   in
   let push origin node =
-    let node = canonical node in
-    if not (Hashtbl.mem parents node) then
-      if Hashtbl.length parents >= pair_limit then overflow := true
-      else begin
-        Hashtbl.add parents node origin;
-        Queue.add node queue
-      end
+    let ((left, right, _, consumed) as node) = canonical node in
+    if not (reachable_within consumed left && reachable_within consumed right)
+    then incr refused_stacks
+    else
+      if not (Hashtbl.mem parents node) then
+        if Hashtbl.length parents >= pair_limit then overflow := true
+        else begin
+          Hashtbl.add parents node origin;
+          Queue.add node queue
+        end
   in
   let rec trail node =
     match Hashtbl.find parents node with
@@ -1479,13 +1589,14 @@ let prove engine (precision : precision) pair_limit deadline survey_limit trace
      why the abstraction could not separate the two parses. A pair that is not
      itself diverged reached acceptance by parting ways on end of input, so its
      own stacks under "#" are the site. *)
-  let accepting_site ((left, right, _) as node) =
-    let rec climb ((_, _, diverged) as node) =
+  let accepting_site ((left, right, _, _) as node) =
+    let rec climb ((_, _, diverged, _) as node) =
       if not diverged then None
       else
         match Hashtbl.find parents node with
         | None -> None
-        | Some (token, ((parent_left, parent_right, parent_diverged) as parent))
+        | Some
+            (token, ((parent_left, parent_right, parent_diverged, _) as parent))
           ->
             if parent_diverged then climb parent
             else Some (parent_left, parent_right, token)
@@ -1497,12 +1608,12 @@ let prove engine (precision : precision) pair_limit deadline survey_limit trace
   (* The node the divergence was born at, rather than the triple describing it:
      the forward walk has to start somewhere it can walk down from. *)
   let divergence_origin node =
-    let rec climb ((_, _, diverged) as node) =
+    let rec climb ((_, _, diverged, _) as node) =
       if not diverged then None
       else
         match Hashtbl.find parents node with
         | None -> None
-        | Some (_, ((_, _, parent_diverged) as parent)) ->
+        | Some (_, ((_, _, parent_diverged, _) as parent)) ->
             if parent_diverged then climb parent else Some parent
     in
     climb node
@@ -1540,10 +1651,10 @@ let prove engine (precision : precision) pair_limit deadline survey_limit trace
     let render_stack suffix =
       String.concat " " (List.map string_of_int suffix)
     in
-    let guesses (left, right, _) token child =
+    let guesses (left, right, _, _) token child =
       let target =
         Option.map
-          (fun (child_left, child_right, _) -> (child_left, child_right))
+          (fun (child_left, child_right, _, _) -> (child_left, child_right))
           child
       in
       List.map
@@ -1551,7 +1662,7 @@ let prove engine (precision : precision) pair_limit deadline survey_limit trace
           Printf.sprintf "guessed at state %d (exact from %d)" top depth)
         (joint_imprecision automaton moves (left, right) token target)
     in
-    let step index ((left, right, _) as node) token child =
+    let step index ((left, right, _, _) as node) token child =
       let stacks =
         if left = right then Printf.sprintf "stack %s" (render_stack left)
         else
@@ -1610,7 +1721,7 @@ let prove engine (precision : precision) pair_limit deadline survey_limit trace
       | Some existing when existing >= depth -> ()
       | _ -> Hashtbl.replace wanted top depth
     in
-    let scan (left, right, _) token =
+    let scan (left, right, _, _) token =
       List.iter
         (fun stack -> List.iter record (chain_imprecision automaton moves stack token))
         (if left = right then [ left ] else [ left; right ])
@@ -1708,7 +1819,7 @@ let prove engine (precision : precision) pair_limit deadline survey_limit trace
     in
     (header :: stacks) @ conflict
   in
-  push None ([ 0 ], [ 0 ], false);
+  push None ([ 0 ], [ 0 ], false, 0);
   (* The clock is read once per dequeued pair, as the concretization search
      reads it once per expanded frontier: a pair costs a joint-outcome pass
      over every terminal class, so the read does not show up beside it. *)
@@ -1718,7 +1829,7 @@ let prove engine (precision : precision) pair_limit deadline survey_limit trace
     && (not !overflow)
     && Unix.gettimeofday () < deadline
   do
-    let (left, right, diverged) as node = Queue.take queue in
+    let (left, right, diverged, consumed) as node = Queue.take queue in
     (* EOF is a lookahead like any other, but it is not in [terminals] - it is
        the sentinel the joint outcomes take separately - so a pair that first
        parts ways on end of input would otherwise never have its site recorded
@@ -1759,7 +1870,10 @@ let prove engine (precision : precision) pair_limit deadline survey_limit trace
                 Hashtbl.replace sites (left, right, token) ();
               push
                 (Some (token, node))
-                (next_left, next_right, diverged || chain_diverged))
+                ( next_left,
+                  next_right,
+                  diverged || chain_diverged,
+                  min terminal_ceiling (consumed + 1) ))
             (joint (left, right) token))
         terminals
   done;
@@ -3032,12 +3146,26 @@ let main () =
            and the ceiling may be part of why: reporting neither leaves the
            reader to guess whether raising --prove-refine would have helped or
            was already the thing making the run expensive. *)
+        (* What the prefix-reachability test did, whenever it did anything.
+           A stack it refuses is one the abstraction would otherwise have
+           carried, so a run that refused many explored a visibly different
+           space from one that refused none, and the reader should not have to
+           infer which from the pair count. *)
+        let report_reachability () =
+          if !refused_stacks > 0 then
+            Printf.printf
+              "Prefix reachability: refused %d abstract stack(s) that no \
+               sentence that short can hold; the token count stops being \
+               tracked past %d.\n"
+              !refused_stacks !tracked_terminals
+        in
         let report_refinement () =
           if !rounds > 0 then
             Printf.printf "Refinement reached: %s\n" (precision_summary ());
           Option.iter
             (fun summary -> Printf.printf "Refinement was capped: %s\n" summary)
-            (capped_summary ())
+            (capped_summary ());
+          report_reachability ()
         in
         match attempt () with
         | Proven pairs ->
@@ -3051,6 +3179,7 @@ let main () =
                alone does not identify it. *)
             if !rounds > 0 then
               Printf.printf "Refinement: %s\n" (precision_summary ());
+            report_reachability ();
             exit 0
         | Surveyed survey ->
             Printf.printf

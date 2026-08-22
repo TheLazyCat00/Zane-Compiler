@@ -187,7 +187,39 @@ the state is triaged into one of these categories.
   current grammar's 919 reachable states — that context is recovered by walking
   those forced predecessors downward, so a rebuilt stack reaches the retained
   depth like any other. It stops at the first entry with more than one possible
-  predecessor, and at the bottom of the stack. **Its budget** is
+  predecessor, and at the bottom of the stack.
+
+  Every one of those narrowings reads the automaton's shape and nothing else,
+  and shape is not the only thing known about a stack. A guessed source is
+  admitted whenever a path of the right length reaches it, which admits states
+  belonging to parts of the grammar the sentence read so far has not gone
+  anywhere near — a valid path through the automaton, just not one this prefix
+  can walk. No amount of retained depth rules them out, because the retained
+  depth is a chain of adjacent states and so is the guess.
+
+  What rules them out is how many terminals have been read. Each state carries
+  the fewest terminals any parse must consume before it can sit on top of the
+  stack, solved once from the grammar as two least fixpoints: the shortest
+  sentence each nonterminal derives, then the cheapest path from the initial
+  state to each state. A pair reached by `n` tokens cannot be holding a stack
+  whose top needs more than `n`, and the pairs that fail this are refused.
+  Because the bound is a minimum over all paths, refusing on it can only ever
+  remove a stack no parse could have, never one some parse could.
+
+  The count is part of a pair's identity rather than a note beside it. The
+  search deduplicates by stack pair, so the same pair reached by a longer
+  sentence is the same node; recording the first arrival's count and reusing it
+  would undercount every later path through that node and refuse stacks those
+  paths can legitimately hold — an unsound filter that reports a proof. Past
+  the deepest requirement in the automaton no state can be ruled out, so the
+  count stops being tracked there and every longer prefix shares one identity.
+  That ceiling is what keeps the pair space finite, and it costs a bounded
+  factor over the opening tokens, which is where the count still decides
+  anything.
+
+  A run says what the test refused, for the same reason it says when a
+  refinement request was clamped: a filter that removes stacks silently leaves
+  the output looking like a search of a space it did not make. **Its budget** is
   the abstract pair limit, derived from `AMBIGUITY_MEMORY_MB` and
   `AMBIGUITY_MAX_FRONTIER_RATIO`. The abstract phase is a single sequential
   search, so the budget is derived for one worker and `AMBIGUITY_JOBS` does not
@@ -254,17 +286,29 @@ the state is triaged into one of these categories.
   as evidence about precision and this is the mistake it invites.
 
   That cost was measured with the refinement ceiling at nine, where the
-  candidate's request was still moving. At fifteen it stops moving: refinement
-  runs twelve rounds, reaches a retained stack of fifteen, clamps nothing, and
-  the trace's deepest request is still a retained stack of twelve at state 661.
-  Refinement gives up only when every request has been honoured, so the depth
-  asked for is there and goes unspent. What the walk shows is why: the stack
-  that reaches 661 carries seven entries, rebuilt by the preceding reduction
-  and extended downward as far as the forced-predecessor chain runs, and the
-  reduction that fires there is eleven wide. Depth beyond seven cannot be
+  candidate's request was still moving, and before the prefix-reachability
+  test existed. It has not been measured since.
+
+  What the candidate looks like now is worth stating, because the shape did not
+  change when the numbers did. At a ceiling of fifteen refinement runs ten
+  rounds, reaches a retained stack of fifteen, clamps nothing, and the trace's
+  deepest request is a retained stack of nine at state 902 — down from twelve
+  at state 661, which the reachability test removed outright: 661 needs nine
+  terminals and the candidate has read six by the time it would be on the
+  stack. Refinement gives up only when every request has been honoured, so
+  the depth asked for is there and goes unspent. What the walk shows is why:
+  the stack that reaches 902 carries seven entries, rebuilt by the preceding
+  reduction and extended downward as far as the forced-predecessor chain runs,
+  while the reduction firing there is eight wide. Depth beyond seven cannot be
   spent on a stack that never arrives holding it. Where that chain stops is
-  what splitting the rebuild addresses, and the split has not been measured
-  with the request pinned this way.
+  what splitting the rebuild addresses.
+
+  The test pays for itself unevenly. At a ceiling of fifteen it cut the run
+  from 729,491 abstract pairs to 698,910 — the refusals more than covering the
+  extra identities the token count introduces — and dropped a round. At nine it
+  cost 60,423 pairs against 112,708, where the same identities are not paid for
+  by anything, because a request still moving does not linger on the stacks the
+  test is good at refusing.
 
   `--trace` follows a reported candidate from its divergence site down to
   acceptance. Every other diagnostic here reports where a divergence was

@@ -106,6 +106,12 @@ REFINEMENT_CAPPED = re.compile(
 REFINEMENT_DEEPEST = re.compile(
     r"to a retained stack of (\d+) at the deepest\.", re.MULTILINE
 )
+REACHABILITY_LINE = re.compile(
+    r"^Prefix reachability: refused (\d+) abstract stack\(s\) that no "
+    r"sentence that short can hold; the token count stops being tracked past "
+    r"(\d+)\.$",
+    re.MULTILINE,
+)
 
 
 # Ambiguous: `a + a + a` groups two ways with nothing to choose between them.
@@ -283,6 +289,31 @@ x: A { () }
 y: A { () }
 """
 
+# One nonterminal reachable both early and late. `d` can begin a sentence or
+# follow four `B`s, so the goto that rebuilds a stack after an imprecise
+# reduction has two sources, and the far one needs terminals a short sentence
+# has not read. The bracket conflict is the shape the real grammar stalls on:
+# on `[`, either the suffix list ends and the brackets belong to `d`, or
+# another suffix begins.
+LATE_ARM = """\
+%token A "a"
+%token B "b"
+%token LB "["
+%token RB "]"
+%token SEMI ";"
+%token EOF "<eof>"
+%start <unit> main
+%%
+main:
+  | d EOF { () }
+  | B B B B d EOF { () }
+d: ty LB RB SEMI { () }
+ty: A suffixes { () }
+suffixes:
+  |                  { () }
+  | LB RB suffixes   { () }
+"""
+
 AMBIGUOUS_GRAMMARS = {
     "expression without precedence": AMBIGUOUS_EXPRESSION,
     "dangling else": DANGLING_ELSE,
@@ -293,6 +324,7 @@ UNAMBIGUOUS_GRAMMARS = {
     "lr(1) list": LR1_LIST,
     "precedence-resolved expression": PRECEDENCE_EXPRESSION,
     "even-length palindrome": EVEN_PALINDROME,
+    "late arm": LATE_ARM,
 }
 
 # Conflict-free automata offer exactly one action per state and lookahead, so
@@ -595,6 +627,42 @@ class RefinementTests(ProverTestCase):
                 )
                 self.assertNotIn(status, VERDICT_STATUSES)
                 self.assertNotRegex(output, PROVEN_LINE)
+
+
+class PrefixReachabilityTests(ProverTestCase):
+    def test_a_stack_no_short_sentence_can_hold_is_refused(self) -> None:
+        # The abstraction rebuilds a stack on a guessed goto source, and the
+        # sources it may guess are read off the automaton's shape alone. That
+        # admits states belonging to a part of the grammar the sentence read so
+        # far has not gone anywhere near, and retained depth never rules them
+        # out, because depth is a chain of adjacent states and so is the guess.
+        status, output = self.prove(LATE_ARM, 1)
+        self.assertEqual(status, PROVEN, output)
+        match = REACHABILITY_LINE.search(output)
+        self.assertIsNotNone(match, output)
+        assert match is not None
+        self.assertGreater(int(match.group(1)), 0, output)
+        # Past the deepest requirement no state can be ruled out, so the count
+        # stops being tracked there. A ceiling below that would leave part of
+        # the automaton permanently unfilterable.
+        self.assertGreater(int(match.group(2)), 0, output)
+
+    def test_a_grammar_with_nothing_to_refuse_stays_silent(self) -> None:
+        # The line has to mean something when it appears, which it only does if
+        # a run that refused nothing does not print it.
+        _, output = self.prove(LR1_LIST, 1)
+        self.assertIsNone(REACHABILITY_LINE.search(output), output)
+
+    def test_refusing_stacks_never_proves_an_ambiguous_grammar(self) -> None:
+        # The filter removes stacks from the search, which is the one kind of
+        # change that can turn a sound over-approximation into a false
+        # theorem. Every ambiguous grammar has to survive it at every level.
+        for name, grammar in AMBIGUOUS_GRAMMARS.items():
+            for level in (1, 2, 3):
+                with self.subTest(grammar=name, level=level):
+                    status, output = self.prove(grammar, level)
+                    self.assertNotRegex(output, PROVEN_LINE)
+                    self.assertNotEqual(status, PROVEN, output)
 
 
 class ForwardTraceTests(ProverTestCase):
