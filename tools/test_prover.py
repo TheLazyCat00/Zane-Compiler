@@ -106,10 +106,15 @@ REFINEMENT_CAPPED = re.compile(
 REFINEMENT_DEEPEST = re.compile(
     r"to a retained stack of (\d+) at the deepest\.", re.MULTILINE
 )
+REFINEMENT_EXHAUSTED = re.compile(
+    r"^Refinement stopped after \d+ round\(s\): the candidate's chain never "
+    r"needed the abstraction to invent a goto, so no retained stack rules it "
+    r"out\.$",
+    re.MULTILINE,
+)
 REACHABILITY_LINE = re.compile(
-    r"^Prefix reachability: refused (\d+) abstract stack\(s\) that no "
-    r"sentence that short can hold; the token count stops being tracked past "
-    r"(\d+)\.$",
+    r"^Stack height: refused (\d+) move\(s\) onto a state no stack that short "
+    r"can carry; the height stops being counted past (\d+)\.$",
     re.MULTILINE,
 )
 
@@ -524,14 +529,18 @@ class RefinementTests(ProverTestCase):
         self.assertEqual(status, NOT_PROVEN, output)
         self.assertRegex(output, REFINEMENT_STOPPED_LINE)
 
-    def test_an_unbounded_blind_spot_widens_its_counterexample(self) -> None:
-        # What refinement is worth beyond the proof. A bounded blind spot
-        # closes once the retained stack outgrows it; an unbounded one answers
-        # every widening with a longer sentence, and the round lines make that
-        # answer visible directly -- the palindrome pushes its counterexample
-        # out by one `A p A` nesting per round. Reading that off a handful of
-        # rounds is the same conclusion the level sweep reaches by running the
-        # whole proof once per level.
+    def test_an_unbounded_blind_spot_is_reported_as_one(self) -> None:
+        # What refinement is worth beyond the proof. A bounded blind spot closes
+        # once the retained stack outgrows it; an unbounded one never does, and
+        # a run has to say so rather than leave it to be inferred from a verdict
+        # that looks the same either way.
+        #
+        # There are two ways it can say so, and which one a grammar gets depends
+        # on how much context the abstraction can recover. The palindrome's
+        # middle is unbounded, so either the counterexample grows a nesting per
+        # round, or -- once the descent rebuilds its stacks to full depth -- the
+        # chain stops asking for depth at all and the run reports that no
+        # retained stack rules the candidate out. Both are the same conclusion.
         _, output = self.prove(
             EVEN_PALINDROME, 1, extra=("--prove-refine", "8")
         )
@@ -539,9 +548,10 @@ class RefinementTests(ProverTestCase):
             match.group(2) for match in REFINEMENT_ROUND_LINE.finditer(output)
         ]
         self.assertGreaterEqual(len(candidates), 2, output)
-        self.assertGreater(
-            len(candidates[-1].split()), len(candidates[0].split()), output
-        )
+        widened = len(candidates[-1].split()) > len(candidates[0].split())
+        stopped = REFINEMENT_EXHAUSTED.search(output)
+        self.assertTrue(widened or stopped is not None, output)
+        self.assertRegex(output, NOT_PROVEN_LINE)
 
     def test_a_request_past_the_ceiling_is_reported_not_swallowed(self) -> None:
         # The palindrome's competing reduction is three symbols wide, so its
@@ -629,22 +639,22 @@ class RefinementTests(ProverTestCase):
                 self.assertNotRegex(output, PROVEN_LINE)
 
 
-class PrefixReachabilityTests(ProverTestCase):
-    def test_a_stack_no_short_sentence_can_hold_is_refused(self) -> None:
+class StackHeightTests(ProverTestCase):
+    def test_a_state_no_short_stack_can_carry_is_refused(self) -> None:
         # The abstraction rebuilds a stack on a guessed goto source, and the
         # sources it may guess are read off the automaton's shape alone. That
-        # admits states belonging to a part of the grammar the sentence read so
-        # far has not gone anywhere near, and retained depth never rules them
-        # out, because depth is a chain of adjacent states and so is the guess.
+        # admits states needing a taller stack than the run has built, and
+        # retained depth never rules them out, because depth is a chain of
+        # adjacent states and so is the guess.
         status, output = self.prove(LATE_ARM, 1)
         self.assertEqual(status, PROVEN, output)
         match = REACHABILITY_LINE.search(output)
         self.assertIsNotNone(match, output)
         assert match is not None
         self.assertGreater(int(match.group(1)), 0, output)
-        # Past the deepest requirement no state can be ruled out, so the count
-        # stops being tracked there. A ceiling below that would leave part of
-        # the automaton permanently unfilterable.
+        # Past the widest reduction the exact height decides nothing, so the
+        # count stops there. A ceiling below that would leave reductions whose
+        # room the abstraction can never check.
         self.assertGreater(int(match.group(2)), 0, output)
 
     def test_a_grammar_with_nothing_to_refuse_stays_silent(self) -> None:
@@ -653,8 +663,8 @@ class PrefixReachabilityTests(ProverTestCase):
         _, output = self.prove(LR1_LIST, 1)
         self.assertIsNone(REACHABILITY_LINE.search(output), output)
 
-    def test_refusing_stacks_never_proves_an_ambiguous_grammar(self) -> None:
-        # The filter removes stacks from the search, which is the one kind of
+    def test_refusing_moves_never_proves_an_ambiguous_grammar(self) -> None:
+        # The test removes moves from the search, which is the one kind of
         # change that can turn a sound over-approximation into a false
         # theorem. Every ambiguous grammar has to survive it at every level.
         for name, grammar in AMBIGUOUS_GRAMMARS.items():

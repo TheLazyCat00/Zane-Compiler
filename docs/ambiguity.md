@@ -182,44 +182,63 @@ the state is triaged into one of these categories.
   nothing underneath. That two used to be a constant, independent of the
   retained depth, so one imprecise reduction reset the stack for the rest of the
   run and every reduction after it popped into the unknown immediately, however
-  much depth had been paid for. Where the automaton determines what sits below —
-  exactly one state has a transition into the source, which holds for 744 of the
-  current grammar's 919 reachable states — that context is recovered by walking
-  those forced predecessors downward, so a rebuilt stack reaches the retained
-  depth like any other. It stops at the first entry with more than one possible
-  predecessor, and at the bottom of the stack.
+  much depth had been paid for. Walking downward from the deepest entry
+  recovers context wherever the automaton leaves no choice about what sits
+  below, which holds for 744 of the current grammar's 919 reachable states, but
+  it has to stop at the first entry with more than one possible predecessor —
+  and one branch four entries down is enough to keep a stack at four for the
+  rest of the run.
 
-  Every one of those narrowings reads the automaton's shape and nothing else,
-  and shape is not the only thing known about a stack. A guessed source is
-  admitted whenever a path of the right length reaches it, which admits states
-  belonging to parts of the grammar the sentence read so far has not gone
-  anywhere near — a valid path through the automaton, just not one this prefix
-  can walk. No amount of retained depth rules them out, because the retained
-  depth is a chain of adjacent states and so is the guess.
+  So the rebuild descends *through* the branch, carrying one stack per possible
+  predecessor. Each is longer than the stack it replaces and no more
+  permissive, and together they cover every real stack the short one stood for,
+  so the split can remove spurious pairs and never a real parse. The bound on
+  it is small on purpose: two stacks differing only in how a split resolved are
+  different possible worlds rather than two parses of one sentence, so the
+  joint walk pairs each side's variants against the other's across every pair
+  of distinct productions, and the cost is quadratic in the split while the
+  depth it buys is not. Most of the descent is free anyway, because a forced
+  level adds depth without adding a variant. When the next level would cross
+  the bound the descent stops at the depth it has reached and keeps the stacks
+  it has, which is the same kind of answer as stopping at a branch, one level
+  further down.
 
-  What rules them out is how many terminals have been read. Each state carries
-  the fewest terminals any parse must consume before it can sit on top of the
-  stack, solved once from the grammar as two least fixpoints: the shortest
-  sentence each nonterminal derives, then the cheapest path from the initial
-  state to each state. A pair reached by `n` tokens cannot be holding a stack
-  whose top needs more than `n`, and the pairs that fail this are refused.
-  Because the bound is a minimum over all paths, refusing on it can only ever
-  remove a stack no parse could have, never one some parse could.
+  All of that reads the automaton's shape, and shape is not the only thing
+  known about a stack. **How tall it is** is a separate fact with its own
+  consequences, and the abstraction used to have no way to hold it: a suffix
+  says which states are on top and never says where the stack ends, so there
+  was always assumed to be more below. That assumption is what admits a
+  reduction with nothing left to goto from, and the guess about where it landed
+  is what keeps spurious pairs alive.
 
-  The count is part of a pair's identity rather than a note beside it. The
-  search deduplicates by stack pair, so the same pair reached by a longer
-  sentence is the same node; recording the first arrival's count and reusing it
-  would undercount every later path through that node and refuse stacks those
-  paths can legitimately hold — an unsound filter that reports a proof. Past
-  the deepest requirement in the automaton no state can be ruled out, so the
-  count stops being tracked there and every longer prefix shares one identity.
-  That ceiling is what keeps the pair space finite, and it costs a bounded
-  factor over the opening tokens, which is where the count still decides
-  anything.
+  So an abstract stack carries its height. A reduction popping `W` entries
+  needs `W` of them and a state underneath, so on a stack of exactly `W` it is
+  not a move any parse can make, and the abstraction can say so instead of
+  guessing. A guessed goto source is checked the same way against the fewest
+  entries a stack can have with that state on top — the length of the shortest
+  path to it through the automaton — which rules out sources belonging to parts
+  of the grammar no stack this short has reached. Both bounds are minima over
+  all paths, so refusing on them removes only moves no parse could make.
 
-  A run says what the test refused, for the same reason it says when a
-  refinement request was clamped: a filter that removes stacks silently leaves
-  the output looking like a search of a space it did not make. **Its budget** is
+  The height is exact while it stays under a ceiling and saturates there.
+  Saturation is the safe direction, because a stack that might be taller than
+  any reduction is wide is one no reduction can be ruled out on, which is what
+  the abstraction assumed everywhere before it counted at all — and a saturated
+  height stays saturated through a reduction rather than having a width
+  subtracted from it, since subtracting from "at least this" manufactures an
+  exact height smaller than the truth and an undercounted height rules out
+  moves a real parse can make. The ceiling only has to clear the widest
+  reduction in the grammar, which is what keeps the abstract stack space
+  finite.
+
+  Knowing the height is also what lets a stack reach its own bottom. A suffix
+  as long as the height is the whole stack, so the descent stops there rather
+  than inventing entries below the initial state, and the reductions that would
+  have popped past it are gone.
+
+  A run says what the height test refused, for the same reason it says when a
+  refinement request was clamped: a test that removes moves silently leaves the
+  output looking like a search of a space it did not make. **Its budget** is
   the abstract pair limit, derived from `AMBIGUITY_MEMORY_MB` and
   `AMBIGUITY_MAX_FRONTIER_RATIO`. The abstract phase is a single sequential
   search, so the budget is derived for one worker and `AMBIGUITY_JOBS` does not
@@ -268,15 +287,15 @@ the state is triaged into one of these categories.
   surviving candidate's site in the same form a survey uses, so a stall can be
   read rather than guessed at.
 
-  Splitting the rebuild at that stopping point — producing one stack per
-  possible predecessor instead of giving up, with a bounded fan-out — was tried
-  and is **not** in the tool. On the current grammar it cost 26% more abstract
-  pairs (60,423 to 76,143), and 75% more on the palindrome, without changing a
-  verdict or removing a candidate. That much still holds.
+  Splitting the rebuild at that stopping point was first tried on its own and
+  measured at 26% more abstract pairs on this grammar and 75% more on the
+  palindrome, without changing a verdict. It is in the tool now, because a
+  split that reaches the bottom of the stack is worth what a split that stops
+  four entries above it is not.
 
-  The reading attached to it did not. The candidate that survives refinement,
-  `& ( Foo ) [ ] ;`, stalls at a site whose two *competing* moves are both
-  untagged — an empty `list_verb_type_suffix_` reduction against a shift — and
+  A reading that came with it did not survive. A candidate that stalled here
+  for a long time, `& ( Foo ) [ ] ;`, sat at a site whose two *competing* moves
+  are both untagged — an empty `list_verb_type_suffix_` reduction against a shift — and
   that was taken to mean the pair was not being kept alive by a guessed goto at
   all, so that stack depth could not be the lever. `--trace` showed otherwise on
   its first run: the very first step of the walk guesses, at a state exact only
@@ -285,30 +304,14 @@ the state is triaged into one of these categories.
   there say nothing about whether the step guessed. Read a localized conflict
   as evidence about precision and this is the mistake it invites.
 
-  That cost was measured with the refinement ceiling at nine, where the
-  candidate's request was still moving, and before the prefix-reachability
-  test existed. It has not been measured since.
-
   What the candidate looks like now is worth stating, because the shape did not
-  change when the numbers did. At a ceiling of fifteen refinement runs ten
-  rounds, reaches a retained stack of fifteen, clamps nothing, and the trace's
-  deepest request is a retained stack of nine at state 902 — down from twelve
-  at state 661, which the reachability test removed outright: 661 needs nine
-  terminals and the candidate has read six by the time it would be on the
-  stack. Refinement gives up only when every request has been honoured, so
-  the depth asked for is there and goes unspent. What the walk shows is why:
-  the stack that reaches 902 carries seven entries, rebuilt by the preceding
-  reduction and extended downward as far as the forced-predecessor chain runs,
-  while the reduction firing there is eight wide. Depth beyond seven cannot be
-  spent on a stack that never arrives holding it. Where that chain stops is
-  what splitting the rebuild addresses.
-
-  The test pays for itself unevenly. At a ceiling of fifteen it cut the run
-  from 729,491 abstract pairs to 698,910 — the refusals more than covering the
-  extra identities the token count introduces — and dropped a round. At nine it
-  cost 60,423 pairs against 112,708, where the same identities are not paid for
-  by anything, because a request still moving does not linger on the stacks the
-  test is good at refusing.
+  change when the numbers did. The one that survives is `Foo . bar Baz [ ] ;`,
+  and its stacks reach the initial state — `7 888 887 102 1 0` — which is the
+  height doing its work: before it, a rebuilt stack floated above a branch
+  point with entries assumed below it that were not there. What is left is a
+  handful of guessed gotos on chains the refinement has already been given the
+  depth for, which is a different situation from the one three abstractions ago
+  and is where the next attempt starts.
 
   `--trace` follows a reported candidate from its divergence site down to
   acceptance. Every other diagnostic here reports where a divergence was

@@ -32,18 +32,17 @@ type automaton = {
      productions a conflict is between is what makes the conflict findable in
      the grammar, so the mapping is kept rather than discarded after parsing. *)
   production_text : (int, string) Hashtbl.t;
-  (* The fewest terminals any parse must have consumed before a state can sit
-     on top of the stack. Unreachable states hold [max_int].
+  (* The fewest entries a stack can have with a state on top: the length of
+     the shortest path from the initial state to it.
 
      This is the one thing about a stack that the retained suffix never says.
      A suffix is a chain of adjacent states and nothing more, so an abstract
-     stack rebuilt on a guessed goto source can name a state belonging to a
-     part of the grammar the sentence read so far cannot have reached - the
-     chain is a valid path through the automaton, just not one this prefix can
-     walk. Comparing a state's requirement against the tokens actually
-     consumed rejects exactly those, and it is a property of the automaton, so
-     it costs one table built once. *)
-  min_terminals : int array;
+     stack rebuilt on a guessed goto source can name a state that no stack
+     that short could be carrying - the chain is a valid path through the
+     automaton, just not one that fits. Comparing it against the height rules
+     those out, and it is a property of the automaton, so it costs one table
+     built once. *)
+  min_height : int array;
 }
 
 let production_name automaton prod =
@@ -223,62 +222,33 @@ let prepare_automaton ~menhir ~grammar ~directory =
   end;
   automaton
 
-(* How few terminals a parse can have read by the time each state is on top.
+(* How short a stack can be with each state on top.
 
-   Two least fixpoints, both over quantities that only ever fall, so both
-   terminate: first the fewest terminals each nonterminal can derive, then the
-   fewest a path from the initial state to each state can spell. A terminal
-   edge costs one; a goto on a nonterminal costs whatever that nonterminal can
-   derive at its shortest, which is zero for the ones that can vanish.
-
-   Relaxation is repeated over the whole edge set rather than ordered as a
-   shortest-path walk. The costs are non-negative so an ordered walk would
-   work, but the edge count here is small and a fixpoint is harder to get
-   wrong. [max_int] marks both "not solved yet" and "cannot happen", which is
-   the same thing for every use: a nonterminal deriving no finite sentence, and
-   a state no parse can reach.
+   A stack is a path from the initial state, one entry per edge, so this is a
+   breadth-first walk of the transition graph and nothing more. [max_int] marks
+   a state no path reaches, which is a state no stack can be carrying at all.
 
    The bound is sound in the direction it is used. It is a minimum over all
-   paths, so a state whose minimum exceeds the tokens consumed cannot be on the
-   stack at all; a state whose minimum is smaller may or may not be. Rejecting
-   on it can therefore remove impossible stacks and never a possible one. *)
-let solve_min_terminals states terminals grammar =
-  let add a b = if a = max_int || b = max_int then max_int else a + b in
-  let yields = Hashtbl.create 256 in
-  let yield_of symbol =
-    if StringSet.mem symbol terminals then 1
-    else Option.value (Hashtbl.find_opt yields symbol) ~default:max_int
-  in
-  let changed = ref true in
-  while !changed do
-    changed := false;
-    List.iter
-      (fun (lhs, symbols) ->
-        let total = List.fold_left (fun sum s -> add sum (yield_of s)) 0 symbols in
-        if total < yield_of lhs then begin
-          Hashtbl.replace yields lhs total;
-          changed := true
-        end)
-      grammar
-  done;
+   paths, so a stack shorter than a state's minimum cannot have that state on
+   top; one that clears it may or may not. Rejecting on it can therefore remove
+   impossible stacks and never a possible one. *)
+let solve_min_height states =
   let distance = Array.make (Array.length states) max_int in
-  if Array.length states > 0 then distance.(0) <- 0;
-  let changed = ref true in
-  while !changed do
-    changed := false;
-    Array.iteri
-      (fun source state ->
-        if distance.(source) < max_int then
-          Hashtbl.iter
-            (fun symbol target ->
-              let reached = add distance.(source) (yield_of symbol) in
-              if reached < distance.(target) then begin
-                distance.(target) <- reached;
-                changed := true
-              end)
-            state.transitions)
-      states
-  done;
+  if Array.length states > 0 then begin
+    distance.(0) <- 1;
+    let queue = Queue.create () in
+    Queue.add 0 queue;
+    while not (Queue.is_empty queue) do
+      let source = Queue.take queue in
+      Hashtbl.iter
+        (fun _ target ->
+          if distance.(target) = max_int then begin
+            distance.(target) <- distance.(source) + 1;
+            Queue.add target queue
+          end)
+        states.(source).transitions
+    done
+  end;
   distance
 
 (* Terminal equivalence classes.
@@ -432,11 +402,6 @@ let parse_automaton path terminals aliases =
   let current = ref None in
   let lookaheads = ref [] in
   let productions = Hashtbl.create 512 in
-  (* Every production, as it was printed, so the minimum terminal yield of each
-     nonterminal can be solved for once the whole file has been read. The same
-     production is printed at every state that reduces it, and duplicates only
-     cost a redundant relaxation, so they are not filtered out here. *)
-  let grammar = ref [] in
   let intern_production text =
     match Hashtbl.find_opt productions text with
     | Some id -> id
@@ -475,15 +440,13 @@ let parse_automaton path terminals aliases =
             else if Str.string_match reduction_re line 0 then begin
               let lhs = String.trim (Str.matched_group 1 line) in
               let rhs = String.trim (Str.matched_group 2 line) in
-              let symbols = words rhs in
               let reduction =
                 {
                   lhs;
-                  width = List.length symbols;
+                  width = List.length (words rhs);
                   prod = intern_production (lhs ^ " -> " ^ rhs);
                 }
               in
-              grammar := (lhs, symbols) :: !grammar;
               List.iter
                 (fun token ->
                   let previous =
@@ -507,8 +470,8 @@ let parse_automaton path terminals aliases =
   Hashtbl.iter
     (fun text id -> Hashtbl.replace production_text id text)
     productions;
-  let min_terminals = solve_min_terminals states terminals !grammar in
-  { states; terminals; aliases; terminal_class; production_text; min_terminals }
+  let min_height = solve_min_height states in
+  { states; terminals; aliases; terminal_class; production_text; min_height }
 
 module Stack_pool = struct
   type node = {
@@ -834,52 +797,113 @@ let truncate_suffix limit list =
    risk. *)
 type precision = int array
 
-(* The state directly below [s] on any stack, when the automaton leaves no
-   choice about it: exactly one state has a transition to [s], so every stack
-   with [s] on top has that state under it. [-1] where more than one state
-   qualifies, and where none does - the latter being the initial state, which
-   sits at the bottom and has nothing below it at all. *)
-let forced_predecessors preds =
-  Array.map
-    (fun sources ->
-      if IntSet.cardinal sources = 1 then IntSet.choose sources else -1)
-    preds
+(* An abstract stack: the suffix the abstraction retains, and how tall the
+   real stack under it is.
 
-(* Truncation is only half of what fixes an abstract stack's depth. The other
-   half is that a stack can be *shorter* than its state is entitled to keep,
-   and the shortest ones come from the abstraction itself: a reduction that
-   pops past what is retained rebuilds the stack as a goto target on a guessed
-   source, two entries and nothing under them. Every reduction after that pops
-   into the unknown immediately, so one imprecise step used to cost precision
-   for the rest of the run however much depth had been paid for - the retained
-   depth had no way to reach back below a rebuilt stack.
+   The suffix says which states are on top. It never says where the stack
+   ends, and that is a separate fact with its own consequences: a reduction
+   can only fire if there are entries for it to pop and a state left
+   underneath to goto from. Without the height the abstraction has to assume
+   there is always more stack below, so it admits reductions no parse could
+   make and then guesses where they landed - and the guess is what keeps
+   spurious pairs alive.
 
-   It can, when the automaton leaves no choice. Walking [forced_predecessors]
-   downward from the deepest entry adds states that every stack ending there
-   must have, so it is a free deepening: no case split, no branching factor,
-   just context the abstraction was discarding. It stops at the first entry
-   with more than one possible predecessor, and at the bottom of the stack,
-   where there is nothing below to add.
+   The height is exact while it stays under [height_ceiling] and saturates
+   there. Saturation is the safe direction: a stack that might be taller than
+   any reduction is wide is a stack no reduction can be ruled out on, which is
+   what the abstraction assumed everywhere before. The ceiling only has to
+   clear the widest reduction in the grammar, because past that the answer to
+   "are there enough entries" is yes regardless. *)
+type stack = { suffix : int list; height : int }
 
-   This only ever lengthens a stack, and a longer stack admits no more moves
-   than a shorter one, so it cannot turn a real parse into a rejected one. *)
-let cap forced (precision : precision) = function
-  | [] -> []
-  | top :: _ as states ->
-      let limit = precision.(top) in
-      let kept = truncate_suffix limit states in
-      let rec extend below_first length deepest =
-        if length >= limit then below_first
-        else
-          let source = forced.(deepest) in
-          if source < 0 then below_first
-          else extend (source :: below_first) (length + 1) source
+(* Every stack the abstraction can still tell apart at this depth.
+
+   A stack can be shorter than its state is entitled to keep, and the shortest
+   ones come from the abstraction itself: a reduction that pops past what is
+   retained rebuilds the stack as a goto target on a guessed source, two
+   entries and nothing under them. Walking downward from the deepest entry
+   recovers context wherever the automaton leaves no choice about what sits
+   below, but it has to stop at the first entry with more than one possible
+   predecessor - and that stopping point is what strands a rebuilt stack short
+   of the depth that was paid for. The entry below is unknown not because the
+   depth ran out but because two states could be there, and one branch point
+   four entries down is enough to keep a stack at four for the rest of the
+   run.
+
+   So descend through the branch instead of stopping at it, carrying one stack
+   per possible predecessor. Each is longer than the stack it replaces and no
+   more permissive, and together they cover every real stack the short one
+   stood for, so this can remove spurious pairs and never a real parse. What it
+   costs is a case split, bounded by [descent_limit]: the descent stops at
+   whatever depth it has reached when the next level would cross that bound,
+   and keeps the stacks it has. Stopping early is the same kind of answer as
+   stopping at a branch, one level further down, so there is nothing to undo
+   and no reason to throw the depth already recovered away.
+
+   The bound is small on purpose. Two stacks that differ only in how a split
+   resolved are different possible worlds rather than two parses of one
+   sentence, so the joint walk pairs each side's variants against the other's
+   across every pair of distinct productions - the cost of a split is
+   quadratic in it, while the depth it buys is not. Most of the descent is
+   free anyway: the automaton forces the entry below for the large majority of
+   its states, and a forced level adds depth without adding a variant, so a
+   small bound still reaches a long way down a chain that never branches.
+
+   The split is what makes the bottom of the stack reachable again. A variant
+   that descends to the initial state has nothing below it, and a reduction
+   wider than it can pop is then not a move any parse can make - a conclusion
+   the abstraction could not draw while the stack was stranded above the
+   branch. *)
+let descent_limit = 8
+
+let cap_variants preds (precision : precision) ceiling height states =
+  match states with
+  | [] -> [ { suffix = []; height } ]
+  | top :: _ ->
+      (* The suffix can never be longer than the stack it is a suffix of, so a
+         known height bounds the retained depth as surely as the precision
+         does, and a suffix that reaches the height has reached the bottom. *)
+      let limit =
+        if height >= ceiling then precision.(top) else min precision.(top) height
       in
-      let reversed = List.rev kept in
-      match reversed with
-      | [] -> kept
-      | deepest :: _ ->
-          List.rev (extend reversed (List.length kept) deepest)
+      let kept = truncate_suffix limit states in
+      let wrap suffix = { suffix; height } in
+      (match List.rev kept with
+      | [] -> [ wrap kept ]
+      | deepest :: _ as reversed ->
+          let finished = ref [] in
+          let frontier = ref [ (reversed, List.length kept, deepest) ] in
+          let stop = ref false in
+          while (not !stop) && !frontier <> [] do
+            let growing = ref [] in
+            let held = ref [] in
+            List.iter
+              (fun ((below_first, length, deepest) as variant) ->
+                if length >= limit then finished := below_first :: !finished
+                else
+                  let sources = preds.(deepest) in
+                  if IntSet.is_empty sources then
+                    finished := below_first :: !finished
+                  else begin
+                    held := variant :: !held;
+                    IntSet.iter
+                      (fun source ->
+                        growing :=
+                          (source :: below_first, length + 1, source) :: !growing)
+                      sources
+                  end)
+              !frontier;
+            if List.length !growing + List.length !finished > descent_limit then begin
+              (* One level too far. Keep every variant at the depth already
+                 reached rather than the level that crossed the bound. *)
+              List.iter
+                (fun (below_first, _, _) -> finished := below_first :: !finished)
+                !held;
+              stop := true
+            end
+            else frontier := !growing
+          done;
+          List.rev_map (fun below_first -> wrap (List.rev below_first)) !finished)
 
 let goto_edges automaton =
   let table = Hashtbl.create 256 in
@@ -990,71 +1014,134 @@ let rec last_state = function
 (* One micro-step of a single run while consuming a token: apply one
    reduction, or terminate the chain by shifting the token (accepting, when
    the token is "#"). *)
-type side_move =
-  | Reduce of int * int list (* production id, suffix afterwards *)
-  | Terminate of int list (* suffix after the shift, or at acceptance *)
+(* How many moves the height test refused during the last abstract run, and how
+   far the height was counted before it stopped deciding anything.
 
-let side_moves automaton gotos below forced (precision : precision) cache
-    suffix token =
-  match Hashtbl.find_opt cache (suffix, token) with
+   Held beside the proof rather than carried through [prove_result], because
+   every outcome wants them and none of them is a verdict. A test that silently
+   removes moves is the same trap as a ceiling that silently clamps a request:
+   the run looks like it explored a space it did not, and nothing in the output
+   says which. Refinement re-runs the proof, so these describe its final round.
+*)
+let refused_stacks = ref 0
+let tracked_height = ref 0
+
+type side_move =
+  | Reduce of int * stack (* production id, the stack afterwards *)
+  | Terminate of stack (* the stack after the shift, or at acceptance *)
+
+let side_moves automaton gotos below preds (precision : precision) ceiling cache
+    stack token =
+  match Hashtbl.find_opt cache (stack, token) with
   | Some moves -> moves
   | None ->
+      let { suffix; height } = stack in
       let moves = ref [] in
       let depth = List.length suffix in
+      let raise_height h = min ceiling (h + 1) in
+      (* A stack too short to be carrying the state the move puts on top of it.
+         The goto source of an imprecise reduction is guessed from the
+         automaton's shape, which admits states that need a taller stack than
+         this run has built; a state no path reaches at all needs more than any
+         run can build. While the height is exact this rules the move out. *)
+      let fits height top =
+        let needed = automaton.min_height.(top) in
+        if needed = max_int then begin
+          incr refused_stacks;
+          false
+        end
+        else if height >= ceiling || height >= needed then true
+        else begin
+          incr refused_stacks;
+          false
+        end
+      in
       (match suffix with
       | [] -> ()
       | top :: _ ->
           let state = automaton.states.(top) in
           if token = "#" then begin
             if StringSet.mem "#" state.accepts then
-              moves := Terminate suffix :: !moves
+              moves := Terminate stack :: !moves
           end
           else
             Option.iter
               (fun target ->
-                moves :=
-                  Terminate (cap forced precision (target :: suffix)) :: !moves)
+                if fits (raise_height height) target then
+                  moves :=
+                    List.rev_append
+                      (List.rev_map
+                         (fun variant -> Terminate variant)
+                         (cap_variants preds precision ceiling
+                            (raise_height height) (target :: suffix)))
+                      !moves)
               (Hashtbl.find_opt state.transitions token);
           List.iter
             (fun reduction ->
-              if reduction.width < depth then
-                match drop_states reduction.width suffix with
-                | [] -> assert false
-                | base :: _ as remaining ->
-                    Option.iter
-                      (fun target ->
-                        moves :=
-                          Reduce
-                            (reduction.prod, cap forced precision (target :: remaining))
-                          :: !moves)
-                      (Hashtbl.find_opt
-                         automaton.states.(base).transitions reduction.lhs)
+              (* A reduction pops [width] entries and leaves the parser on the
+                 state below the last of them, so a stack of exactly that many
+                 entries has nothing left to goto from. While the height is
+                 exact this rules the move out outright, which is the whole
+                 point of carrying it: the abstraction used to assume more
+                 stack below and guess where the pop landed. *)
+              if height < ceiling && reduction.width >= height then ()
               else
-                (* The reduction pops into the unknown part of the stack; the
-                   goto source is the state left on top afterwards, which sits
-                   one entry below the last one popped. Counting from the
-                   deepest entry the suffix does know, that is
-                   [width - depth + 1] entries further down, and the states
-                   that can be there are exactly the ones that many predecessor
-                   steps away. Popping exactly the suffix is the one-step case
-                   of the same rule. *)
-                let deepest = last_state suffix in
-                let sources = below deepest (reduction.width - depth + 1) in
-                List.iter
-                  (fun (source, target) ->
-                    if IntSet.mem source sources then
-                      moves :=
-                        Reduce
-                          (reduction.prod, cap forced precision [ target; source ])
-                        :: !moves)
-                  (Option.value
-                     (Hashtbl.find_opt gotos reduction.lhs)
-                     ~default:[]))
+                (* A saturated height is not a number, it is the absence of
+                   one: subtracting a width from it would manufacture an exact
+                   height smaller than the truth, and an under-counted height
+                   rules out reductions a real parse can make. So it stays
+                   saturated, which is the direction that only ever admits more
+                   moves. *)
+                let after =
+                  if height >= ceiling then ceiling
+                  else min ceiling (height - reduction.width + 1)
+                in
+                if reduction.width < depth then
+                  match drop_states reduction.width suffix with
+                  | [] -> assert false
+                  | base :: _ as remaining ->
+                      Option.iter
+                        (fun target ->
+                          if fits after target then
+                            moves :=
+                              List.rev_append
+                                (List.rev_map
+                                   (fun variant ->
+                                     Reduce (reduction.prod, variant))
+                                   (cap_variants preds precision ceiling after
+                                      (target :: remaining)))
+                                !moves)
+                        (Hashtbl.find_opt
+                           automaton.states.(base).transitions reduction.lhs)
+                else
+                  (* The reduction pops into the unknown part of the stack; the
+                     goto source is the state left on top afterwards, which sits
+                     one entry below the last one popped. Counting from the
+                     deepest entry the suffix does know, that is
+                     [width - depth + 1] entries further down, and the states
+                     that can be there are exactly the ones that many predecessor
+                     steps away. Popping exactly the suffix is the one-step case
+                     of the same rule. *)
+                  let deepest = last_state suffix in
+                  let sources = below deepest (reduction.width - depth + 1) in
+                  List.iter
+                    (fun (source, target) ->
+                      if IntSet.mem source sources && fits after target then
+                        moves :=
+                          List.rev_append
+                            (List.rev_map
+                               (fun variant -> Reduce (reduction.prod, variant))
+                               (cap_variants preds precision ceiling after
+                                  [ target; source ]))
+                            !moves)
+                    (Option.value
+                       (Hashtbl.find_opt gotos reduction.lhs)
+                       ~default:[]))
             (reductions state token));
-      Hashtbl.add cache (suffix, token) !moves;
+      Hashtbl.add cache (stack, token) !moves;
       !moves
 
-type chain_status = Running of int list | Finished of int list
+type chain_status = Running of stack | Finished of stack
 
 (* All (left result, right result, diverged) ways for both runs to consume
    [token]. The two reduction chains advance in lockstep: aligned identical
@@ -1158,7 +1245,7 @@ let joint_outcomes moves (start_left, start_right) token =
    This is diagnostic only, and deliberately separate from [joint_outcomes]:
    carrying provenance through the hot path would multiply the outcome set it
    deduplicates on, and only the handful of sites a survey prints ever ask. *)
-let conflicting_moves moves suffix token =
+let conflicting_moves moves stack token =
   let seen = Hashtbl.create 16 in
   let queue = Queue.create () in
   let found = ref None in
@@ -1184,7 +1271,7 @@ let conflicting_moves moves suffix token =
         | Some other -> Some (move, other)
         | None -> pair_off rest)
   in
-  push suffix;
+  push stack;
   while !found = None && not (Queue.is_empty queue) do
     let current = Queue.take queue in
     let available = moves current token in
@@ -1217,7 +1304,7 @@ let conflicting_moves moves suffix token =
    path carry provenance. The visit bound is a guard rather than a limit that
    is expected to bite: a refinement request this walk misses costs precision
    on the next round, never soundness. *)
-let chain_imprecision automaton moves suffix token =
+let chain_imprecision automaton moves stack token =
   let seen = Hashtbl.create 64 in
   let queue = Queue.create () in
   let requests = ref [] in
@@ -1228,14 +1315,14 @@ let chain_imprecision automaton moves suffix token =
       Queue.add stack queue
     end
   in
-  push suffix;
+  push stack;
   while (not (Queue.is_empty queue)) && !visits < 4096 do
     incr visits;
     let current = Queue.take queue in
-    (match current with
+    (match current.suffix with
     | [] -> ()
     | top :: _ ->
-        let depth = List.length current in
+        let depth = List.length current.suffix in
         List.iter
           (fun reduction ->
             if reduction.width >= depth then
@@ -1283,7 +1370,7 @@ let joint_imprecision automaton moves pair token target =
         || (left = child_right && right = child_left)
   in
   let width_of stack prod =
-    match stack with
+    match stack.suffix with
     | [] -> None
     | top :: _ ->
         Option.map
@@ -1299,8 +1386,8 @@ let joint_imprecision automaton moves pair token target =
     | Terminate _ -> None
     | Reduce (prod, _) -> (
         match width_of stack prod with
-        | Some width when width >= List.length stack ->
-            Some (List.hd stack, width + 1)
+        | Some width when width >= List.length stack.suffix ->
+            Some (List.hd stack.suffix, width + 1)
         | _ -> None)
   in
   let successors = Hashtbl.create 64 in
@@ -1477,17 +1564,6 @@ type prove_result =
 let ambiguous_status = 1
 let not_proven_status = 3
 
-(* How many stacks the prefix-reachability test refused during the last abstract
-   run, and how far the token count was tracked before it stopped mattering.
-
-   Held beside the proof rather than carried through [prove_result], because
-   every outcome wants them and none of them is a verdict. A test that silently
-   removes stacks is the same trap as a ceiling that silently clamps a request:
-   the run looks like it explored a space it did not, and nothing in the output
-   says which. Refinement re-runs the proof, so these describe its final round.
-*)
-let refused_stacks = ref 0
-let tracked_terminals = ref 0
 
 (* [deadline] is absolute rather than a duration because refinement runs this
    several times over: the rounds share one budget for the abstract phase, so a
@@ -1499,11 +1575,30 @@ let prove engine (precision : precision) pair_limit deadline survey_limit trace
   let gotos = goto_edges automaton in
   let preds = predecessors automaton in
   let below = below_steps preds in
-  let forced = forced_predecessors preds in
+  (* Past the widest reduction in the grammar the exact height stops deciding
+     anything: every reduction has the entries it needs and one to spare, which
+     is what the abstraction assumed before it counted at all. So that is where
+     the count saturates, and the abstract stack space stays finite. *)
+  refused_stacks := 0;
+  let height_ceiling =
+    Array.fold_left
+      (fun widest state ->
+        Hashtbl.fold
+          (fun _ reductions widest ->
+            List.fold_left
+              (fun widest reduction -> max widest reduction.width)
+              widest reductions)
+          state.reductions widest)
+      0 automaton.states
+    + 2
+  in
+  tracked_height := height_ceiling;
   (* Keyed by a single suffix rather than a pair, so this stays small and is
      read by every pair that reaches the same stack: worth keeping whole. *)
   let moves_cache = Hashtbl.create 100_003 in
-  let moves = side_moves automaton gotos below forced precision moves_cache in
+  let moves =
+    side_moves automaton gotos below preds precision height_ceiling moves_cache
+  in
   (* The pair cache is the opposite. Each node is dequeued once and asks for
      every terminal class exactly once, so the only repeat key is the twin
      node that shares a stack pair and differs in its divergence flag. Left
@@ -1527,9 +1622,7 @@ let prove engine (precision : precision) pair_limit deadline survey_limit trace
         outcomes
   in
   let parents :
-      ( int list * int list * bool * int,
-        (string * (int list * int list * bool * int)) option )
-      Hashtbl.t =
+      (stack * stack * bool, (string * (stack * stack * bool)) option) Hashtbl.t =
     Hashtbl.create 100_003
   in
   let queue = Queue.create () in
@@ -1538,45 +1631,25 @@ let prove engine (precision : precision) pair_limit deadline survey_limit trace
   (* A site is the stack pair and lookahead at which two parses first part
      ways: the same divergence reached by many sentences is one blind spot,
      not many, so sites are what get counted. *)
-  let sites : (int list * int list * string, unit) Hashtbl.t =
+  let sites : (stack * stack * string, unit) Hashtbl.t =
     Hashtbl.create 1_009
   in
   let accepting = ref 0 in
   let examples = ref [] in
   let example_count = ref 0 in
   let surveying = survey_limit > 0 in
-  let canonical (left, right, diverged, consumed) =
-    if compare left right <= 0 then (left, right, diverged, consumed)
-    else (right, left, diverged, consumed)
-  in
-  (* Past this many terminals no state can be ruled out, so the count stops
-     being tracked and every longer prefix shares one identity. Without a
-     ceiling the count would make the pair space infinite and the search would
-     never close; with it the space grows by a bounded factor and only over the
-     opening tokens, which is where the count still decides anything. *)
-  let terminal_ceiling =
-    Array.fold_left
-      (fun highest required ->
-        if required = max_int then highest else max highest required)
-      0 automaton.min_terminals
-  in
-  refused_stacks := 0;
-  tracked_terminals := terminal_ceiling;
-  let reachable_within consumed = function
-    | [] -> true
-    | top :: _ -> automaton.min_terminals.(top) <= consumed
+  let canonical (left, right, diverged) =
+    if compare left right <= 0 then (left, right, diverged)
+    else (right, left, diverged)
   in
   let push origin node =
-    let ((left, right, _, consumed) as node) = canonical node in
-    if not (reachable_within consumed left && reachable_within consumed right)
-    then incr refused_stacks
-    else
-      if not (Hashtbl.mem parents node) then
-        if Hashtbl.length parents >= pair_limit then overflow := true
-        else begin
-          Hashtbl.add parents node origin;
-          Queue.add node queue
-        end
+    let node = canonical node in
+    if not (Hashtbl.mem parents node) then
+      if Hashtbl.length parents >= pair_limit then overflow := true
+      else begin
+        Hashtbl.add parents node origin;
+        Queue.add node queue
+      end
   in
   let rec trail node =
     match Hashtbl.find parents node with
@@ -1589,14 +1662,13 @@ let prove engine (precision : precision) pair_limit deadline survey_limit trace
      why the abstraction could not separate the two parses. A pair that is not
      itself diverged reached acceptance by parting ways on end of input, so its
      own stacks under "#" are the site. *)
-  let accepting_site ((left, right, _, _) as node) =
-    let rec climb ((_, _, diverged, _) as node) =
+  let accepting_site ((left, right, _) as node) =
+    let rec climb ((_, _, diverged) as node) =
       if not diverged then None
       else
         match Hashtbl.find parents node with
         | None -> None
-        | Some
-            (token, ((parent_left, parent_right, parent_diverged, _) as parent))
+        | Some (token, ((parent_left, parent_right, parent_diverged) as parent))
           ->
             if parent_diverged then climb parent
             else Some (parent_left, parent_right, token)
@@ -1608,12 +1680,12 @@ let prove engine (precision : precision) pair_limit deadline survey_limit trace
   (* The node the divergence was born at, rather than the triple describing it:
      the forward walk has to start somewhere it can walk down from. *)
   let divergence_origin node =
-    let rec climb ((_, _, diverged, _) as node) =
+    let rec climb ((_, _, diverged) as node) =
       if not diverged then None
       else
         match Hashtbl.find parents node with
         | None -> None
-        | Some (_, ((_, _, parent_diverged, _) as parent)) ->
+        | Some (_, ((_, _, parent_diverged) as parent)) ->
             if parent_diverged then climb parent else Some parent
     in
     climb node
@@ -1648,13 +1720,13 @@ let prove engine (precision : precision) pair_limit deadline survey_limit trace
      the site alone never could. *)
   let describe_forward node =
     let node_pair = node in
-    let render_stack suffix =
-      String.concat " " (List.map string_of_int suffix)
+    let render_stack stack =
+      String.concat " " (List.map string_of_int stack.suffix)
     in
-    let guesses (left, right, _, _) token child =
+    let guesses (left, right, _) token child =
       let target =
         Option.map
-          (fun (child_left, child_right, _, _) -> (child_left, child_right))
+          (fun (child_left, child_right, _) -> (child_left, child_right))
           child
       in
       List.map
@@ -1662,7 +1734,7 @@ let prove engine (precision : precision) pair_limit deadline survey_limit trace
           Printf.sprintf "guessed at state %d (exact from %d)" top depth)
         (joint_imprecision automaton moves (left, right) token target)
     in
-    let step index ((left, right, _, _) as node) token child =
+    let step index ((left, right, _) as node) token child =
       let stacks =
         if left = right then Printf.sprintf "stack %s" (render_stack left)
         else
@@ -1721,7 +1793,7 @@ let prove engine (precision : precision) pair_limit deadline survey_limit trace
       | Some existing when existing >= depth -> ()
       | _ -> Hashtbl.replace wanted top depth
     in
-    let scan (left, right, _, _) token =
+    let scan (left, right, _) token =
       List.iter
         (fun stack -> List.iter record (chain_imprecision automaton moves stack token))
         (if left = right then [ left ] else [ left; right ])
@@ -1743,8 +1815,8 @@ let prove engine (precision : precision) pair_limit deadline survey_limit trace
   let terminals =
     StringSet.elements (class_representatives automaton automaton.terminals)
   in
-  let render_stack suffix =
-    String.concat " " (List.map string_of_int suffix)
+  let render_stack stack =
+    String.concat " " (List.map string_of_int stack.suffix)
   in
   (* One move at the stack it fires from. A reduction is tagged by how far it
      pops, because that is what says how much the abstraction had to invent
@@ -1759,18 +1831,18 @@ let prove engine (precision : precision) pair_limit deadline survey_limit trace
      different things about how much room a refinement has, and reading the
      exact-pop case as the looser one would point a refinement at a gap the
      predecessor filter already closed. *)
-  let describe_move suffix lookahead move =
+  let describe_move stack lookahead move =
     match move with
     | Terminate next ->
         if lookahead = "#" then "accept"
         else (
-          match next with
+          match next.suffix with
           | target :: _ -> Printf.sprintf "shift to %d" target
           | [] -> "shift")
     | Reduce (prod, _) ->
-        let depth = List.length suffix in
+        let depth = List.length stack.suffix in
         let width =
-          match suffix with
+          match stack.suffix with
           | [] -> None
           | top :: _ ->
               Option.map
@@ -1819,7 +1891,8 @@ let prove engine (precision : precision) pair_limit deadline survey_limit trace
     in
     (header :: stacks) @ conflict
   in
-  push None ([ 0 ], [ 0 ], false, 0);
+  let start = { suffix = [ 0 ]; height = 1 } in
+  push None (start, start, false);
   (* The clock is read once per dequeued pair, as the concretization search
      reads it once per expanded frontier: a pair costs a joint-outcome pass
      over every terminal class, so the read does not show up beside it. *)
@@ -1829,7 +1902,7 @@ let prove engine (precision : precision) pair_limit deadline survey_limit trace
     && (not !overflow)
     && Unix.gettimeofday () < deadline
   do
-    let (left, right, diverged, consumed) as node = Queue.take queue in
+    let (left, right, diverged) as node = Queue.take queue in
     (* EOF is a lookahead like any other, but it is not in [terminals] - it is
        the sentinel the joint outcomes take separately - so a pair that first
        parts ways on end of input would otherwise never have its site recorded
@@ -1870,10 +1943,7 @@ let prove engine (precision : precision) pair_limit deadline survey_limit trace
                 Hashtbl.replace sites (left, right, token) ();
               push
                 (Some (token, node))
-                ( next_left,
-                  next_right,
-                  diverged || chain_diverged,
-                  min terminal_ceiling (consumed + 1) ))
+                (next_left, next_right, diverged || chain_diverged))
             (joint (left, right) token))
         terminals
   done;
@@ -3146,18 +3216,17 @@ let main () =
            and the ceiling may be part of why: reporting neither leaves the
            reader to guess whether raising --prove-refine would have helped or
            was already the thing making the run expensive. *)
-        (* What the prefix-reachability test did, whenever it did anything.
-           A stack it refuses is one the abstraction would otherwise have
-           carried, so a run that refused many explored a visibly different
-           space from one that refused none, and the reader should not have to
-           infer which from the pair count. *)
+        (* What the height test did, whenever it did anything. A move it
+           refuses is one the abstraction would otherwise have carried, so a
+           run that refused many explored a visibly different space from one
+           that refused none, and the reader should not have to infer which
+           from the pair count. *)
         let report_reachability () =
           if !refused_stacks > 0 then
             Printf.printf
-              "Prefix reachability: refused %d abstract stack(s) that no \
-               sentence that short can hold; the token count stops being \
-               tracked past %d.\n"
-              !refused_stacks !tracked_terminals
+              "Stack height: refused %d move(s) onto a state no stack that \
+               short can carry; the height stops being counted past %d.\n"
+              !refused_stacks !tracked_height
         in
         let report_refinement () =
           if !rounds > 0 then
