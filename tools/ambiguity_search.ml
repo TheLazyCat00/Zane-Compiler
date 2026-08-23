@@ -998,39 +998,27 @@ let below_steps preds =
   in
   walk
 
-(* Deepen [state] to [depth], and everything behind it far enough that a stack
-   arriving there can actually carry that many entries.
+(* Deepen [state] to [depth].
 
-   A suffix grows one entry at a time under the cap of whatever ends up on top,
-   so a stack can only reach [state] holding [depth] entries if every state
-   that can sit directly below it retains at least [depth - 1]. Asking for
-   depth at the blind spot alone would change nothing: the information was
-   already thrown away upstream. Refinement therefore walks backwards through
-   predecessors, shrinking the request by one at each step, and stops wherever
-   it asks for nothing a state does not already keep.
+   The request names one state, and one state is all this raises. That was not
+   always enough: a suffix grew one entry at a time under the cap of whatever
+   ended up on top, so a stack could only arrive at [state] holding [depth]
+   entries if every state that could sit below it had been retaining
+   [depth - 1] all along, and refinement had to walk a backward cone of
+   predecessors to arrange it. The cone was the entire cost of a refinement,
+   and its radius was the request: a radius-eleven cone reaches every state of
+   a dense automaton at a depth close to the request, which is how a refinement
+   aimed at four states ended up paying for the whole grammar and exhausting
+   memory.
 
-   That backward cone is the entire cost of a refinement. It is also the reason
-   refinement is not free: a cone of radius nine can reach a large part of a
-   dense automaton, and how much it reaches is a property of the grammar rather
-   than something this function can bound. What it does bound is everything
-   outside the cone, which stays at the base level.
-
-   The predecessor graph has cycles, so the guard doing the work is the depth
-   comparison: a state is re-expanded only when its retained depth actually
-   grows, and it can only grow to the depth first requested, so the walk
-   terminates on any automaton. *)
-let deepen (precision : precision) preds state depth =
-  let queue = Queue.create () in
-  Queue.add (state, depth) queue;
-  while not (Queue.is_empty queue) do
-    let state, depth = Queue.take queue in
-    if depth > precision.(state) then begin
-      precision.(state) <- depth;
-      if depth > 1 then
-        IntSet.iter (fun source -> Queue.add (source, depth - 1) queue)
-          preds.(state)
-    end
-  done
+   Two things removed the need for it. A reduction chain keeps the entries its
+   own pops leave behind, so depth survives a chain instead of being re-capped
+   at every step; and where a stack does arrive short, the rebuilding descent
+   walks it back down through the entries the automaton forces. Depth is
+   therefore a property of the state on top and nothing else, and it can be
+   granted where it is wanted without being bought everywhere behind it. *)
+let deepen (precision : precision) state depth =
+  if depth > precision.(state) then precision.(state) <- depth
 
 let rec last_state = function
   | [] -> invalid_arg "last_state: empty suffix"
@@ -3300,7 +3288,6 @@ let main () =
         let precision =
           Array.make (Array.length automaton.states) !prove_level
         in
-        let preds = predecessors automaton in
         let deadline = Unix.gettimeofday () +. timeout in
         let rounds = ref 0 in
         let stalled = ref None in
@@ -3379,7 +3366,7 @@ let main () =
                      !refine_rounds)
               else begin
                 List.iter
-                  (fun (state, depth) -> deepen precision preds state depth)
+                  (fun (state, depth) -> deepen precision state depth)
                   deeper;
                 incr rounds;
                 Printf.printf
