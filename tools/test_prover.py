@@ -348,6 +348,42 @@ pal:
   | A pal A    { () }
 """
 
+# A chain that reduces several times before it shifts, over a stack deeper than
+# the retained depth. `decl` wraps a `ty` whose own suffix list is built from
+# bracket pairs, so closing the list on `[` runs `suffixes -> epsilon`, then
+# `suffixes -> LB args RB suffixes`, then `ty -> U gen suffixes`, each popping
+# from what the one before it left. Every one of those pops stays inside the
+# retained stack, so every goto along the way resolves exactly -- but a chain
+# that re-truncates at each step throws the deeper entries away between them,
+# and the descent walks them back through every context `ty` appears in, which
+# `alias` and `bind` make several. The chain then walks on over a stack no
+# parse was standing on, with nothing about it reading as a guess.
+MID_CHAIN = """\
+%token U "u"
+%token L "l"
+%token DOT "."
+%token LB "["
+%token RB "]"
+%token SEMI ";"
+%token BANG "!"
+%token EOF "<eof>"
+%start <unit> main
+%%
+main:
+  | decl EOF { () }
+  | alias EOF { () }
+  | bind EOF { () }
+decl: U gen DOT L ty LB args RB SEMI { () }
+alias: L DOT ty SEMI { () }
+bind: BANG ty SEMI { () }
+ty: U gen suffixes { () }
+gen: { () }
+args: { () }
+suffixes:
+  |                     { () }
+  | LB args RB suffixes { () }
+"""
+
 AMBIGUOUS_GRAMMARS = {
     "expression without precedence": AMBIGUOUS_EXPRESSION,
     "dangling else": DANGLING_ELSE,
@@ -702,6 +738,24 @@ class StackHeightTests(ProverTestCase):
         self.assertIsNotNone(match, output)
         assert match is not None
         self.assertGreater(int(match.group(1)), 0, output)
+
+    def test_a_chain_keeps_the_entries_its_own_pops_left_behind(self) -> None:
+        # Every pop in the chain leaving this site stays inside the retained
+        # stack, so every goto it takes resolves off a suffix long enough to
+        # expose its source, and the step has nothing to guess. It guessed
+        # anyway, because the stack was cut back to the retained depth after
+        # each pop and the descent then invented its way back down -- through
+        # every context `ty` appears in, rather than the one the chain had
+        # just been standing in. A pop never leaves more than it was given, so
+        # keeping what it left costs nothing that outlives the chain.
+        _, output = self.prove(MID_CHAIN, 3, extra=("--prove-trace",))
+        steps = [
+            line
+            for line in output.splitlines()
+            if re.match(r"^ *\d+\. on ", line)
+        ]
+        self.assertTrue(steps, output)
+        self.assertTrue(steps[0].rstrip().endswith("[exact]"), output)
 
     def test_a_grammar_with_nothing_to_refuse_stays_silent(self) -> None:
         # The line has to mean something when it appears, which it only does if

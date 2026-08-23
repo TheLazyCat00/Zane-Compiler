@@ -865,15 +865,22 @@ type stack = { suffix : int list; height : int }
    branch. *)
 let descent_limit = 512
 
-let cap_variants preds below (precision : precision) ceiling height states =
+let cap_variants preds below (precision : precision) keep ceiling height states =
   match states with
   | [] -> [ { suffix = []; height } ]
   | top :: _ ->
       (* The suffix can never be longer than the stack it is a suffix of, so a
          known height bounds the retained depth as surely as the precision
          does, and a suffix that reaches the height has reached the bottom. *)
+      (* [keep] is a floor the caller has already earned: entries this stack
+         is demonstrably carrying, which cutting would only hand back to the
+         descent to invent - through every predecessor the automaton allows
+         rather than the one that was really there. It can never exceed the
+         height, since it counts entries of a stack that tall. *)
       let limit =
-        if height >= ceiling then precision.(top) else min precision.(top) height
+        max keep
+          (if height >= ceiling then precision.(top)
+           else min precision.(top) height)
       in
       let kept = truncate_suffix limit states in
       let wrap suffix = { suffix; height } in
@@ -1090,7 +1097,7 @@ let side_moves automaton gotos below preds (precision : precision) ceiling cache
                     List.rev_append
                       (List.rev_map
                          (fun variant -> Terminate variant)
-                         (cap_variants preds below precision ceiling
+                         (cap_variants preds below precision 0 ceiling
                             (raise_height height) (target :: suffix)))
                       !moves)
               (Hashtbl.find_opt state.transitions token);
@@ -1114,6 +1121,18 @@ let side_moves automaton gotos below preds (precision : precision) ceiling cache
                   if height >= ceiling then ceiling
                   else min ceiling (height - reduction.width + 1)
                 in
+                (* What is left after the pop is kept whole rather than cut
+                   back to what the state on top is granted. A reduction chain
+                   fires several times before it shifts, and re-truncating at
+                   every step throws away entries the chain was demonstrably
+                   holding a moment ago, only for the descent to invent them
+                   back through every predecessor the automaton allows. That is
+                   how a chain can walk to acceptance with every one of its
+                   gotos exact and every stack it stood on made up. Keeping
+                   them costs nothing that lasts: a pop never leaves more than
+                   it was given, and the shift at the end of the chain cuts the
+                   stack back to the retained depth before it becomes a node
+                   the search stores. *)
                 if reduction.width < depth then
                   match drop_states reduction.width suffix with
                   | [] -> assert false
@@ -1126,8 +1145,9 @@ let side_moves automaton gotos below preds (precision : precision) ceiling cache
                                 (List.rev_map
                                    (fun variant ->
                                      Reduce (reduction.prod, variant))
-                                   (cap_variants preds below precision ceiling after
-                                      (target :: remaining)))
+                                   (cap_variants preds below precision
+                                      (depth - reduction.width + 1) ceiling
+                                      after (target :: remaining)))
                                 !moves)
                         (Hashtbl.find_opt
                            automaton.states.(base).transitions reduction.lhs)
@@ -1171,8 +1191,8 @@ let side_moves automaton gotos below preds (precision : precision) ceiling cache
                           List.rev_append
                             (List.rev_map
                                (fun variant -> Reduce (reduction.prod, variant))
-                               (cap_variants preds below precision ceiling after
-                                  [ target; source ]))
+                               (cap_variants preds below precision 0 ceiling
+                                  after [ target; source ]))
                             !moves)
                     (Option.value
                        (Hashtbl.find_opt gotos reduction.lhs)
@@ -1713,7 +1733,8 @@ let prove engine (precision : precision) pair_limit deadline survey_limit trace
      read by every pair that reaches the same stack: worth keeping whole. *)
   let moves_cache = Hashtbl.create 100_003 in
   let moves =
-    side_moves automaton gotos below preds precision height_ceiling moves_cache
+    side_moves automaton gotos below preds precision height_ceiling
+      moves_cache
   in
   (* The pair cache is the opposite. Each node is dequeued once and asks for
      every terminal class exactly once, so the only repeat key is the twin
