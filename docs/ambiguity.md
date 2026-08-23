@@ -474,6 +474,18 @@ markers that motivated it sit at height five and deeper.
 the other side, and the same blowup: "exact below height H" and "keep H entries
 from the bottom" describe the same set of stacks.
 
+**Labelling the backward walk with the production's symbols.** A reduction of
+`A -> X1 ... XW` pops entries that spell the right-hand side, so walking down
+from the deepest retained entry along those specific symbols looks like it must
+beat walking down along every edge that arrives there. It is the same walk. In
+an LR automaton every transition into a state carries the same symbol — the
+state is `goto(I, X)` for one `X`, which is what its item cores have the dot
+after — so a state's predecessors by a given symbol are all of its
+predecessors. Instrumented over a level-3 proof of the current grammar, the
+labelled walk narrows nothing: zero sites, zero sources. `predecessors` builds
+its table with `fun _ target` because the symbol it drops is a function of the
+target.
+
 What works instead is depth granted per state, at the state that asked for it,
 with the reduction chains keeping what their own pops leave behind. That buys
 exactness where a candidate needs it and leaves the rest of the automaton
