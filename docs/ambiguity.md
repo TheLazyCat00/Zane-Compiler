@@ -179,29 +179,30 @@ the state is triaged into one of these categories.
 
   A reduction that pops past the retained stack also has to *rebuild* it, as a
   goto target sitting on one of those guessed sources — two entries, with
-  nothing underneath. That two used to be a constant, independent of the
-  retained depth, so one imprecise reduction reset the stack for the rest of the
-  run and every reduction after it popped into the unknown immediately, however
-  much depth had been paid for. Walking downward from the deepest entry
-  recovers context wherever the automaton leaves no choice about what sits
-  below, which holds for 744 of the current grammar's 919 reachable states, but
-  it has to stop at the first entry with more than one possible predecessor —
-  and one branch four entries down is enough to keep a stack at four for the
-  rest of the run.
+  nothing underneath. Walking downward from the deepest entry recovers context
+  wherever the automaton leaves no choice about what sits below, which holds
+  for 744 of the current grammar's 919 reachable states, and the walk stops at
+  the first entry with more than one possible predecessor. Descending through a
+  branch would mean carrying one stack per predecessor, and two stacks
+  differing only in how a split resolved are different possible worlds rather
+  than two parses of one sentence: the joint walk pairs each side's variants
+  against the other's across every pair of distinct productions, so the cost of
+  a split is quadratic in it while the depth it buys is not.
+  `AMBIGUITY_DESCENT_LIMIT` raises the bound for a grammar that wants the
+  split; the descent then stops at whatever depth it has reached when the next
+  level would cross it.
 
-  So the rebuild descends *through* the branch, carrying one stack per possible
-  predecessor. Each is longer than the stack it replaces and no more
-  permissive, and together they cover every real stack the short one stood for,
-  so the split can remove spurious pairs and never a real parse. The bound on
-  it is small on purpose: two stacks differing only in how a split resolved are
-  different possible worlds rather than two parses of one sentence, so the
-  joint walk pairs each side's variants against the other's across every pair
-  of distinct productions, and the cost is quadratic in the split while the
-  depth it buys is not. Most of the descent is free anyway, because a forced
-  level adds depth without adding a variant. When the next level would cross
-  the bound the descent stops at the depth it has reached and keeps the stacks
-  it has, which is the same kind of answer as stopping at a branch, one level
-  further down.
+  What makes stopping at a branch affordable is that a reduction chain no
+  longer loses the depth it starts with. A chain fires several times before it
+  shifts, and each reduction keeps the entries its own pop leaves behind rather
+  than cutting the stack back to what the state left on top is entitled to
+  retain. Without that, a chain whose every goto resolved exactly could still
+  be standing on entries the descent had invented — imprecision that nothing in
+  a trace reads as a guess, since each goto along the way was exact. Keeping
+  them costs nothing that lasts: a pop never leaves more than it was given, and
+  the shift that ends the chain cuts the stack back to the retained depth
+  before it becomes a node the search stores, so the extra depth lives only
+  inside one token's chain.
 
   All of that reads the automaton's shape, and shape is not the only thing
   known about a stack. **How tall it is** is a separate fact with its own
@@ -219,6 +220,17 @@ the state is triaged into one of these categories.
   path to it through the automaton — which rules out sources belonging to parts
   of the grammar no stack this short has reached. Both bounds are minima over
   all paths, so refusing on them removes only moves no parse could make.
+
+  While the height is exact it says more than a minimum. The reduction leaves a
+  stack of a known height with the goto target on top, so the source is the
+  entry directly below it, at a height one less — and every stack a parse
+  builds starts at the initial state. A source the initial state cannot reach
+  in exactly that many steps is not standing on any stack at all, however well
+  it fits the automaton's shape read backwards. The same reasoning steers the
+  rebuilding descent: when the height is exact it says precisely how many
+  entries are still missing, so a candidate for one of them is only real if the
+  bottom is still that many predecessor steps below it, which is what makes the
+  walk forced as often as it is.
 
   The height is exact while it stays under a ceiling and saturates there.
   Saturation is the safe direction, because a stack that might be taller than
@@ -258,27 +270,36 @@ the state is triaged into one of these categories.
   the run, deepening one blind spot leaves the rest of the automaton at the
   base level.
 
-  Asking for depth at the blind spot alone would change nothing, since the
-  context was already discarded upstream: a stack can only arrive somewhere
-  holding `D` entries if everything that can sit below it retains at least
-  `D - 1`. Refinement therefore walks backwards through the predecessor
-  relation, shrinking the request by one at each step. That backward cone is
-  the whole cost, and how much of the automaton it reaches is a property of the
-  grammar — on the current grammar, refining to a retained depth of nine
-  deepens about three fifths of the automaton's states and still finishes,
-  where a uniform level 3 does not.
+  A round grants the depth at the state that asked for it and nowhere else.
+  Nothing has to be bought behind it: a reduction chain keeps the entries its
+  own pops leave behind, so depth survives a chain rather than being re-capped
+  at each step, and where a stack does arrive short the rebuilding descent
+  walks it back down through the entries the automaton forces. That is what
+  makes a round cheap enough to be worth repeating — a request granted to its
+  whole backward cone instead reaches every state of a dense automaton at a
+  depth close to the request, which on this grammar is the same thing as
+  raising the uniform level.
 
-  A candidate whose chain never guessed is refined too. Imprecision is not
-  only invented gotos: a truncated stack conflates every real stack that ends
-  the same way, and two of those can differ in what happens next, so a pair can
-  survive an abstraction that guessed nowhere along its path. Nothing asks for
-  depth in that case, and refinement used to give up on exactly the candidates
-  whose chains were already clean. It now asks for one more entry than each
-  *truncated* stack on the path is carrying — truncated being the whole
-  condition, because a stack as long as its own height is the entire stack and
-  asking for depth past the bottom is a request no ceiling can satisfy. When
-  every stack on the path is complete there is nothing left to sharpen, and the
-  run says so instead of pretending another round would help.
+  Invented gotos are not the only imprecision worth a request. A truncated
+  stack conflates every real stack that ends the same way, and two of those can
+  differ in what happens next, so a pair can survive an abstraction whose
+  gotos were all exact. Each round therefore also walks the reduction chains
+  and asks any stack cut below its own height for that height: a stack
+  retaining as many entries as it is tall is the whole stack, and no deeper
+  request can mean anything, since nothing sits below the initial state. The
+  chains matter and not only the stacks between tokens — a candidate can reach
+  acceptance with every recorded stack complete and every goto exact, standing
+  the whole way on a chain that was cut short between them.
+
+  Being cut short is not on its own a reason to ask. A truncated stack has lost
+  nothing if walking it back down reconstructs the whole of it, since the
+  entries were forced and the descent recovers the ones that were really there.
+  So the walk runs to the stack's full height, and the depth is asked for
+  whenever it comes back short of it — stopped at a branch, split into several,
+  or handed a height too saturated to pin anything down. When neither the
+  gotos nor the chains have anything new to ask, the round widens by one
+  instead of stopping, which lets refinement climb to the ceiling the caller
+  set rather than stalling well below it.
 
   Refining cannot produce a false proof. Every depth assignment
   over-approximates, because truncation is the only thing that ever shortens a
