@@ -61,6 +61,35 @@ Every LR conflict state must carry exactly one of:
 A grammar change that introduces a new conflict state is incomplete until
 the state is triaged into one of these categories.
 
+### Where the current conflicts come from
+
+The 38 conflicts in the current automaton are all on an opening bracket, and
+they are not 38 independent problems:
+
+| Token      | States | Root |
+| ---------- | -----: | ---- |
+| `[`        |     12 | the enum-map declaration |
+| `(`        |     11 | `loption_generics_ -> ` before a call or a lambda |
+| `<`        |      9 | `loption_generics_ -> ` against `<` as less-than |
+| `{`        |      3 | `loption_generics_ -> ` before a constructor body |
+
+All twelve `[` conflicts are the single adjacency in
+`enum=named_type_expr "." property=LIDENT map_type=type_expr "[" entries "]"`:
+after a type, `[` can either extend that type into a verb type or open the
+entry list, and which it was is only settled at the end of the declaration.
+Separating the two — a `=` before the entry list, a different bracket pair, or
+dropping the map type — removes all twelve and leaves 26, and it removes the
+entire family of candidates the prover otherwise spends its refinement rounds
+on.
+
+The remaining 26 are 21 reductions of `loption_generics_ -> ` and five of
+`app` or `primary`. The empty generics reduction is load-bearing rather than an
+artifact: expanding the option into two explicit alternatives raises the count
+to 40, and dropping generics from named types raises it to 28. What it stands
+in for is a genuine overlap in the surface syntax — `x Foo(…)` is either a
+constructor shorthand or a lambda declaration whose return type is `Foo`, and
+nothing before the closing bracket says which.
+
 ## Tooling
 
 - `ambiguity search [PROFILE]` — bounded, parallel GLR search for complete
