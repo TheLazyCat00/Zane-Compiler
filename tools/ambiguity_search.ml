@@ -1374,6 +1374,54 @@ let chain_imprecision automaton moves stack token =
   done;
   !requests
 
+(* Where a chain leaving one stack is standing on a stack it has forgotten.
+
+   [chain_imprecision] finds the one kind of guess a deeper stack removes by
+   making a goto exact. It is not the only kind. A reduction chain truncates
+   its stack at every step, under the cap of whatever state ends up on top, and
+   a stack cut below its own height has thrown away entries it was demonstrably
+   holding. The rebuilding descent then walks those entries back - through every
+   predecessor the automaton allows, not just the one that was really there -
+   so the chain continues on stacks no parse was ever standing on.
+
+   Nothing about that reads as a guess at the goto: each goto along the way
+   resolves exactly, off a suffix long enough to expose its source. The chain
+   is exact and standing on an invention. That is how a candidate can survive
+   with every step of its trace marked exact and refinement reporting that no
+   retained stack rules it out.
+
+   The depth that fixes it is the stack's own height, for the same reason the
+   path-level widening asks for it: a stack retaining as many entries as it is
+   tall is the whole stack, and the descent has nothing left to invent. The
+   walk is the same one [chain_imprecision] makes, and carries the same visit
+   bound for the same reason - a request it misses costs a round, never
+   soundness. *)
+let chain_truncations moves stack token =
+  let seen = Hashtbl.create 64 in
+  let queue = Queue.create () in
+  let requests = ref [] in
+  let visits = ref 0 in
+  let push stack =
+    if not (Hashtbl.mem seen stack) then begin
+      Hashtbl.add seen stack ();
+      Queue.add stack queue
+    end
+  in
+  push stack;
+  while (not (Queue.is_empty queue)) && !visits < 4096 do
+    incr visits;
+    let current = Queue.take queue in
+    (match current.suffix with
+    | [] -> ()
+    | top :: _ ->
+        if List.length current.suffix < current.height then
+          requests := (top, current.height) :: !requests);
+    List.iter
+      (function Reduce (_, next) -> push next | Terminate _ -> ())
+      (moves current token)
+  done;
+  !requests
+
 (* The imprecise reductions on the joint step a recorded edge actually took.
 
    [chain_imprecision] explores every chain leaving one stack, which is what
@@ -1888,34 +1936,39 @@ let prove engine (precision : precision) pair_limit deadline survey_limit trace
          that stops conflating it with anything: a stack retaining as many
          entries as it is tall is the whole stack, and no deeper request can
          mean anything, since nothing sits below the initial state. Truncated
-         is therefore the whole condition - when every stack on the path is
-         already complete there is nothing left to sharpen, and the run says so
-         rather than pretending another round would help.
+         is therefore the whole condition - when every stack the chains stand
+         on is already complete there is nothing left to sharpen, and the run
+         says so rather than pretending another round would help.
 
          Asking for the height rather than one entry more than the stack
          carries matters more than it looks. Widening by one turns a single
          blind spot into a round per entry, and every one of those rounds pays
          for a whole proof at a precision that was never going to be enough;
          the ceiling clamps the request anyway, so the crawl buys nothing the
-         jump does not. *)
-      let widen (left, right, _) =
+         jump does not.
+
+         The stacks between tokens are not the only ones to ask. A reduction
+         chain truncates at every step, and the stack that was cut is usually
+         one inside the chain rather than one the path recorded - which is how
+         a candidate could reach acceptance with every recorded stack complete,
+         every goto exact, and a chain standing the whole way on entries the
+         descent had invented. So walk the chains, exactly as the goto scan
+         does. Each recorded stack is the first stack of its own chain, so this
+         asks for everything the path-level widening asked for and more. *)
+      let widen (left, right, _) token =
         List.iter
-          (fun stack ->
-            let depth = List.length stack.suffix in
-            match stack.suffix with
-            | [] -> ()
-            | top :: _ -> if depth < stack.height then record (top, stack.height))
+          (fun stack -> List.iter record (chain_truncations moves stack token))
           (if left = right then [ left ] else [ left; right ])
       in
       let rec walk node =
         match Hashtbl.find parents node with
         | None -> ()
-        | Some (_, parent) ->
-            widen parent;
+        | Some (token, parent) ->
+            widen parent token;
             walk parent
       in
       walk node;
-      widen node
+      widen node "#"
     end;
     Hashtbl.fold (fun top depth result -> (top, depth) :: result) wanted []
   in
