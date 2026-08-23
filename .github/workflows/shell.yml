@@ -56,24 +56,39 @@ jobs:
     timeout-minutes: ${{ fromJSON(inputs.timeout) }}
 
     steps:
-      # GitHub already restricts `workflow_dispatch` to accounts with write
-      # access, so this cannot be the only thing standing between a stranger
-      # and the runner. It is here for the case that restriction does not
-      # cover: a token or an app acting on somebody's behalf. It fails closed,
-      # because an API call that did not answer is not an answer.
+      # What actually gates this job is GitHub's own rule that only accounts
+      # with write access can dispatch a workflow. That is a platform
+      # guarantee and it holds whether or not this step runs.
+      #
+      # The step is a second opinion for the case the rule does not describe:
+      # a token or an app dispatching on somebody's behalf. It is advisory,
+      # and deliberately so. The collaborator-permission endpoint wants push
+      # access to answer, and the token this job carries is read-only, so on
+      # most runs it will decline to say - and raising the token's access just
+      # to ask whether the actor has access would give away more than the
+      # check is worth. A definitive "no" stops the run; anything else says
+      # so and leaves the platform rule to do its job.
       - name: Check the actor can write to this repository
         env:
           GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          ACTOR: ${{ github.actor }}
         run: |
-          set -euo pipefail
+          set -uo pipefail
           permission=$(gh api \
-            "repos/${{ github.repository }}/collaborators/${{ github.actor }}/permission" \
-            --jq .permission 2>/dev/null || echo unknown)
-          echo "${{ github.actor }}: $permission"
+            "repos/$REPOSITORY/collaborators/$ACTOR/permission" \
+            --jq .permission 2>/dev/null)
           case "$permission" in
-            admin|maintain|write) ;;
+            admin|maintain|write)
+              echo "$ACTOR has $permission access."
+              ;;
+            "")
+              echo "Could not read $ACTOR's permission with this job's" \
+                "read-only token; relying on GitHub restricting" \
+                "workflow_dispatch to accounts with write access."
+              ;;
             *)
-              echo "::error::${{ github.actor }} does not have write access ($permission)"
+              echo "::error::$ACTOR does not have write access ($permission)"
               exit 1
               ;;
           esac
