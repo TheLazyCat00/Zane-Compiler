@@ -9,3 +9,11 @@ _opam/
 .claude/settings.local.json
 *.term
 machine-config.txt
+
+# ocamlopt writes these beside the source when a module is compiled
+# outside dune, which is how the prover gets built without the full switch.
+*.cmi
+*.cmx
+*.cmo
+*.o
+*.a

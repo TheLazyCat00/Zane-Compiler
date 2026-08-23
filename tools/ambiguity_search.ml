@@ -858,13 +858,18 @@ type stack = { suffix : int list; height : int }
    initial state has nothing below it, and a reduction wider than it can pop is
    then not a move any parse can make - a conclusion the abstraction cannot
    draw while the stack is stranded above a branch. *)
+(* Forced rather than read at module initialization: a top-level binding is
+   evaluated before [main] is entered, so a rejected value would escape the
+   handler around it and print a bare [Fatal error] instead of the tool's own
+   [error:] line - and would skip [clear_progress]. *)
 let descent_limit =
-  match Sys.getenv_opt "AMBIGUITY_DESCENT_LIMIT" with
-  | None | Some "" -> 1
-  | Some value -> (
-      match int_of_string_opt value with
-      | Some chosen when chosen >= 1 -> chosen
-      | _ -> invalid_arg "AMBIGUITY_DESCENT_LIMIT must be a positive integer")
+  lazy
+    (match Sys.getenv_opt "AMBIGUITY_DESCENT_LIMIT" with
+     | None | Some "" -> 1
+     | Some value -> (
+         match int_of_string_opt value with
+         | Some chosen when chosen >= 1 -> chosen
+         | _ -> invalid_arg "AMBIGUITY_DESCENT_LIMIT must be a positive integer"))
 
 let cap_variants preds below (precision : precision) keep ceiling height states =
   match states with
@@ -919,7 +924,10 @@ let cap_variants preds below (precision : precision) keep ceiling height states 
                       sources
                   end)
               !frontier;
-            if List.length !growing + List.length !finished > descent_limit then begin
+            if
+              List.length !growing + List.length !finished
+              > Lazy.force descent_limit
+            then begin
               (* One level too far. Keep every variant at the depth already
                  reached rather than the level that crossed the bound. *)
               List.iter

@@ -68,9 +68,9 @@ are not independent problems:
 
 | Token | States | Root |
 | ----- | -----: | ---- |
-| `(`   |     11 | `loption_generics_ -> ` before a call or a lambda |
-| `<`   |      9 | `loption_generics_ -> ` against `<` as less-than |
-| `{`   |      3 | `loption_generics_ -> ` before a constructor body |
+| `(`   |     11 | `loption_generics_ ->` before a call or a lambda |
+| `<`   |      9 | `loption_generics_ ->` against `<` as less-than |
+| `{`   |      3 | `loption_generics_ ->` before a constructor body |
 
 There were twelve more, on `[`, and all twelve were one adjacency: an enum
 map's type was a `type_expr`, whose own run of verb-type suffixes had to be
@@ -79,10 +79,10 @@ group is depends on what follows its closing bracket, so deciding at the
 opening one is a question LR cannot answer, and the family of candidates it
 generated is unbounded — the surviving counterexample grew a token per
 refinement round, so no retained depth ever closed it. `enum_map_tail` shifts
-every group first and classifies it afterwards, which removed all twelve
-without changing what the language accepts.
+every group before classifying it, which removed all twelve without changing
+what the language accepts.
 
-The 26 that remain are 21 reductions of `loption_generics_ -> ` and five of
+The 26 that remain are 21 reductions of `loption_generics_ ->` and five of
 `app` or `primary`. The empty generics reduction is load-bearing rather than an
 artifact: expanding the option into two explicit alternatives raises the count
 to 40, and dropping generics from named types raises it to 28. What it stands

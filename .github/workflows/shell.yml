@@ -94,14 +94,14 @@ jobs:
           esac
 
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ inputs.ref }}
           submodules: recursive
 
       - name: Install devbox + Nix + devbox.json packages
         if: ${{ inputs.devbox }}
-        uses: jetify-com/devbox-install-action@v0.15.0
+        uses: jetify-com/devbox-install-action@a0d2d53632934ae004f878c840055956d9f741b0 # v0.14.0
         with:
           enable-cache: true
 

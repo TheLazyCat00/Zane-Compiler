@@ -612,9 +612,14 @@ class RefinementTests(ProverTestCase):
         candidates = [
             match.group(2) for match in REFINEMENT_ROUND_LINE.finditer(output)
         ]
-        self.assertGreaterEqual(len(candidates), 2, output)
-        widened = len(candidates[-1].split()) > len(candidates[0].split())
+        # Two rounds are what widening needs to be visible, so requiring them
+        # up front would rule out the second outcome this test accepts: a run
+        # whose descent rebuilds the stacks in the first round and stops there.
+        self.assertTrue(candidates, output)
         stopped = REFINEMENT_EXHAUSTED.search(output)
+        widened = len(candidates) >= 2 and len(candidates[-1].split()) > len(
+            candidates[0].split()
+        )
         self.assertTrue(widened or stopped is not None, output)
         self.assertRegex(output, NOT_PROVEN_LINE)
 
