@@ -1412,11 +1412,20 @@ let chain_imprecision automaton moves stack token =
 
    The depth that fixes it is the stack's own height, for the same reason the
    path-level widening asks for it: a stack retaining as many entries as it is
-   tall is the whole stack, and the descent has nothing left to invent. The
-   walk is the same one [chain_imprecision] makes, and carries the same visit
-   bound for the same reason - a request it misses costs a round, never
-   soundness. *)
-let chain_truncations moves stack token =
+   tall is the whole stack, and the descent has nothing left to invent.
+
+   Being cut short is not on its own a reason to ask, though, and asking on
+   every cut would aim a refinement at most of the automaton at once. A
+   truncated stack has lost nothing if walking it back down reaches exactly one
+   stack: the entries were forced, so the descent rebuilds the ones that were
+   really there and no others. So [descend] runs the walk to the stack's full
+   height, and only a stack that comes back as several - or as none, which is
+   what a height too saturated to pin down returns - is worth the depth.
+
+   The walk over the chain is the same one [chain_imprecision] makes, and
+   carries the same visit bound for the same reason: a request it misses costs
+   a round, never soundness. *)
+let chain_truncations descend moves stack token =
   let seen = Hashtbl.create 64 in
   let queue = Queue.create () in
   let requests = ref [] in
@@ -1433,9 +1442,11 @@ let chain_truncations moves stack token =
     let current = Queue.take queue in
     (match current.suffix with
     | [] -> ()
-    | top :: _ ->
+    | top :: _ -> (
         if List.length current.suffix < current.height then
-          requests := (top, current.height) :: !requests);
+          match descend current with
+          | [ _ ] -> ()
+          | _ -> requests := (top, current.height) :: !requests));
     List.iter
       (function Reduce (_, next) -> push next | Terminate _ -> ())
       (moves current token)
@@ -1736,6 +1747,16 @@ let prove engine (precision : precision) pair_limit deadline survey_limit trace
     side_moves automaton gotos below preds precision height_ceiling
       moves_cache
   in
+  (* One stack walked back down to its full height, for the refinement scan to
+     ask whether anything was lost by cutting it short. A saturated height is
+     not a height at all, so there is nothing to walk down to and the walk
+     reports none rather than one. *)
+  let descend stack =
+    if stack.height >= height_ceiling then []
+    else
+      cap_variants preds below precision stack.height height_ceiling
+        stack.height stack.suffix
+  in
   (* The pair cache is the opposite. Each node is dequeued once and asks for
      every terminal class exactly once, so the only repeat key is the twin
      node that shares a stack pair and differs in its divergence flag. Left
@@ -1978,7 +1999,8 @@ let prove engine (precision : precision) pair_limit deadline survey_limit trace
          asks for everything the path-level widening asked for and more. *)
       let widen (left, right, _) token =
         List.iter
-          (fun stack -> List.iter record (chain_truncations moves stack token))
+          (fun stack ->
+            List.iter record (chain_truncations descend moves stack token))
           (if left = right then [ left ] else [ left; right ])
       in
       let rec walk node =
