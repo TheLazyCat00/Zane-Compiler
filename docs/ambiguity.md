@@ -453,6 +453,32 @@ the state is triaged into one of these categories.
 - `menhir --explain` — enumerates the conflict states that constitute the
   obligation ledger.
 
+## Sharpenings that were measured and rejected
+
+Two ways of giving the abstraction more stack look obviously right and are
+neither. Both are recorded here because the reasoning that recommends them
+survives being told they do not work, so they get proposed again.
+
+**Carrying the stack's bottom entries.** The state that says which construct a
+stack is inside sits at a fixed height near the bottom, while whatever the
+construct contains piles up above it — which is exactly the shape that defeats
+depth counted from the top, and exactly the shape a fixed number of entries
+counted from the bottom would settle. It also multiplies the abstract stack
+space, because every stack shorter than the bound becomes exact and stops
+standing in for the others. On the current grammar a level-2 proof costs about
+ten thousand pairs with no bottom kept, ninety thousand with three entries
+kept, and does not finish within five minutes with five — while the context
+markers that motivated it sit at height five and deeper.
+
+**Keeping every stack under a height bound exact.** The same idea reached from
+the other side, and the same blowup: "exact below height H" and "keep H entries
+from the bottom" describe the same set of stacks.
+
+What works instead is depth granted per state, at the state that asked for it,
+with the reduction chains keeping what their own pops leave behind. That buys
+exactness where a candidate needs it and leaves the rest of the automaton
+standing in for itself.
+
 ## Local machine configuration
 
 The ambiguity-tool executables load machine-specific values from the ignored
