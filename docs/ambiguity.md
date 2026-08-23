@@ -63,26 +63,26 @@ the state is triaged into one of these categories.
 
 ### Where the current conflicts come from
 
-The 38 conflicts in the current automaton are all on an opening bracket, and
-they are not 38 independent problems:
+The conflicts in the current automaton are all on an opening bracket, and they
+are not independent problems:
 
-| Token      | States | Root |
-| ---------- | -----: | ---- |
-| `[`        |     12 | the enum-map declaration |
-| `(`        |     11 | `loption_generics_ -> ` before a call or a lambda |
-| `<`        |      9 | `loption_generics_ -> ` against `<` as less-than |
-| `{`        |      3 | `loption_generics_ -> ` before a constructor body |
+| Token | States | Root |
+| ----- | -----: | ---- |
+| `(`   |     11 | `loption_generics_ -> ` before a call or a lambda |
+| `<`   |      9 | `loption_generics_ -> ` against `<` as less-than |
+| `{`   |      3 | `loption_generics_ -> ` before a constructor body |
 
-All twelve `[` conflicts are the single adjacency in
-`enum=named_type_expr "." property=LIDENT map_type=type_expr "[" entries "]"`:
-after a type, `[` can either extend that type into a verb type or open the
-entry list, and which it was is only settled at the end of the declaration.
-Separating the two — a `=` before the entry list, a different bracket pair, or
-dropping the map type — removes all twelve and leaves 26, and it removes the
-entire family of candidates the prover otherwise spends its refinement rounds
-on.
+There were twelve more, on `[`, and all twelve were one adjacency: an enum
+map's type was a `type_expr`, whose own run of verb-type suffixes had to be
+closed before the entry list's bracket could be shifted. Which kind a bracket
+group is depends on what follows its closing bracket, so deciding at the
+opening one is a question LR cannot answer, and the family of candidates it
+generated is unbounded — the surviving counterexample grew a token per
+refinement round, so no retained depth ever closed it. `enum_map_tail` shifts
+every group first and classifies it afterwards, which removed all twelve
+without changing what the language accepts.
 
-The remaining 26 are 21 reductions of `loption_generics_ -> ` and five of
+The 26 that remain are 21 reductions of `loption_generics_ -> ` and five of
 `app` or `primary`. The empty generics reduction is load-bearing rather than an
 artifact: expanding the option into two explicit alternatives raises the count
 to 40, and dropping generics from named types raises it to 28. What it stands
