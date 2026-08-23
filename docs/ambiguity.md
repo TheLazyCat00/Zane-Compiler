@@ -63,14 +63,18 @@ the state is triaged into one of these categories.
 
 ### Where the current conflicts come from
 
-The conflicts in the current automaton are all on an opening bracket, and they
-are not independent problems:
+Menhir reports 26 conflict states. Twenty-three of them turn on one lookahead
+token and three turn on four at once, so the table counts states rather than
+token occurrences and its rows sum to the same 26. They are not independent
+problems:
 
-| Token | States | Root |
-| ----- | -----: | ---- |
-| `(`   |     11 | `loption_generics_ ->` before a call or a lambda |
-| `<`   |      9 | `loption_generics_ ->` against `<` as less-than |
-| `{`   |      3 | `loption_generics_ ->` before a constructor body |
+| Lookahead | States | Reduction | Root |
+| --------- | -----: | --------- | ---- |
+| `(`             | 9 | `loption_generics_ ->` | before a call or a lambda |
+| `<`             | 9 | `loption_generics_ ->` | against `<` as less-than |
+| `(` `<` `{` `.` | 3 | `loption_generics_ ->` | a named type opening a constructor body |
+| `{`             | 3 | `app -> ... DOT LIDENT` | a field access against a constructor body |
+| `(`             | 2 | `primary -> LIDENT`, `primary -> THIS` | a bare name against a call or a lambda |
 
 There were twelve more, on `[`, and all twelve were one adjacency: an enum
 map's type was a `type_expr`, whose own run of verb-type suffixes had to be
@@ -82,8 +86,8 @@ refinement round, so no retained depth ever closed it. `enum_map_tail` shifts
 every group before classifying it, which removed all twelve without changing
 what the language accepts.
 
-The 26 that remain are 21 reductions of `loption_generics_ ->` and five of
-`app` or `primary`. The empty generics reduction is load-bearing rather than an
+Twenty-one of the 26 reduce `loption_generics_ ->` and five reduce `app` or
+`primary`. The empty generics reduction is load-bearing rather than an
 artifact: expanding the option into two explicit alternatives raises the count
 to 40, and dropping generics from named types raises it to 28. What it stands
 in for is a genuine overlap in the surface syntax — `x Foo(…)` is either a
