@@ -1142,9 +1142,31 @@ let side_moves automaton gotos below preds (precision : precision) ceiling cache
                      of the same rule. *)
                   let deepest = last_state suffix in
                   let sources = below deepest (reduction.width - depth + 1) in
+                  (* The goto source does not merely sit that far below the
+                     suffix, it sits at a known height. The reduction leaves a
+                     stack of [after] entries with the goto target on top, so
+                     the source is the entry directly below it, and every stack
+                     a parse builds starts at the initial state. A source the
+                     initial state cannot reach in exactly that many steps is
+                     therefore not standing on any stack, however well it fits
+                     the automaton's shape read backwards. While the height is
+                     exact this is what turns a guessed goto into the only one
+                     available. *)
+                  let grounded source =
+                    if after >= ceiling then true
+                    else if after < 2 then false
+                    else if IntSet.mem 0 (below source (after - 2)) then true
+                    else begin
+                      incr refused_stacks;
+                      false
+                    end
+                  in
                   List.iter
                     (fun (source, target) ->
-                      if IntSet.mem source sources && fits after target then
+                      if
+                        IntSet.mem source sources && grounded source
+                        && fits after target
+                      then
                         moves :=
                           List.rev_append
                             (List.rev_map
@@ -1598,7 +1620,7 @@ let prove engine (precision : precision) pair_limit deadline survey_limit trace
      is what the abstraction assumed before it counted at all. So that is where
      the count saturates, and the abstract stack space stays finite. *)
   refused_stacks := 0;
-  let height_ceiling =
+  let widest_reduction =
     Array.fold_left
       (fun widest state ->
         Hashtbl.fold
@@ -1608,7 +1630,35 @@ let prove engine (precision : precision) pair_limit deadline survey_limit trace
               widest reductions)
           state.reductions widest)
       0 automaton.states
-    + 2
+  in
+  (* Two tests read the height, and they want different things from it.
+     Ruling out a reduction that would pop the whole stack only has to tell
+     heights apart up to the widest reduction, so that test alone would be
+     content to stop counting just past [widest_reduction]. Pinning a stack to
+     the initial state - what turns a truncated goto from a guess into the only
+     move available - needs the height to still be a number at the depths real
+     stacks reach, which is further down. [min_height] measures how far: the
+     deepest one is the tallest stack the automaton forces any parse to build,
+     and counting a little past it keeps the pinning available where it pays.
+     Stopping too early is not unsound, it is merely blind - a saturated height
+     admits every move - which is why a ceiling that only served the first test
+     left the second one inert on a real grammar. Counting higher is sharper
+     still and costs more distinct stacks; [AMBIGUITY_HEIGHT_CEILING] raises it
+     for a grammar that wants the trade. *)
+  let tallest_forced =
+    Array.fold_left
+      (fun tallest needed ->
+        if needed = max_int then tallest else max tallest needed)
+      0 automaton.min_height
+  in
+  let height_ceiling =
+    let natural = max widest_reduction tallest_forced + 2 in
+    match Sys.getenv_opt "AMBIGUITY_HEIGHT_CEILING" with
+    | None | Some "" -> natural
+    | Some value -> (
+        match int_of_string_opt value with
+        | Some raised -> max natural raised
+        | None -> invalid_arg "AMBIGUITY_HEIGHT_CEILING must be an integer")
   in
   tracked_height := height_ceiling;
   (* Keyed by a single suffix rather than a pair, so this stays small and is
@@ -3379,6 +3429,12 @@ let main () =
             Option.iter
               (fun summary -> Printf.printf "Refinement was capped: %s\n" summary)
               (capped_summary ());
+            (* A surviving candidate is exactly where the reader wants to know
+               how much the height test was doing, because it is the line that
+               separates "the abstraction is blind here" from "the abstraction
+               looked and the moves were real". Leaving it off this path made
+               the test look inert on every run that did not end in a proof. *)
+            report_reachability ();
             Printf.printf
               "Attempting to concretize with the bounded search...\n\n"
       end;

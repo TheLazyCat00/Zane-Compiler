@@ -319,6 +319,35 @@ suffixes:
   | LB RB suffixes   { () }
 """
 
+# The late arm again, with an unbounded blind spot bolted on. `pal` is the
+# even-length palindrome, so no fixed retained depth ever separates its two
+# parses and every level ends in a surviving candidate -- while the `B B B B d`
+# arm still gives the abstraction guessed goto sources that no short stack can
+# be standing on. A run needs both to show that the height test reports what it
+# did even when the run does not end in a proof.
+LATE_PALINDROME = """\
+%token A "a"
+%token B "b"
+%token LB "["
+%token RB "]"
+%token SEMI ";"
+%token EOF "<eof>"
+%start <unit> main
+%%
+main:
+  | d EOF { () }
+  | B B B B d EOF { () }
+  | pal EOF { () }
+d: ty LB RB SEMI { () }
+ty: A suffixes { () }
+suffixes:
+  |                  { () }
+  | LB RB suffixes   { () }
+pal:
+  |            { () }
+  | A pal A    { () }
+"""
+
 AMBIGUOUS_GRAMMARS = {
     "expression without precedence": AMBIGUOUS_EXPRESSION,
     "dangling else": DANGLING_ELSE,
@@ -657,6 +686,22 @@ class StackHeightTests(ProverTestCase):
         # count stops there. A ceiling below that would leave reductions whose
         # room the abstraction can never check.
         self.assertGreater(int(match.group(2)), 0, output)
+
+    def test_a_surviving_candidate_still_says_what_the_height_refused(
+        self,
+    ) -> None:
+        # A candidate is the run whose reader most needs the count, because it
+        # is what separates "the abstraction is blind here" from "the
+        # abstraction looked and the moves it kept were real". Reporting it
+        # only alongside a proof made the test look inert on every run that did
+        # not find one.
+        status, output = self.prove(LATE_PALINDROME, 1)
+        self.assertNotEqual(status, PROVEN, output)
+        self.assertIn("Abstract ambiguity candidate", output)
+        match = REACHABILITY_LINE.search(output)
+        self.assertIsNotNone(match, output)
+        assert match is not None
+        self.assertGreater(int(match.group(1)), 0, output)
 
     def test_a_grammar_with_nothing_to_refuse_stays_silent(self) -> None:
         # The line has to mean something when it appears, which it only does if
