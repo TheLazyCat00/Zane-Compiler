@@ -823,47 +823,48 @@ type stack = { suffix : int list; height : int }
    retained rebuilds the stack as a goto target on a guessed source, two
    entries and nothing under them. Walking downward from the deepest entry
    recovers context wherever the automaton leaves no choice about what sits
-   below, but it has to stop at the first entry with more than one possible
-   predecessor - and that stopping point is what strands a rebuilt stack short
-   of the depth that was paid for. The entry below is unknown not because the
-   depth ran out but because two states could be there, and one branch point
-   four entries down is enough to keep a stack at four for the rest of the
-   run.
+   below.
 
-   So descend through the branch instead of stopping at it, carrying one stack
-   per possible predecessor. Each is longer than the stack it replaces and no
-   more permissive, and together they cover every real stack the short one
-   stood for, so this can remove spurious pairs and never a real parse. What it
-   costs is a case split, bounded by [descent_limit]: the descent stops at
-   whatever depth it has reached when the next level would cross that bound,
-   and keeps the stacks it has. Stopping early is the same kind of answer as
-   stopping at a branch, one level further down, so there is nothing to undo
-   and no reason to throw the depth already recovered away.
+   It stops at the first entry with more than one possible predecessor.
+   Descending through a branch means carrying one stack per predecessor, and
+   two stacks that differ only in how a split resolved are different possible
+   worlds rather than two parses of one sentence, so the joint walk pairs each
+   side's variants against the other's across every pair of distinct
+   productions: the cost of a split is quadratic in it, while the depth it buys
+   is not. That depth is also no longer worth buying here. A reduction chain
+   keeps the entries its own pops leave behind, so the context a split would
+   recover is context the chain never dropped, and on the real grammar
+   descending through branches changes the explored pair count by well under a
+   percent while making a refined run's stacks fan out far enough to exhaust
+   memory. [AMBIGUITY_DESCENT_LIMIT] raises the bound for a grammar that wants
+   the split; the descent then stops at whatever depth it has reached when the
+   next level would cross it, and keeps the stacks it has.
 
-   The bound is small on purpose. Two stacks that differ only in how a split
-   resolved are different possible worlds rather than two parses of one
-   sentence, so the joint walk pairs each side's variants against the other's
-   across every pair of distinct productions - the cost of a split is
-   quadratic in it, while the depth it buys is not. Most of the descent is
-   free anyway: the automaton forces the entry below for the large majority of
-   its states, and a forced level adds depth without adding a variant, so a
-   small bound still reaches a long way down a chain that never branches.
+   Most of the descent is free either way: the automaton forces the entry below
+   for the large majority of its states, and a forced level adds depth without
+   adding a variant, so stopping at the first branch still reaches a long way
+   down a chain that never branches.
 
-   The height steers the split as well as ending it. Every stack starts at the
+   The height steers the walk as well as ending it. Every stack starts at the
    initial state, so when the height is exact it says precisely how many
    entries are still missing, and a candidate for one of them is only real if
-   the bottom is still that many predecessor steps below it. Variants that
+   the bottom is still that many predecessor steps below it. Candidates that
    cannot get there are dropped before they are ever carried, which is what
-   keeps the split narrow enough to be worth taking: a chain that has to land
-   on the initial state in three more entries has far fewer ways to do it than
-   the automaton's shape alone suggests.
+   makes the walk forced as often as it is: a chain that has to land on the
+   initial state in three more entries has far fewer ways to do it than the
+   automaton's shape alone suggests.
 
-   The split is what makes the bottom of the stack reachable again. A variant
-   that descends to the initial state has nothing below it, and a reduction
-   wider than it can pop is then not a move any parse can make - a conclusion
-   the abstraction could not draw while the stack was stranded above the
-   branch. *)
-let descent_limit = 512
+   Reaching the bottom is what the walk is for. A stack that descends to the
+   initial state has nothing below it, and a reduction wider than it can pop is
+   then not a move any parse can make - a conclusion the abstraction cannot
+   draw while the stack is stranded above a branch. *)
+let descent_limit =
+  match Sys.getenv_opt "AMBIGUITY_DESCENT_LIMIT" with
+  | None | Some "" -> 1
+  | Some value -> (
+      match int_of_string_opt value with
+      | Some chosen when chosen >= 1 -> chosen
+      | _ -> invalid_arg "AMBIGUITY_DESCENT_LIMIT must be a positive integer")
 
 let cap_variants preds below (precision : precision) keep ceiling height states =
   match states with
