@@ -107,9 +107,9 @@ REFINEMENT_DEEPEST = re.compile(
     r"to a retained stack of (\d+) at the deepest\.", re.MULTILINE
 )
 REFINEMENT_EXHAUSTED = re.compile(
-    r"^Refinement stopped after \d+ round\(s\): the candidate's chain never "
-    r"needed the abstraction to invent a goto, so no retained stack rules it "
-    r"out\.$",
+    r"^Refinement stopped after \d+ round\(s\): the candidate's chains never "
+    r"needed the abstraction to invent a goto and never stood on a stack it "
+    r"could not have rebuilt, so no retained stack rules it out\.$",
     re.MULTILINE,
 )
 REACHABILITY_LINE = re.compile(

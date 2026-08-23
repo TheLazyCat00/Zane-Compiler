@@ -1417,11 +1417,13 @@ let chain_imprecision automaton moves stack token =
 
    Being cut short is not on its own a reason to ask, though, and asking on
    every cut would aim a refinement at most of the automaton at once. A
-   truncated stack has lost nothing if walking it back down reaches exactly one
-   stack: the entries were forced, so the descent rebuilds the ones that were
-   really there and no others. So [descend] runs the walk to the stack's full
-   height, and only a stack that comes back as several - or as none, which is
-   what a height too saturated to pin down returns - is worth the depth.
+   truncated stack has lost nothing if walking it back down reconstructs the
+   whole of it: every entry was forced, so the descent recovers the ones that
+   were really there and no others, and depth would buy nothing the walk does
+   not already give. So [descend] runs the walk to the stack's full height, and
+   the depth is worth asking for whenever the walk comes back short of it -
+   stopped at a branch, split into several, or given a height too saturated to
+   pin anything down.
 
    The walk over the chain is the same one [chain_imprecision] makes, and
    carries the same visit bound for the same reason: a request it misses costs
@@ -1446,7 +1448,7 @@ let chain_truncations descend moves stack token =
     | top :: _ -> (
         if List.length current.suffix < current.height then
           match descend current with
-          | [ _ ] -> ()
+          | [ rebuilt ] when List.length rebuilt.suffix >= rebuilt.height -> ()
           | _ -> requests := (top, current.height) :: !requests));
     List.iter
       (function Reduce (_, next) -> push next | Terminate _ -> ())
@@ -1966,13 +1968,14 @@ let prove engine (precision : precision) pair_limit deadline survey_limit trace
     in
     walk node;
     scan node "#";
-    if Hashtbl.length wanted = 0 then begin
-      (* Nowhere on the path did the abstraction have to invent a goto, and yet
-         the pair is still here. Imprecision is not only invented gotos: a
-         truncated stack conflates every real stack that ends the same way, and
-         two of those can differ in what happens next. Nothing asks for depth
-         in that case, so refinement used to give up on exactly the candidates
-         whose chains were already clean.
+    begin
+      (* Imprecision is not only invented gotos: a truncated stack conflates
+         every real stack that ends the same way, and two of those can differ
+         in what happens next. Nothing about that asks for depth at a goto, so
+         a candidate whose chain is already clean would have nothing to
+         sharpen - and a candidate whose gotos ask for depth they have already
+         been granted would have nothing new, which is the same dead end
+         reached from the other side.
 
          So ask each truncated stack on the path for its own height. Its
          height is how many entries it really has, so that is the one depth
@@ -3361,8 +3364,9 @@ let main () =
               in
               if requests = [] then
                 stop
-                  "the candidate's chain never needed the abstraction to \
-                   invent a goto, so no retained stack rules it out"
+                  "the candidate's chains never needed the abstraction to \
+                   invent a goto and never stood on a stack it could not have \
+                   rebuilt, so no retained stack rules it out"
               else if deeper = [] then
                 stop
                   (Printf.sprintf
