@@ -73,7 +73,7 @@ PAST_STACK_TAG = re.compile(
 # counterexample visible round by round.
 REFINEMENT_ROUND_LINE = re.compile(
     r"^Refinement round (\d+): deepened the stacks behind (.*), "
-    r"retaining up to (\d+)\.$",
+    r"retaining up to (\d+) \((state \d+ to \d+)(, state \d+ to \d+)*\)\.$",
     re.MULTILINE,
 )
 REFINEMENT_STOPPED_LINE = re.compile(

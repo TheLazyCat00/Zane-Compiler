@@ -1883,21 +1883,28 @@ let prove engine (precision : precision) pair_limit deadline survey_limit trace
          in that case, so refinement used to give up on exactly the candidates
          whose chains were already clean.
 
-         So ask for one more entry than each truncated stack on the path is
-         carrying. Truncated is the whole condition: a stack as long as its own
-         height is the entire stack, and asking for depth past the bottom is a
-         request no ceiling can ever satisfy, which would leave refinement
-         re-running the proof until the clock stopped. When every stack on the
-         path is complete there is nothing left to sharpen, and the run says so
-         rather than pretending another round would help. *)
+         So ask each truncated stack on the path for its own height. Its
+         height is how many entries it really has, so that is the one depth
+         that stops conflating it with anything: a stack retaining as many
+         entries as it is tall is the whole stack, and no deeper request can
+         mean anything, since nothing sits below the initial state. Truncated
+         is therefore the whole condition - when every stack on the path is
+         already complete there is nothing left to sharpen, and the run says so
+         rather than pretending another round would help.
+
+         Asking for the height rather than one entry more than the stack
+         carries matters more than it looks. Widening by one turns a single
+         blind spot into a round per entry, and every one of those rounds pays
+         for a whole proof at a precision that was never going to be enough;
+         the ceiling clamps the request anyway, so the crawl buys nothing the
+         jump does not. *)
       let widen (left, right, _) =
         List.iter
           (fun stack ->
             let depth = List.length stack.suffix in
             match stack.suffix with
             | [] -> ()
-            | top :: _ ->
-                if depth < stack.height then record (top, depth + 1))
+            | top :: _ -> if depth < stack.height then record (top, stack.height))
           (if left = right then [ left ] else [ left; right ])
       in
       let rec walk node =
@@ -3276,10 +3283,15 @@ let main () =
                 incr rounds;
                 Printf.printf
                   "Refinement round %d: deepened the stacks behind %s, \
-                   retaining up to %d.\n"
+                   retaining up to %d (%s).\n"
                   !rounds
                   (String.concat " " tokens)
-                  (Array.fold_left max 0 precision);
+                  (Array.fold_left max 0 precision)
+                  (String.concat ", "
+                     (List.map
+                        (fun (state, depth) ->
+                          Printf.sprintf "state %d to %d" state depth)
+                        deeper));
                 flush stdout;
                 attempt ()
               end
