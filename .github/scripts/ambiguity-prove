@@ -40,6 +40,19 @@ if [[ "${SURVEY:-0}" != "0" ]]; then
 	args+=(--survey "$SURVEY")
 fi
 
+# Refinement deepens the retained stack only behind the candidate that needed
+# it shallow, and tries again, so it reaches precision a uniform level of the
+# same cost cannot. It is what tells a bounded blind spot from an unbounded
+# one: a bounded one changes shape round by round and disappears, an unbounded
+# one answers every round with a longer sentence. Zero keeps the single
+# unrefined attempt.
+if [[ "${REFINE:-0}" != "0" ]]; then
+	args+=(--refine "$REFINE")
+	if [[ -n "${REFINE_ROUNDS:-}" ]]; then
+		args+=(--refine-rounds "$REFINE_ROUNDS")
+	fi
+fi
+
 # The report directory is created here as well as by --output, so the artifact
 # upload finds a directory even when the run dies before its first write.
 mkdir -p "$(dirname "$REPORT")"

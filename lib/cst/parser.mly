@@ -45,6 +45,13 @@ let attach_abort_handle expr abort_handle =
   in
   loop expr
 
+(* What one bracket group in an enum map turned out to hold. The grammar shifts
+   the group before it can tell which kind it is, so the kind travels with the
+   contents until the run of groups is complete. *)
+type enum_map_group =
+  | Entries of (string * Nodes.Expr.t) list
+  | Params of Nodes.Param_type.t list
+
 let constructor_expr name args =
   Nodes.Expr.VerbCall
     (Nodes.Verb_call.Constructor { name; args; abort_handle = None })
@@ -329,6 +336,60 @@ type_expr:
       (member, value)
     }
 
+(* An enum map is a type followed by a run of bracket groups, all but the last
+   of which belong to the type as verb-type suffixes. Which one a group is
+   depends on what comes after its closing bracket, so the old shape - a
+   [type_expr] whose own suffix list had to be closed before the entry list's
+   bracket could be shifted - asked the parser to decide at the opening
+   bracket instead. Here every group is shifted first and classified after,
+   which is what the decision actually depends on.
+
+   A group's contents already say which kind it is: an entry is `name = value`
+   and a parameter type never starts that way. What the grammar cannot say is
+   that entries come last and suffixes do not, so the actions reject the two
+   orders that are not enum maps, the same way an abort handler in the wrong
+   place is rejected. *)
+enum_map_tail:
+  | "[" body=ioption(enum_map_group) "]" {
+      match body with
+      | None -> ([], [])
+      | Some (Entries entries) -> ([], entries)
+      | Some (Params _) ->
+          raise
+            (Parse_error.Rejected
+               "an enum map ends in its entry list, not in a verb-type suffix")
+    }
+  | "[" body=ioption(enum_map_group) "]" rest=enum_map_tail {
+      let suffixes, entries = rest in
+      let params =
+        match body with
+        | None -> []
+        | Some (Params params) -> params
+        | Some (Entries _) ->
+            raise
+              (Parse_error.Rejected
+                 "an enum map's entries come after its type, not inside it")
+      in
+      let suffix ret_type =
+        Nodes.Type_expr.Verb (Nodes.Verb_type.Func { params; ret_type })
+      in
+      (suffix :: suffixes, entries)
+    }
+  | "[" THIS this_type=type_expr
+    params=loption(preceded(",", separated_nonempty_list(",", param_type)))
+    "]" is_mut=boption(MUT) rest=enum_map_tail {
+      let suffixes, entries = rest in
+      let suffix ret_type =
+        Nodes.Type_expr.Verb
+          (Nodes.Verb_type.Meth { this_type; params; ret_type; is_mut })
+      in
+      (suffix :: suffixes, entries)
+    }
+
+%inline enum_map_group:
+  | entries=separated_nonempty_list(",", enum_map_entry) { Entries entries }
+  | params=separated_nonempty_list(",", param_type) { Params params }
+
 body_decl(body_form):
   | ret_type=ret_type name=LIDENT "(" params=separated_list(",", param) ")" body=body_form {
       Nodes.Decl.Verb (Nodes.Verb_decl.Func { name; params; ret_type; body })
@@ -416,9 +477,32 @@ simple_decl:
         value = Nodes.Expr.MethLambda meth_lambda;
       }
     }
-  | enum=named_type_expr "." property=LIDENT map_type=type_expr
-    "[" entries=separated_list(",", enum_map_entry) "]" {
-      Nodes.Decl.EnumMap { enum; property; type_ = map_type; entries }
+  | enum=named_type_expr "." property=LIDENT map_type=type_atom
+    tail=enum_map_tail {
+      let suffixes, entries = tail in
+      let type_ =
+        List.fold_left
+          (fun type_ suffix -> suffix (Nodes.Ret_type.Safe type_))
+          map_type suffixes
+      in
+      Nodes.Decl.EnumMap { enum; property; type_; entries }
+    }
+  | enum=named_type_expr "." property=LIDENT
+    "(" ret_type=abort_ret_type ")" tail=enum_map_tail {
+      let suffixes, entries = tail in
+      match suffixes with
+      | [] ->
+          raise
+            (Parse_error.Rejected
+               "a parenthesized abort return has to be given a verb type")
+      | first :: rest ->
+          let type_ =
+            List.fold_left
+              (fun type_ suffix -> suffix (Nodes.Ret_type.Safe type_))
+              (first (Nodes.Ret_type.Parenthesized ret_type))
+              rest
+          in
+          Nodes.Decl.EnumMap { enum; property; type_; entries }
     }
   | "(" THIS this_type=type_expr ")"
     "[" params=separated_list(",", param) "]" "=>" value=expr {

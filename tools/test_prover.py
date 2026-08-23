@@ -73,7 +73,7 @@ PAST_STACK_TAG = re.compile(
 # counterexample visible round by round.
 REFINEMENT_ROUND_LINE = re.compile(
     r"^Refinement round (\d+): deepened the stacks behind (.*), "
-    r"retaining up to (\d+)\.$",
+    r"retaining up to (\d+) \((state \d+ to \d+)(, state \d+ to \d+)*\)\.$",
     re.MULTILINE,
 )
 REFINEMENT_STOPPED_LINE = re.compile(
@@ -105,6 +105,17 @@ REFINEMENT_CAPPED = re.compile(
 )
 REFINEMENT_DEEPEST = re.compile(
     r"to a retained stack of (\d+) at the deepest\.", re.MULTILINE
+)
+REFINEMENT_EXHAUSTED = re.compile(
+    r"^Refinement stopped after \d+ round\(s\): the candidate's chains never "
+    r"needed the abstraction to invent a goto and never stood on a stack it "
+    r"could not have rebuilt, so no retained stack rules it out\.$",
+    re.MULTILINE,
+)
+REACHABILITY_LINE = re.compile(
+    r"^Stack height: refused (\d+) move\(s\) onto a state no stack that short "
+    r"can carry; the height stops being counted past (\d+)\.$",
+    re.MULTILINE,
 )
 
 
@@ -283,6 +294,96 @@ x: A { () }
 y: A { () }
 """
 
+# One nonterminal reachable both early and late. `d` can begin a sentence or
+# follow four `B`s, so the goto that rebuilds a stack after an imprecise
+# reduction has two sources, and the far one needs terminals a short sentence
+# has not read. The bracket conflict is the shape the real grammar stalls on:
+# on `[`, either the suffix list ends and the brackets belong to `d`, or
+# another suffix begins.
+LATE_ARM = """\
+%token A "a"
+%token B "b"
+%token LB "["
+%token RB "]"
+%token SEMI ";"
+%token EOF "<eof>"
+%start <unit> main
+%%
+main:
+  | d EOF { () }
+  | B B B B d EOF { () }
+d: ty LB RB SEMI { () }
+ty: A suffixes { () }
+suffixes:
+  |                  { () }
+  | LB RB suffixes   { () }
+"""
+
+# The late arm again, with an unbounded blind spot bolted on. `pal` is the
+# even-length palindrome, so no fixed retained depth ever separates its two
+# parses and every level ends in a surviving candidate -- while the `B B B B d`
+# arm still gives the abstraction guessed goto sources that no short stack can
+# be standing on. A run needs both to show that the height test reports what it
+# did even when the run does not end in a proof.
+LATE_PALINDROME = """\
+%token A "a"
+%token B "b"
+%token LB "["
+%token RB "]"
+%token SEMI ";"
+%token EOF "<eof>"
+%start <unit> main
+%%
+main:
+  | d EOF { () }
+  | B B B B d EOF { () }
+  | pal EOF { () }
+d: ty LB RB SEMI { () }
+ty: A suffixes { () }
+suffixes:
+  |                  { () }
+  | LB RB suffixes   { () }
+pal:
+  |            { () }
+  | A pal A    { () }
+"""
+
+# A chain that reduces several times before it shifts, over a stack deeper than
+# the retained depth. `decl` wraps a `ty` whose own suffix list is built from
+# bracket pairs, so closing the list on `[` runs `suffixes -> epsilon`, then
+# `suffixes -> LB args RB suffixes`, then `ty -> U gen suffixes`, each popping
+# from what the one before it left. Every one of those pops stays inside the
+# retained stack, so every goto along the way resolves exactly -- but a chain
+# that re-truncates at each step throws the deeper entries away between them,
+# and the descent walks them back through every context `ty` appears in, which
+# `alias` and `bind` make several. The chain then walks on over a stack no
+# parse was standing on, with nothing about it reading as a guess.
+MID_CHAIN = """\
+%token U "u"
+%token L "l"
+%token DOT "."
+%token LB "["
+%token RB "]"
+%token SEMI ";"
+%token BANG "!"
+%token EOF "<eof>"
+%start <unit> main
+%%
+main:
+  | decl EOF { () }
+  | alias EOF { () }
+  | bind EOF { () }
+decl: U gen DOT L ty LB args RB SEMI { () }
+alias: L DOT ty SEMI { () }
+bind: BANG ty SEMI { () }
+ty: U gen suffixes { () }
+gen: { () }
+args: { () }
+suffixes:
+  |                     { () }
+  | LB args RB suffixes { () }
+"""
+
 AMBIGUOUS_GRAMMARS = {
     "expression without precedence": AMBIGUOUS_EXPRESSION,
     "dangling else": DANGLING_ELSE,
@@ -293,6 +394,7 @@ UNAMBIGUOUS_GRAMMARS = {
     "lr(1) list": LR1_LIST,
     "precedence-resolved expression": PRECEDENCE_EXPRESSION,
     "even-length palindrome": EVEN_PALINDROME,
+    "late arm": LATE_ARM,
 }
 
 # Conflict-free automata offer exactly one action per state and lookahead, so
@@ -492,24 +594,34 @@ class RefinementTests(ProverTestCase):
         self.assertEqual(status, NOT_PROVEN, output)
         self.assertRegex(output, REFINEMENT_STOPPED_LINE)
 
-    def test_an_unbounded_blind_spot_widens_its_counterexample(self) -> None:
-        # What refinement is worth beyond the proof. A bounded blind spot
-        # closes once the retained stack outgrows it; an unbounded one answers
-        # every widening with a longer sentence, and the round lines make that
-        # answer visible directly -- the palindrome pushes its counterexample
-        # out by one `A p A` nesting per round. Reading that off a handful of
-        # rounds is the same conclusion the level sweep reaches by running the
-        # whole proof once per level.
+    def test_an_unbounded_blind_spot_is_reported_as_one(self) -> None:
+        # What refinement is worth beyond the proof. A bounded blind spot closes
+        # once the retained stack outgrows it; an unbounded one never does, and
+        # a run has to say so rather than leave it to be inferred from a verdict
+        # that looks the same either way.
+        #
+        # There are two ways it can say so, and which one a grammar gets depends
+        # on how much context the abstraction can recover. The palindrome's
+        # middle is unbounded, so either the counterexample grows a nesting per
+        # round, or -- once the descent rebuilds its stacks to full depth -- the
+        # chain stops asking for depth at all and the run reports that no
+        # retained stack rules the candidate out. Both are the same conclusion.
         _, output = self.prove(
             EVEN_PALINDROME, 1, extra=("--prove-refine", "8")
         )
         candidates = [
             match.group(2) for match in REFINEMENT_ROUND_LINE.finditer(output)
         ]
-        self.assertGreaterEqual(len(candidates), 2, output)
-        self.assertGreater(
-            len(candidates[-1].split()), len(candidates[0].split()), output
+        # Two rounds are what widening needs to be visible, so requiring them
+        # up front would rule out the second outcome this test accepts: a run
+        # whose descent rebuilds the stacks in the first round and stops there.
+        self.assertTrue(candidates, output)
+        stopped = REFINEMENT_EXHAUSTED.search(output)
+        widened = len(candidates) >= 2 and len(candidates[-1].split()) > len(
+            candidates[0].split()
         )
+        self.assertTrue(widened or stopped is not None, output)
+        self.assertRegex(output, NOT_PROVEN_LINE)
 
     def test_a_request_past_the_ceiling_is_reported_not_swallowed(self) -> None:
         # The palindrome's competing reduction is three symbols wide, so its
@@ -525,11 +637,12 @@ class RefinementTests(ProverTestCase):
         self.assertGreater(int(capped.group(4)), 2, output)
 
     def test_no_cap_is_reported_when_every_request_fits(self) -> None:
-        # The guard against the line above appearing whenever refinement runs:
-        # a ceiling of eight covers everything the palindrome's chain asks for,
-        # so there is nothing to cut down and nothing to report.
+        # The guard against the line above appearing whenever refinement runs.
+        # This grammar's blind spot is bounded -- refinement walks it and the
+        # concretization search then finds the real sentence -- so a ceiling of
+        # eight covers every request and there is nothing to cut down.
         _, output = self.prove(
-            EVEN_PALINDROME, 1, extra=("--prove-refine", "8")
+            AMBIGUOUS_EXPRESSION, 1, extra=("--prove-refine", "8")
         )
         self.assertRegex(output, REFINEMENT_ROUND_LINE)
         self.assertNotRegex(output, REFINEMENT_CAPPED)
@@ -595,6 +708,76 @@ class RefinementTests(ProverTestCase):
                 )
                 self.assertNotIn(status, VERDICT_STATUSES)
                 self.assertNotRegex(output, PROVEN_LINE)
+
+
+class StackHeightTests(ProverTestCase):
+    def test_a_state_no_short_stack_can_carry_is_refused(self) -> None:
+        # The abstraction rebuilds a stack on a guessed goto source, and the
+        # sources it may guess are read off the automaton's shape alone. That
+        # admits states needing a taller stack than the run has built, and
+        # retained depth never rules them out, because depth is a chain of
+        # adjacent states and so is the guess.
+        status, output = self.prove(LATE_ARM, 1)
+        self.assertEqual(status, PROVEN, output)
+        match = REACHABILITY_LINE.search(output)
+        self.assertIsNotNone(match, output)
+        assert match is not None
+        self.assertGreater(int(match.group(1)), 0, output)
+        # Past the widest reduction the exact height decides nothing, so the
+        # count stops there. A ceiling below that would leave reductions whose
+        # room the abstraction can never check.
+        self.assertGreater(int(match.group(2)), 0, output)
+
+    def test_a_surviving_candidate_still_says_what_the_height_refused(
+        self,
+    ) -> None:
+        # A candidate is the run whose reader most needs the count, because it
+        # is what separates "the abstraction is blind here" from "the
+        # abstraction looked and the moves it kept were real". Reporting it
+        # only alongside a proof made the test look inert on every run that did
+        # not find one.
+        status, output = self.prove(LATE_PALINDROME, 1)
+        self.assertNotEqual(status, PROVEN, output)
+        self.assertIn("Abstract ambiguity candidate", output)
+        match = REACHABILITY_LINE.search(output)
+        self.assertIsNotNone(match, output)
+        assert match is not None
+        self.assertGreater(int(match.group(1)), 0, output)
+
+    def test_a_chain_keeps_the_entries_its_own_pops_left_behind(self) -> None:
+        # Every pop in the chain leaving this site stays inside the retained
+        # stack, so every goto it takes resolves off a suffix long enough to
+        # expose its source, and the step has nothing to guess. It guessed
+        # anyway, because the stack was cut back to the retained depth after
+        # each pop and the descent then invented its way back down -- through
+        # every context `ty` appears in, rather than the one the chain had
+        # just been standing in. A pop never leaves more than it was given, so
+        # keeping what it left costs nothing that outlives the chain.
+        _, output = self.prove(MID_CHAIN, 3, extra=("--prove-trace",))
+        steps = [
+            line
+            for line in output.splitlines()
+            if re.match(r"^ *\d+\. on ", line)
+        ]
+        self.assertTrue(steps, output)
+        self.assertTrue(steps[0].rstrip().endswith("[exact]"), output)
+
+    def test_a_grammar_with_nothing_to_refuse_stays_silent(self) -> None:
+        # The line has to mean something when it appears, which it only does if
+        # a run that refused nothing does not print it.
+        _, output = self.prove(LR1_LIST, 1)
+        self.assertIsNone(REACHABILITY_LINE.search(output), output)
+
+    def test_refusing_moves_never_proves_an_ambiguous_grammar(self) -> None:
+        # The test removes moves from the search, which is the one kind of
+        # change that can turn a sound over-approximation into a false
+        # theorem. Every ambiguous grammar has to survive it at every level.
+        for name, grammar in AMBIGUOUS_GRAMMARS.items():
+            for level in (1, 2, 3):
+                with self.subTest(grammar=name, level=level):
+                    status, output = self.prove(grammar, level)
+                    self.assertNotRegex(output, PROVEN_LINE)
+                    self.assertNotEqual(status, PROVEN, output)
 
 
 class ForwardTraceTests(ProverTestCase):

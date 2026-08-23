@@ -65,6 +65,26 @@ on:
         required: false
         default: "0"
         type: string
+      refine:
+        # A uniform level has to be paid for everywhere it is raised, and on
+        # this grammar the level that would close one blind spot is the level
+        # that makes the proof too expensive to run. Refinement deepens only
+        # the states behind the candidate that needed the abstraction blunt,
+        # so it reaches precision the level alone cannot afford. This is the
+        # ceiling it may deepen to; 0 runs the single unrefined attempt.
+        description: Refine up to a retained stack of N (0 = no refinement)
+        required: false
+        default: "0"
+        type: string
+      refine_rounds:
+        # Rounds share the pair budget and the clock rather than each getting
+        # their own, so this bounds attempts, not cost. It is worth setting
+        # high: the round lines are the diagnostic, and a run that stops at
+        # the round limit says less than one that runs out of depth.
+        description: Most refinement rounds to attempt
+        required: false
+        default: "40"
+        type: string
       strict:
         description: Fail the job on "not proven", not only on a found ambiguity
         required: false
@@ -84,7 +104,7 @@ concurrency:
 
 jobs:
   prove:
-    name: Prove level ${{ inputs.level || '3' }} on ${{ inputs.ref || github.ref_name }}
+    name: Prove level ${{ inputs.level || '3' }}${{ inputs.refine && inputs.refine != '0' && format(' refined to {0}', inputs.refine) || '' }} on ${{ inputs.ref || github.ref_name }}
     runs-on: ubuntu-latest
     # Both search phases obey --timeout, so the tool bounds itself: at the
     # largest offered value the two phases total six hours. This cap is the
@@ -149,6 +169,8 @@ jobs:
           PROFILE: ${{ inputs.profile || 'quick' }}
           SEARCH_TIMEOUT: ${{ inputs.timeout || '15m' }}
           SURVEY: ${{ inputs.survey || '0' }}
+          REFINE: ${{ inputs.refine || '0' }}
+          REFINE_ROUNDS: ${{ inputs.refine_rounds || '40' }}
           WITNESSES: "50"
         run: |
           set -euo pipefail

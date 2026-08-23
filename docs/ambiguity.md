@@ -61,6 +61,39 @@ Every LR conflict state must carry exactly one of:
 A grammar change that introduces a new conflict state is incomplete until
 the state is triaged into one of these categories.
 
+### Where the current conflicts come from
+
+Menhir reports 26 conflict states. Twenty-three of them turn on one lookahead
+token and three turn on four at once, so the table counts states rather than
+token occurrences and its rows sum to the same 26. They are not independent
+problems:
+
+| Lookahead | States | Reduction | Root |
+| --------- | -----: | --------- | ---- |
+| `(`             | 9 | `loption_generics_ ->` | before a call or a lambda |
+| `<`             | 9 | `loption_generics_ ->` | against `<` as less-than |
+| `(` `<` `{` `.` | 3 | `loption_generics_ ->` | a named type opening a constructor body |
+| `{`             | 3 | `app -> ... DOT LIDENT` | a field access against a constructor body |
+| `(`             | 2 | `primary -> LIDENT`, `primary -> THIS` | a bare name against a call or a lambda |
+
+There were twelve more, on `[`, and all twelve were one adjacency: an enum
+map's type was a `type_expr`, whose own run of verb-type suffixes had to be
+closed before the entry list's bracket could be shifted. Which kind a bracket
+group is depends on what follows its closing bracket, so deciding at the
+opening one is a question LR cannot answer, and the family of candidates it
+generated is unbounded — the surviving counterexample grew a token per
+refinement round, so no retained depth ever closed it. `enum_map_tail` shifts
+every group before classifying it, which removed all twelve without changing
+what the language accepts.
+
+Twenty-one of the 26 reduce `loption_generics_ ->` and five reduce `app` or
+`primary`. The empty generics reduction is load-bearing rather than an
+artifact: expanding the option into two explicit alternatives raises the count
+to 40, and dropping generics from named types raises it to 28. What it stands
+in for is a genuine overlap in the surface syntax — `x Foo(…)` is either a
+constructor shorthand or a lambda declaration whose return type is `Foo`, and
+nothing before the closing bracket says which.
+
 ## Tooling
 
 - `ambiguity search [PROFILE]` — bounded, parallel GLR search for complete
@@ -179,15 +212,78 @@ the state is triaged into one of these categories.
 
   A reduction that pops past the retained stack also has to *rebuild* it, as a
   goto target sitting on one of those guessed sources — two entries, with
-  nothing underneath. That two used to be a constant, independent of the
-  retained depth, so one imprecise reduction reset the stack for the rest of the
-  run and every reduction after it popped into the unknown immediately, however
-  much depth had been paid for. Where the automaton determines what sits below —
-  exactly one state has a transition into the source, which holds for 744 of the
-  current grammar's 919 reachable states — that context is recovered by walking
-  those forced predecessors downward, so a rebuilt stack reaches the retained
-  depth like any other. It stops at the first entry with more than one possible
-  predecessor, and at the bottom of the stack. **Its budget** is
+  nothing underneath. Walking downward from the deepest entry recovers context
+  wherever the automaton leaves no choice about what sits below, which holds
+  for 744 of the current grammar's 919 reachable states, and the walk stops at
+  the first entry with more than one possible predecessor. Descending through a
+  branch would mean carrying one stack per predecessor, and two stacks
+  differing only in how a split resolved are different possible worlds rather
+  than two parses of one sentence: the joint walk pairs each side's variants
+  against the other's across every pair of distinct productions, so the cost of
+  a split is quadratic in it while the depth it buys is not.
+  `AMBIGUITY_DESCENT_LIMIT` raises the bound for a grammar that wants the
+  split; the descent then stops at whatever depth it has reached when the next
+  level would cross it.
+
+  What makes stopping at a branch affordable is that a reduction chain no
+  longer loses the depth it starts with. A chain fires several times before it
+  shifts, and each reduction keeps the entries its own pop leaves behind rather
+  than cutting the stack back to what the state left on top is entitled to
+  retain. Without that, a chain whose every goto resolved exactly could still
+  be standing on entries the descent had invented — imprecision that nothing in
+  a trace reads as a guess, since each goto along the way was exact. Keeping
+  them costs nothing that lasts: a pop never leaves more than it was given, and
+  the shift that ends the chain cuts the stack back to the retained depth
+  before it becomes a node the search stores, so the extra depth lives only
+  inside one token's chain.
+
+  All of that reads the automaton's shape, and shape is not the only thing
+  known about a stack. **How tall it is** is a separate fact with its own
+  consequences, and the abstraction used to have no way to hold it: a suffix
+  says which states are on top and never says where the stack ends, so there
+  was always assumed to be more below. That assumption is what admits a
+  reduction with nothing left to goto from, and the guess about where it landed
+  is what keeps spurious pairs alive.
+
+  So an abstract stack carries its height. A reduction popping `W` entries
+  needs `W` of them and a state underneath, so on a stack of exactly `W` it is
+  not a move any parse can make, and the abstraction can say so instead of
+  guessing. A guessed goto source is checked the same way against the fewest
+  entries a stack can have with that state on top — the length of the shortest
+  path to it through the automaton — which rules out sources belonging to parts
+  of the grammar no stack this short has reached. Both bounds are minima over
+  all paths, so refusing on them removes only moves no parse could make.
+
+  While the height is exact it says more than a minimum. The reduction leaves a
+  stack of a known height with the goto target on top, so the source is the
+  entry directly below it, at a height one less — and every stack a parse
+  builds starts at the initial state. A source the initial state cannot reach
+  in exactly that many steps is not standing on any stack at all, however well
+  it fits the automaton's shape read backwards. The same reasoning steers the
+  rebuilding descent: when the height is exact it says precisely how many
+  entries are still missing, so a candidate for one of them is only real if the
+  bottom is still that many predecessor steps below it, which is what makes the
+  walk forced as often as it is.
+
+  The height is exact while it stays under a ceiling and saturates there.
+  Saturation is the safe direction, because a stack that might be taller than
+  any reduction is wide is one no reduction can be ruled out on, which is what
+  the abstraction assumed everywhere before it counted at all — and a saturated
+  height stays saturated through a reduction rather than having a width
+  subtracted from it, since subtracting from "at least this" manufactures an
+  exact height smaller than the truth and an undercounted height rules out
+  moves a real parse can make. The ceiling only has to clear the widest
+  reduction in the grammar, which is what keeps the abstract stack space
+  finite.
+
+  Knowing the height is also what lets a stack reach its own bottom. A suffix
+  as long as the height is the whole stack, so the descent stops there rather
+  than inventing entries below the initial state, and the reductions that would
+  have popped past it are gone.
+
+  A run says what the height test refused, for the same reason it says when a
+  refinement request was clamped: a test that removes moves silently leaves the
+  output looking like a search of a space it did not make. **Its budget** is
   the abstract pair limit, derived from `AMBIGUITY_MEMORY_MB` and
   `AMBIGUITY_MAX_FRONTIER_RATIO`. The abstract phase is a single sequential
   search, so the budget is derived for one worker and `AMBIGUITY_JOBS` does not
@@ -207,15 +303,36 @@ the state is triaged into one of these categories.
   the run, deepening one blind spot leaves the rest of the automaton at the
   base level.
 
-  Asking for depth at the blind spot alone would change nothing, since the
-  context was already discarded upstream: a stack can only arrive somewhere
-  holding `D` entries if everything that can sit below it retains at least
-  `D - 1`. Refinement therefore walks backwards through the predecessor
-  relation, shrinking the request by one at each step. That backward cone is
-  the whole cost, and how much of the automaton it reaches is a property of the
-  grammar — on the current grammar, refining to a retained depth of nine
-  deepens about three fifths of the automaton's states and still finishes,
-  where a uniform level 3 does not.
+  A round grants the depth at the state that asked for it and nowhere else.
+  Nothing has to be bought behind it: a reduction chain keeps the entries its
+  own pops leave behind, so depth survives a chain rather than being re-capped
+  at each step, and where a stack does arrive short the rebuilding descent
+  walks it back down through the entries the automaton forces. That is what
+  makes a round cheap enough to be worth repeating — a request granted to its
+  whole backward cone instead reaches every state of a dense automaton at a
+  depth close to the request, which on this grammar is the same thing as
+  raising the uniform level.
+
+  Invented gotos are not the only imprecision worth a request. A truncated
+  stack conflates every real stack that ends the same way, and two of those can
+  differ in what happens next, so a pair can survive an abstraction whose
+  gotos were all exact. Each round therefore also walks the reduction chains
+  and asks any stack cut below its own height for that height: a stack
+  retaining as many entries as it is tall is the whole stack, and no deeper
+  request can mean anything, since nothing sits below the initial state. The
+  chains matter and not only the stacks between tokens — a candidate can reach
+  acceptance with every recorded stack complete and every goto exact, standing
+  the whole way on a chain that was cut short between them.
+
+  Being cut short is not on its own a reason to ask. A truncated stack has lost
+  nothing if walking it back down reconstructs the whole of it, since the
+  entries were forced and the descent recovers the ones that were really there.
+  So the walk runs to the stack's full height, and the depth is asked for
+  whenever it comes back short of it — stopped at a branch, split into several,
+  or handed a height too saturated to pin anything down. When neither the
+  gotos nor the chains have anything new to ask, the round widens by one
+  instead of stopping, which lets refinement climb to the ceiling the caller
+  set rather than stalling well below it.
 
   Refining cannot produce a false proof. Every depth assignment
   over-approximates, because truncation is the only thing that ever shortens a
@@ -236,15 +353,15 @@ the state is triaged into one of these categories.
   surviving candidate's site in the same form a survey uses, so a stall can be
   read rather than guessed at.
 
-  Splitting the rebuild at that stopping point — producing one stack per
-  possible predecessor instead of giving up, with a bounded fan-out — was tried
-  and is **not** in the tool. On the current grammar it cost 26% more abstract
-  pairs (60,423 to 76,143), and 75% more on the palindrome, without changing a
-  verdict or removing a candidate. That much still holds.
+  Splitting the rebuild at that stopping point was first tried on its own and
+  measured at 26% more abstract pairs on this grammar and 75% more on the
+  palindrome, without changing a verdict. It is in the tool now, because a
+  split that reaches the bottom of the stack is worth what a split that stops
+  four entries above it is not.
 
-  The reading attached to it did not. The candidate that survives refinement,
-  `& ( Foo ) [ ] ;`, stalls at a site whose two *competing* moves are both
-  untagged — an empty `list_verb_type_suffix_` reduction against a shift — and
+  A reading that came with it did not survive. A candidate that stalled here
+  for a long time, `& ( Foo ) [ ] ;`, sat at a site whose two *competing* moves
+  are both untagged — an empty `list_verb_type_suffix_` reduction against a shift — and
   that was taken to mean the pair was not being kept alive by a guessed goto at
   all, so that stack depth could not be the lever. `--trace` showed otherwise on
   its first run: the very first step of the walk guesses, at a state exact only
@@ -252,6 +369,15 @@ the state is triaged into one of these categories.
   conflict, not the rest of the reduction chain they sit in, so untagged moves
   there say nothing about whether the step guessed. Read a localized conflict
   as evidence about precision and this is the mistake it invites.
+
+  What the candidate looks like now is worth stating, because the shape did not
+  change when the numbers did. The one that survives is `Foo . bar Baz [ ] ;`,
+  and its stacks reach the initial state — `7 888 887 102 1 0` — which is the
+  height doing its work: before it, a rebuilt stack floated above a branch
+  point with entries assumed below it that were not there. What is left is a
+  handful of guessed gotos on chains the refinement has already been given the
+  depth for, which is a different situation from the one three abstractions ago
+  and is where the next attempt starts.
 
   `--trace` follows a reported candidate from its divergence site down to
   acceptance. Every other diagnostic here reports where a divergence was
@@ -359,6 +485,44 @@ the state is triaged into one of these categories.
   (`tools/SYNTAX_EXPERIMENT.md`).
 - `menhir --explain` — enumerates the conflict states that constitute the
   obligation ledger.
+
+## Sharpenings that were measured and rejected
+
+Two ways of giving the abstraction more stack look obviously right and are
+neither. Both are recorded here because the reasoning that recommends them
+survives being told they do not work, so they get proposed again.
+
+**Carrying the stack's bottom entries.** The state that says which construct a
+stack is inside sits at a fixed height near the bottom, while whatever the
+construct contains piles up above it — which is exactly the shape that defeats
+depth counted from the top, and exactly the shape a fixed number of entries
+counted from the bottom would settle. It also multiplies the abstract stack
+space, because every stack shorter than the bound becomes exact and stops
+standing in for the others. On the current grammar a level-2 proof costs about
+ten thousand pairs with no bottom kept, ninety thousand with three entries
+kept, and does not finish within five minutes with five — while the context
+markers that motivated it sit at height five and deeper.
+
+**Keeping every stack under a height bound exact.** The same idea reached from
+the other side, and the same blowup: "exact below height H" and "keep H entries
+from the bottom" describe the same set of stacks.
+
+**Labelling the backward walk with the production's symbols.** A reduction of
+`A -> X1 ... XW` pops entries that spell the right-hand side, so walking down
+from the deepest retained entry along those specific symbols looks like it must
+beat walking down along every edge that arrives there. It is the same walk. In
+an LR automaton every transition into a state carries the same symbol — the
+state is `goto(I, X)` for one `X`, which is what its item cores have the dot
+after — so a state's predecessors by a given symbol are all of its
+predecessors. Instrumented over a level-3 proof of the current grammar, the
+labelled walk narrows nothing: zero sites, zero sources. `predecessors` builds
+its table with `fun _ target` because the symbol it drops is a function of the
+target.
+
+What works instead is depth granted per state, at the state that asked for it,
+with the reduction chains keeping what their own pops leave behind. That buys
+exactness where a candidate needs it and leaves the rest of the automaton
+standing in for itself.
 
 ## Local machine configuration
 
