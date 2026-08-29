@@ -51,6 +51,15 @@ if [[ "${REFINE:-0}" != "0" ]]; then
 	if [[ -n "${REFINE_ROUNDS:-}" ]]; then
 		args+=(--refine-rounds "$REFINE_ROUNDS")
 	fi
+	# An unbounded blind spot answers every round with a longer sentence, so a
+	# run that keeps refining it spends the whole clock on one site and reports
+	# nothing about the rest of the grammar. Retiring stops pursuing a site once
+	# it has stopped moving, names it, and carries on; the run then reports
+	# which sites are open instead of only which one it ran out of time on. It
+	# can never report a proof, so it costs no soundness.
+	if [[ -n "${RETIRE:-}" && "${RETIRE}" != "0" ]]; then
+		args+=(--retire "$RETIRE")
+	fi
 fi
 
 # The report directory is created here as well as by --output, so the artifact

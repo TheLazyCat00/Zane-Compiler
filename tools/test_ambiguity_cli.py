@@ -479,6 +479,14 @@ class SurveyFlagTests(unittest.TestCase):
             arguments[arguments.index("--prove-refine-rounds") + 1], "4"
         )
 
+    def test_retirement_only_travels_with_refinement(self) -> None:
+        # Retiring names what refinement failed to close, so on its own it has
+        # nothing to act on and the engine would never see the option.
+        arguments = ambiguity.engine_arguments(self.profile(), 3, refine=0, retire=2)
+        self.assertNotIn("--prove-retire", arguments)
+        arguments = ambiguity.engine_arguments(self.profile(), 3, refine=9, retire=2)
+        self.assertEqual(arguments[arguments.index("--prove-retire") + 1], "2")
+
     def test_a_trace_only_travels_when_asked(self) -> None:
         self.assertNotIn("--prove-trace", ambiguity.engine_arguments(self.profile(), 3))
         self.assertIn(
@@ -496,6 +504,7 @@ class SurveyFlagTests(unittest.TestCase):
             ("with a survey", ["prove", "1", "--refine", "4", "--survey", "1"]),
             ("rounds without refinement", ["prove", "1", "--refine-rounds", "4"]),
             ("trace with a survey", ["prove", "1", "--trace", "--survey", "1"]),
+            ("retire without refinement", ["prove", "1", "--retire", "2"]),
         ):
             with self.subTest(combination=name):
                 with self.assertRaises(SystemExit):

@@ -353,6 +353,39 @@ nothing before the closing bracket says which.
   surviving candidate's site in the same form a survey uses, so a stall can be
   read rather than guessed at.
 
+  `--retire N` decides what to do about the unbounded case. Refinement pursues
+  one candidate at a time, so a site no depth in this abstraction reaches keeps
+  producing candidates for as long as there is clock left, and the run ends
+  having said nothing about any other part of the grammar — the site with the
+  longest queue of counterexamples decides what the whole run reports.
+  `--retire N` stops pursuing a site once `N` consecutive rounds have left the
+  divergence where it was, prints it, and carries on with the rest. Every later
+  candidate born at a retired site is stepped over rather than answered, so the
+  search reaches the sites behind it.
+
+  A site is identified by the two states on top of the diverging stacks and the
+  lookahead, which is the part of it a deepening never changes: refinement
+  lengthens what sits below those states, so the rendered site names a
+  different triple after every round even when the blind spot has not moved.
+  Two rounds landing on the same identity is what "the round bought nothing"
+  means here. A site is retired for either of two reasons, both about that site
+  alone: it has stopped moving under `N` rounds of deepening, or it wants more
+  depth than `--refine K` allows. The round limit is a budget for the whole run
+  and still ends it.
+
+  Whether a blind spot is finite is not something a run can decide, so
+  retiring is a decision to stop looking rather than a finding about the
+  grammar, and the report says so in those terms. A run that retired anything
+  never prints `PROVEN UNAMBIGUOUS`, however much it closed: the retired sites
+  were stepped over, not answered. What it prints instead is the sharper
+  statement that is actually available — the sites it gave up on, each with the
+  sentence that reached it and the conflict behind it, and a verdict saying the
+  grammar is unproven at those sites and closed everywhere else. It also always
+  goes on to the bounded concretization search, because retiring drops the
+  candidate that search would otherwise have been handed, and a retired site
+  that was a real ambiguity rather than a blind spot has to still produce its
+  witness.
+
   Splitting the rebuild at that stopping point was first tried on its own and
   measured at 26% more abstract pairs on this grammar and 75% more on the
   palindrome, without changing a verdict. It is in the tool now, because a
