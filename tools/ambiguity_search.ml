@@ -1868,6 +1868,25 @@ let prove engine (precision : precision) pair_limit deadline survey_limit trace
     Hashtbl.length retired > 0
     && Hashtbl.mem retired (site_identity (accepting_site node))
   in
+  (* A retired site takes its whole subtree with it. A child inherits
+     [diverged], and [accepting_site] climbs to the first ancestor that is not
+     diverged, so every node below a diverged one reports that node's site: the
+     subtree under a retired divergence cannot produce a candidate anywhere
+     else, and walking it is work that has no outcome. Stepping over the site
+     without pruning it was measured on Zane's grammar at 55 minutes and 1.3M
+     pairs after the retirement, with no second candidate and no end to the
+     phase.
+
+     Only diverged nodes are eligible. An undiverged node has no site yet --
+     [accepting_site] hands back its own stacks under "#" -- so asking whether
+     it is retired would prune on a triple that names something else.
+
+     One thing this can cost: pairs are deduplicated on first arrival, so a
+     triple first reached under a retired site is not pushed again from
+     elsewhere, and a site reachable only that way is not found. That is a
+     reason a retiring run reports what it looked at rather than a proof; it
+     already never claims one. *)
+  let prune_subtree ((_, _, diverged) as node) = diverged && is_retired node in
   (* The node the divergence was born at, rather than the triple describing it:
      the forward walk has to start somewhere it can walk down from. *)
   let divergence_origin node =
@@ -2159,9 +2178,12 @@ let prove engine (precision : precision) pair_limit deadline survey_limit trace
     then Hashtbl.replace sites (left, right, "#") ();
     if accepts_diverged then begin
       incr accepting;
-      (* A retired site still counts as an accepting divergence -- the pair is
-         as real as it ever was, and hiding it from the count would let a
-         retirement look like progress. It just stops being the answer. *)
+      (* A pair at a retired site still counts as an accepting divergence --
+         it is as real as it ever was, and hiding it from the count would let a
+         retirement look like progress. It just stops being the answer. The
+         count does thin out below one, because the subtree is pruned rather
+         than walked, which is another reason it is a floor on a retiring
+         run. *)
       if !candidate = None && not (is_retired node) then candidate := Some node;
       if surveying && !example_count < survey_limit then begin
         examples :=
@@ -2173,7 +2195,7 @@ let prove engine (precision : precision) pair_limit deadline survey_limit trace
         incr example_count
       end
     end;
-    if surveying || !candidate = None then
+    if (surveying || !candidate = None) && not (prune_subtree node) then
       List.iter
         (fun token ->
           List.iter

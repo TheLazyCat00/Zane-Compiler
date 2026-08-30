@@ -363,6 +363,18 @@ nothing before the closing bracket says which.
   candidate born at a retired site is stepped over rather than answered, so the
   search reaches the sites behind it.
 
+  A retired site takes its whole subtree with it. A pair inherits its
+  divergence from its parent, and a site is where a divergence was *born*, so
+  every pair below a diverged one reports that same site: the subtree under a
+  retired divergence cannot produce a candidate anywhere else, and walking it
+  is work with no possible outcome. Stepping over such a site without pruning
+  it was measured on this grammar at 55 minutes and 1.3 million pairs after the
+  retirement, with no second candidate and no end to the abstract phase. What
+  this costs is a floor rather than a count: pairs are deduplicated on first
+  arrival, so a pair first reached under a retired site is not pushed again
+  from elsewhere, and a site reachable only that way is not found. That is one
+  more reason a retiring run reports what it looked at rather than a proof.
+
   A site is identified by the two states on top of the diverging stacks and the
   lookahead, which is the part of it a deepening never changes: refinement
   lengthens what sits below those states, so the rendered site names a

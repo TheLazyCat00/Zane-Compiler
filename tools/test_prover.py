@@ -150,6 +150,33 @@ REACHABILITY_LINE = re.compile(
 )
 
 
+# Two blind spots that share nothing: the expression conflict and the dangling
+# else, reachable from one start symbol through disjoint alternatives. Retiring
+# prunes the subtree under a site it gave up on, and the property that pruning
+# could break is exactly the one retirement exists for -- reaching what lies
+# behind the site. A grammar with one site cannot tell the two apart.
+TWO_INDEPENDENT_SITES = """\
+%token A "a"
+%token PLUS "+"
+%token IF "if"
+%token THEN "then"
+%token ELSE "else"
+%token X "x"
+%token EOF "<eof>"
+%start <unit> main
+%%
+main:
+  | e EOF { () }
+  | s EOF { () }
+e:
+  | A { () }
+  | e PLUS e { () }
+s:
+  | X { () }
+  | IF X THEN s { () }
+  | IF X THEN s ELSE s { () }
+"""
+
 # Ambiguous: `a + a + a` groups two ways with nothing to choose between them.
 AMBIGUOUS_EXPRESSION = """\
 %token A "a"
@@ -815,6 +842,27 @@ class RetirementTests(ProverTestCase):
             EVEN_PALINDROME, 1, extra=("--prove-refine", "5", "--prove-retire", "2")
         )
         self.assertRegex(output, RETIRED_CLOSED_LINE)
+
+    def test_a_second_site_behind_the_first_is_still_reached(self) -> None:
+        # The property retiring exists for, and the one its pruning could
+        # break. A retired site takes its whole subtree with it, because every
+        # node below a diverged one reports that node's site and so can only
+        # produce candidates there. Prune a shade too widely and the site
+        # behind it goes with it -- silently, since the run still ends in a
+        # verdict. Two sites sharing nothing is the smallest thing that
+        # notices.
+        _, output = self.prove(
+            TWO_INDEPENDENT_SITES,
+            1,
+            extra=("--prove-refine", "6", "--prove-retire", "1"),
+        )
+        header = RETIRED_HEADER.search(output)
+        self.assertIsNotNone(header, output)
+        self.assertEqual(int(header.group(1)), 2, output)
+        lookaheads = {
+            match.group(1) for match in RETIRED_ANNOUNCEMENT.finditer(output)
+        }
+        self.assertEqual(lookaheads, {"PLUS", "ELSE"}, output)
 
     def test_retirement_leaves_a_conflict_free_proof_alone(self) -> None:
         # Nothing to retire: no pair ever diverges, so no candidate is raised
