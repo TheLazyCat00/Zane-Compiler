@@ -3496,15 +3496,37 @@ let main () =
                 flush stdout;
                 attempt ()
               in
+              (* What the round limit is really bounding is abstract phases,
+                 and a retirement starts one exactly as a deepening does.
+                 Counting only deepenings would leave the limit unable to bite
+                 at all on a grammar with many blind spots: nothing increments
+                 [rounds], so a run could retire its way through one phase per
+                 site with the ceiling never reached. Both are charged to the
+                 same budget, while [rounds] stays a count of deepenings for
+                 the report, which is the number that describes the
+                 abstraction the run ended at. *)
+              let budget_left =
+                !rounds + List.length !retirements < !refine_rounds
+              in
               if requests = [] then
                 stop
                   "the candidate's chains never needed the abstraction to \
                    invent a goto and never stood on a stack it could not have \
                    rebuilt, so no retained stack rules it out"
-              else if exhausted <> None && !retire_after > 0 then
-                retire (Option.get exhausted)
-              else if exhausted <> None then stop (Option.get exhausted)
-              else if !rounds >= !refine_rounds then
+              else if exhausted <> None then begin
+                (* This site is finished either way. The only question left is
+                   whether there is budget to retire it and go on. *)
+                let reason = Option.get exhausted in
+                if !retire_after > 0 && budget_left then retire reason
+                else if !retire_after > 0 then
+                  stop
+                    (Printf.sprintf
+                       "%s, and the round limit (%d) left no room to retire it \
+                        and carry on"
+                       reason !refine_rounds)
+                else stop reason
+              end
+              else if not budget_left then
                 stop
                   (Printf.sprintf "the round limit (%d) was reached"
                      !refine_rounds)

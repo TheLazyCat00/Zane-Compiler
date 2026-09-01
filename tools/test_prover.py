@@ -864,6 +864,54 @@ class RetirementTests(ProverTestCase):
         }
         self.assertEqual(lookaheads, {"PLUS", "ELSE"}, output)
 
+    def test_the_round_limit_bounds_retirements_too(self) -> None:
+        # What the round limit is bounding is abstract phases, and a
+        # retirement starts one exactly as a deepening does. Charging only
+        # deepenings left the limit unable to bite at all here: nothing
+        # increments the round count on a retirement, so this grammar ran
+        # three phases under a limit of one, and a grammar with many blind
+        # spots would have run one per site.
+        #
+        # Both sites of this grammar exhaust the ceiling before any deepening
+        # happens, so the whole budget goes to retirements and the count is
+        # exactly the limit.
+        for limit, expected in (("1", 1), ("2", 2)):
+            with self.subTest(rounds=limit):
+                _, output = self.prove(
+                    EVEN_PALINDROME,
+                    1,
+                    extra=(
+                        "--prove-refine",
+                        "5",
+                        "--prove-refine-rounds",
+                        limit,
+                        "--prove-retire",
+                        "1",
+                    ),
+                )
+                retired = RETIRED_ANNOUNCEMENT.findall(output)
+                self.assertEqual(len(retired), expected, output)
+
+    def test_a_retirement_with_no_budget_left_says_so(self) -> None:
+        # A run that stops because it may not retire reads exactly like one
+        # that stopped because the site was hopeless, and the two want
+        # different things from the reader -- the first is a limit to raise.
+        _, output = self.prove(
+            EVEN_PALINDROME,
+            1,
+            extra=(
+                "--prove-refine",
+                "5",
+                "--prove-refine-rounds",
+                "1",
+                "--prove-retire",
+                "1",
+            ),
+        )
+        stopped = REFINEMENT_STOPPED_LINE.search(output)
+        self.assertIsNotNone(stopped, output)
+        self.assertIn("no room to retire it", stopped.group(2), output)
+
     def test_retirement_leaves_a_conflict_free_proof_alone(self) -> None:
         # Nothing to retire: no pair ever diverges, so no candidate is raised
         # and the proof must come out exactly as it does without the flag --

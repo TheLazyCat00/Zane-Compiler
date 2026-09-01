@@ -51,15 +51,22 @@ if [[ "${REFINE:-0}" != "0" ]]; then
 	if [[ -n "${REFINE_ROUNDS:-}" ]]; then
 		args+=(--refine-rounds "$REFINE_ROUNDS")
 	fi
-	# An unbounded blind spot answers every round with a longer sentence, so a
-	# run that keeps refining it spends the whole clock on one site and reports
-	# nothing about the rest of the grammar. Retiring stops pursuing a site once
-	# it has stopped moving, names it, and carries on; the run then reports
-	# which sites are open instead of only which one it ran out of time on. It
-	# can never report a proof, so it costs no soundness.
-	if [[ -n "${RETIRE:-}" && "${RETIRE}" != "0" ]]; then
-		args+=(--retire "$RETIRE")
-	fi
+fi
+
+# An unbounded blind spot answers every round with a longer sentence, so a run
+# that keeps refining it spends the whole clock on one site and reports nothing
+# about the rest of the grammar. Retiring stops pursuing a site once it has
+# stopped moving, names it, and carries on; the run then reports which sites are
+# open instead of only which one it ran out of time on. It can never report a
+# proof, so it costs no soundness.
+#
+# Passed outside the refinement branch on purpose. Retiring needs refinement to
+# act on, and `ambiguity prove` is what says so -- dropping the option here when
+# REFINE is unset would turn a workflow run that asked to retire into an hour of
+# doing neither, reported as a success. Handing it over unconditionally lets
+# that check fire and fail the step.
+if [[ -n "${RETIRE:-}" && "${RETIRE}" != "0" ]]; then
+	args+=(--retire "$RETIRE")
 fi
 
 # The report directory is created here as well as by --output, so the artifact
