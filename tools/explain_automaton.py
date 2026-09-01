@@ -121,13 +121,17 @@ def main() -> int:
     with TemporaryDirectory() as directory:
         automaton, conflicts = build(menhir, arguments.grammar, Path(directory))
 
+        # Flushed block by block. A --search over Zane's automaton prints
+        # hundreds of states, and through a pipe -- into `less`, into a file --
+        # a block-buffered stdout would hold all of them back until the command
+        # was over.
         for wanted in arguments.state:
             block = state_block(automaton, wanted)
             if not block:
                 print(f"No State {wanted} in the automaton.")
             else:
                 print("\n".join(block))
-            print()
+            print(flush=True)
 
         if arguments.search:
             text = automaton.read_text(encoding="utf-8")
@@ -136,18 +140,18 @@ def main() -> int:
                 if STATE_RE.match(line):
                     if any(arguments.search in one for one in current):
                         print("\n".join(current))
-                        print()
+                        print(flush=True)
                     current = []
                 current.append(line)
             if any(arguments.search in one for one in current):
                 print("\n".join(current))
-                print()
+                print(flush=True)
 
         if arguments.conflicts:
             if conflicts.exists():
-                print(conflicts.read_text(encoding="utf-8"), end="")
+                print(conflicts.read_text(encoding="utf-8"), end="", flush=True)
             else:
-                print("Menhir reported no conflicts.")
+                print("Menhir reported no conflicts.", flush=True)
     return 0
 
 

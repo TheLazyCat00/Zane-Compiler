@@ -12,14 +12,14 @@ syntax-experiment-test:
 	python3 -m unittest tools.test_syntax_experiment -v
 
 # The parser suite: acceptance, grammar ambiguity, the prover's soundness
-# corpus, and the search CLI's own tests. The engine-backed tests skip
-# themselves unless the executables and Menhir are present, so build them first
-# and fail loudly on a missing Menhir rather than reporting a green run that
-# silently skipped them.
+# corpus, the search CLI's own tests, and the sweep's process runner. The
+# engine-backed tests skip themselves unless the executables and Menhir are
+# present, so build them first and fail loudly on a missing Menhir rather than
+# reporting a green run that silently skipped them.
 test:
 	@command -v menhir >/dev/null || { echo "menhir not found on PATH; enter the devbox shell first" >&2; exit 1; }
 	dune build tools/ambiguity_search.exe tools/parser_shape.exe tools/parser_accept.exe
-	python3 -m unittest tools.test_ambiguity_cli tools.test_parser_ambiguity tools.test_parser_syntax tools.test_prover -v
+	python3 -m unittest tools.test_ambiguity_cli tools.test_parser_ambiguity tools.test_parser_syntax tools.test_precision_sweep tools.test_prover -v
 
 # Sweep the prover's abstraction level over a grammar to tell a bounded blind
 # spot from an unbounded one. A bounded one keeps its shape and disappears once
