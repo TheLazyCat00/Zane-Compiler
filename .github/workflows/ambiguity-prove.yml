@@ -85,6 +85,19 @@ on:
         required: false
         default: "40"
         type: string
+      retire:
+        # Refinement pursues one candidate at a time, so a site no depth in
+        # this abstraction reaches will answer every round with a longer
+        # sentence and take the whole clock with it — and the run then reports
+        # nothing about any other part of the grammar. Retiring stops pursuing
+        # a site once N consecutive rounds have left the divergence where it
+        # was, names it in the report, and carries on with the rest. Such a run
+        # never reports a proof, whatever it closes, so this trades no
+        # soundness for the coverage.
+        description: Retire a site after N rounds that do not move it (0 = pursue it to the end)
+        required: false
+        default: "0"
+        type: string
       strict:
         description: Fail the job on "not proven", not only on a found ambiguity
         required: false
@@ -171,6 +184,7 @@ jobs:
           SURVEY: ${{ inputs.survey || '0' }}
           REFINE: ${{ inputs.refine || '0' }}
           REFINE_ROUNDS: ${{ inputs.refine_rounds || '40' }}
+          RETIRE: ${{ inputs.retire || '0' }}
           WITNESSES: "50"
         run: |
           set -euo pipefail

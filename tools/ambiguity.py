@@ -475,6 +475,7 @@ def engine_arguments(
     survey: int = 0,
     refine: int = 0,
     refine_rounds: int = 0,
+    retire: int = 0,
     trace: bool = False,
 ) -> list[str]:
     arguments: list[str] = []
@@ -492,6 +493,8 @@ def engine_arguments(
         arguments.extend(["--prove-refine", str(refine)])
         if refine_rounds > 0:
             arguments.extend(["--prove-refine-rounds", str(refine_rounds)])
+        if retire > 0:
+            arguments.extend(["--prove-retire", str(retire)])
     if trace:
         arguments.append("--prove-trace")
     return arguments
@@ -619,6 +622,17 @@ def parser() -> argparse.ArgumentParser:
         default=0,
         metavar="N",
         help="give up refining after N rounds (default: the engine's own)",
+    )
+    prove.add_argument(
+        "--retire",
+        type=int,
+        default=0,
+        metavar="N",
+        help=(
+            "stop pursuing a divergence site once N rounds of deepening have "
+            "left the candidate at the same site, and carry on with the rest "
+            "of the grammar; a run that retires anything never reports a proof"
+        ),
     )
     add_overrides(prove)
 
@@ -768,13 +782,20 @@ def main(argv: Sequence[str] | None = None) -> int:
             raise ConfigurationError("--refine must be at least the proof level")
         if refine > 0 and survey > 0:
             raise ConfigurationError("--refine cannot be combined with --survey")
+        retire = getattr(arguments, "retire", 0)
+        if retire < 0:
+            raise ConfigurationError("--retire must be non-negative")
+        # Retiring names what refinement failed to close, so it has nothing to
+        # act on without refinement, and the engine would never see the option.
+        if retire > 0 and refine == 0:
+            raise ConfigurationError("--retire requires --refine")
         trace = getattr(arguments, "trace", False)
         # A survey reports every site rather than one candidate, so there is no
         # single path for a trace to follow.
         if trace and survey > 0:
             raise ConfigurationError("--trace cannot be combined with --survey")
         engine_args = engine_arguments(
-            profile, proof_level, survey, refine, refine_rounds, trace
+            profile, proof_level, survey, refine, refine_rounds, retire, trace
         )
         if arguments.dry_run:
             print(summary)

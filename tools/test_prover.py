@@ -112,12 +112,70 @@ REFINEMENT_EXHAUSTED = re.compile(
     r"could not have rebuilt, so no retained stack rules it out\.$",
     re.MULTILINE,
 )
+# Retirement announces each decision as it is made, and then lists them again
+# with their evidence. The announcement is what says the run carried on; the
+# list is what a reader acts on, so both are pinned.
+RETIRED_ANNOUNCEMENT = re.compile(
+    r"^Retired the divergence site at states? \d+(?: and \d+)? on lookahead "
+    r"(\S+): (.+)\. Continuing with the rest of the grammar\.$",
+    re.MULTILINE,
+)
+RETIRED_HEADER = re.compile(
+    r"^Retired (\d+) divergence site\(s\), each after refinement stopped "
+    r"moving it\. The grammar is unproven at these sites and nowhere else:$",
+    re.MULTILINE,
+)
+RETIRED_ENTRY = re.compile(
+    r"^  \d+\. states? \d+(?: and \d+)? on lookahead \S+: .+$", re.MULTILINE
+)
+RETIRED_SENTENCE = re.compile(r"^     reached by: .+$", re.MULTILINE)
+# The abstract phase ran to the end rather than stopping at the site it gave
+# up on. This is the whole point of retiring: without it the run reports the
+# one site it ran out of patience at and nothing about the rest.
+RETIRED_CLOSED_LINE = re.compile(
+    r"^Closed everywhere the search was still allowed to look: outside the "
+    r"retired site\(s\), no diverging pair of accepting parses exists in the "
+    r"top-\d+ stack abstraction \(\d+ abstract pairs explored\)\.$",
+    re.MULTILINE,
+)
+RETIRED_VERDICT = re.compile(
+    r"^NOT PROVEN: (\d+) retired site\(s\) were stepped over rather than "
+    r"answered, ",
+    re.MULTILINE,
+)
 REACHABILITY_LINE = re.compile(
     r"^Stack height: refused (\d+) move\(s\) onto a state no stack that short "
     r"can carry; the height stops being counted past (\d+)\.$",
     re.MULTILINE,
 )
 
+
+# Two blind spots that share nothing: the expression conflict and the dangling
+# else, reachable from one start symbol through disjoint alternatives. Retiring
+# prunes the subtree under a site it gave up on, and the property that pruning
+# could break is exactly the one retirement exists for -- reaching what lies
+# behind the site. A grammar with one site cannot tell the two apart.
+TWO_INDEPENDENT_SITES = """\
+%token A "a"
+%token PLUS "+"
+%token IF "if"
+%token THEN "then"
+%token ELSE "else"
+%token X "x"
+%token EOF "<eof>"
+%start <unit> main
+%%
+main:
+  | e EOF { () }
+  | s EOF { () }
+e:
+  | A { () }
+  | e PLUS e { () }
+s:
+  | X { () }
+  | IF X THEN s { () }
+  | IF X THEN s ELSE s { () }
+"""
 
 # Ambiguous: `a + a + a` groups two ways with nothing to choose between them.
 AMBIGUOUS_EXPRESSION = """\
@@ -439,6 +497,7 @@ class ProverTestCase(unittest.TestCase):
         *,
         environment: dict[str, str] | None = None,
         timeout: str = "30",
+        max_tokens: str = "8",
         extra: tuple[str, ...] = (),
         expect_verdict: bool = True,
     ) -> tuple[int, str]:
@@ -454,7 +513,7 @@ class ProverTestCase(unittest.TestCase):
                 str(level),
                 *extra,
                 "--max-tokens",
-                "8",
+                max_tokens,
                 "--timeout",
                 timeout,
                 "--max-witnesses",
@@ -708,6 +767,175 @@ class RefinementTests(ProverTestCase):
                 )
                 self.assertNotIn(status, VERDICT_STATUSES)
                 self.assertNotRegex(output, PROVEN_LINE)
+
+
+class RetirementTests(ProverTestCase):
+    """`--prove-retire` bounds what one blind spot can cost a run.
+
+    Refinement pursues one candidate at a time, so a site no depth in this
+    abstraction reaches keeps producing candidates until the clock runs out,
+    and the run ends having said nothing about any other part of the grammar.
+    Retiring stops pursuing such a site, names it, and carries on.
+
+    The property that would be worst to lose is not soundness of the
+    abstraction -- retiring never sharpens anything -- but the reporting of a
+    real ambiguity. Retiring drops the candidate the concretization search
+    would otherwise have been handed, so these tests pin that a witness is
+    still found, and that a run which retired anything never prints a proof.
+    """
+
+    def test_retirement_never_hides_an_ambiguity(self) -> None:
+        # The direction that matters. `--prove-retire 1` retires at the first
+        # opportunity, which is the most eager setting available and so the
+        # most likely to step over a site that is a real ambiguity rather than
+        # a blind spot. The witness has to survive it.
+        for name, grammar in AMBIGUOUS_GRAMMARS.items():
+            with self.subTest(grammar=name):
+                status, output = self.prove(
+                    grammar,
+                    1,
+                    # The dangling else needs nine tokens for its shortest
+                    # witness, which is past this suite's usual bound; without
+                    # the room the run would report "not proven" for a reason
+                    # that has nothing to do with retiring.
+                    max_tokens="10",
+                    extra=("--prove-refine", "6", "--prove-retire", "1"),
+                )
+                self.assertNotRegex(output, PROVEN_LINE)
+                self.assertNotEqual(status, PROVEN, output)
+                self.assertRegex(output, WITNESS_LINE)
+                self.assertEqual(status, AMBIGUOUS, output)
+
+    def test_a_retiring_run_never_reports_a_proof(self) -> None:
+        # A retired site was stepped over, not answered, so a run that retired
+        # anything has not proven the grammar however much of it came out
+        # clean. Printing a proof there would be the most dangerous line this
+        # tool has -- it would be a theorem about a space with a hole in it.
+        status, output = self.prove(
+            EVEN_PALINDROME, 1, extra=("--prove-refine", "5", "--prove-retire", "2")
+        )
+        self.assertRegex(output, RETIRED_ANNOUNCEMENT)
+        self.assertNotRegex(output, PROVEN_LINE)
+        self.assertRegex(output, RETIRED_VERDICT)
+        self.assertEqual(status, NOT_PROVEN, output)
+
+    def test_a_retired_site_is_named_with_its_evidence(self) -> None:
+        # A site nobody can act on is not a useful thing to have stopped for.
+        # Each retirement is printed with the sentence that reached it and the
+        # conflict behind it, in the same form a survey uses.
+        _, output = self.prove(
+            EVEN_PALINDROME, 1, extra=("--prove-refine", "5", "--prove-retire", "2")
+        )
+        header = RETIRED_HEADER.search(output)
+        self.assertIsNotNone(header, output)
+        self.assertEqual(len(RETIRED_ENTRY.findall(output)), int(header.group(1)))
+        self.assertRegex(output, RETIRED_SENTENCE)
+        self.assertRegex(output, SITE_LOOKAHEAD_LINE)
+        self.assertRegex(output, SITE_CONFLICT_LINE)
+
+    def test_the_run_continues_past_a_retired_site(self) -> None:
+        # What retiring buys. Without it the abstract phase stops at the site
+        # it gave up on; with it the phase runs to the end, so the verdict
+        # covers the rest of the grammar rather than only the site with the
+        # longest queue of counterexamples.
+        _, output = self.prove(
+            EVEN_PALINDROME, 1, extra=("--prove-refine", "5", "--prove-retire", "2")
+        )
+        self.assertRegex(output, RETIRED_CLOSED_LINE)
+
+    def test_a_second_site_behind_the_first_is_still_reached(self) -> None:
+        # The property retiring exists for, and the one its pruning could
+        # break. A retired site takes its whole subtree with it, because every
+        # node below a diverged one reports that node's site and so can only
+        # produce candidates there. Prune a shade too widely and the site
+        # behind it goes with it -- silently, since the run still ends in a
+        # verdict. Two sites sharing nothing is the smallest thing that
+        # notices.
+        _, output = self.prove(
+            TWO_INDEPENDENT_SITES,
+            1,
+            extra=("--prove-refine", "6", "--prove-retire", "1"),
+        )
+        header = RETIRED_HEADER.search(output)
+        self.assertIsNotNone(header, output)
+        self.assertEqual(int(header.group(1)), 2, output)
+        lookaheads = {
+            match.group(1) for match in RETIRED_ANNOUNCEMENT.finditer(output)
+        }
+        self.assertEqual(lookaheads, {"PLUS", "ELSE"}, output)
+
+    def test_the_round_limit_bounds_retirements_too(self) -> None:
+        # What the round limit is bounding is abstract phases, and a
+        # retirement starts one exactly as a deepening does. Charging only
+        # deepenings left the limit unable to bite at all here: nothing
+        # increments the round count on a retirement, so this grammar ran
+        # three phases under a limit of one, and a grammar with many blind
+        # spots would have run one per site.
+        #
+        # Both sites of this grammar exhaust the ceiling before any deepening
+        # happens, so the whole budget goes to retirements and the count is
+        # exactly the limit.
+        for limit, expected in (("1", 1), ("2", 2)):
+            with self.subTest(rounds=limit):
+                _, output = self.prove(
+                    EVEN_PALINDROME,
+                    1,
+                    extra=(
+                        "--prove-refine",
+                        "5",
+                        "--prove-refine-rounds",
+                        limit,
+                        "--prove-retire",
+                        "1",
+                    ),
+                )
+                retired = RETIRED_ANNOUNCEMENT.findall(output)
+                self.assertEqual(len(retired), expected, output)
+
+    def test_a_retirement_with_no_budget_left_says_so(self) -> None:
+        # A run that stops because it may not retire reads exactly like one
+        # that stopped because the site was hopeless, and the two want
+        # different things from the reader -- the first is a limit to raise.
+        _, output = self.prove(
+            EVEN_PALINDROME,
+            1,
+            extra=(
+                "--prove-refine",
+                "5",
+                "--prove-refine-rounds",
+                "1",
+                "--prove-retire",
+                "1",
+            ),
+        )
+        stopped = REFINEMENT_STOPPED_LINE.search(output)
+        self.assertIsNotNone(stopped, output)
+        self.assertIn("no room to retire it", stopped.group(2), output)
+
+    def test_retirement_leaves_a_conflict_free_proof_alone(self) -> None:
+        # Nothing to retire: no pair ever diverges, so no candidate is raised
+        # and the proof must come out exactly as it does without the flag --
+        # including its status, which retiring anything would have changed.
+        for name, grammar in CONFLICT_FREE_GRAMMARS.items():
+            with self.subTest(grammar=name):
+                status, output = self.prove(
+                    grammar,
+                    1,
+                    extra=("--prove-refine", "6", "--prove-retire", "1"),
+                )
+                self.assertEqual(status, PROVEN, output)
+                self.assertRegex(output, PROVEN_LINE)
+                self.assertNotRegex(output, RETIRED_ANNOUNCEMENT)
+
+    def test_retiring_without_refinement_does_not_run(self) -> None:
+        # Retiring names what refinement failed to close, so without
+        # refinement there is nothing for it to act on and it would run
+        # exactly as if it had not been typed.
+        status, output = self.prove(
+            LR1_LIST, 1, extra=("--prove-retire", "2"), expect_verdict=False
+        )
+        self.assertNotIn(status, VERDICT_STATUSES)
+        self.assertNotRegex(output, PROVEN_LINE)
 
 
 class StackHeightTests(ProverTestCase):

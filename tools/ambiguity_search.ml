@@ -1665,10 +1665,24 @@ type prove_survey = {
    abstraction that was exact everywhere along its path, so no amount of extra
    depth will remove it. The site is what says where refinement stalled, in the
    same form a survey prints. *)
+type abstract_candidate = {
+  candidate_tokens : string list;
+  candidate_pairs : int;
+  candidate_example : survey_example;
+  candidate_forward : string list;
+  candidate_requests : (int * int) list;
+  (* The site reduced to what survives a change of abstraction: the two states
+     on top and the lookahead. The stacks under those states are exactly what a
+     refinement lengthens, so the rendered site in [candidate_example] names a
+     different triple after every round even when the blind spot has not moved.
+     This one does not, which is what lets the loop ask whether a round bought
+     anything. *)
+  candidate_site : int * int * string;
+}
+
 type prove_result =
   | Proven of int
-  | Abstract_candidate of
-      string list * int * survey_example * string list * (int * int) list
+  | Abstract_candidate of abstract_candidate
   | Pair_overflow of int
   | Prove_timeout of int
   | Surveyed of prove_survey
@@ -1687,8 +1701,14 @@ let not_proven_status = 3
    several times over: the rounds share one budget for the abstract phase, so a
    proof that needed four of them is not four times as patient as one that
    needed none. *)
+(* [retired] names sites the caller has already given up on. A pair whose
+   divergence was born at one of them is not a candidate: the search steps over
+   it and keeps going, so one blind spot that no depth closes stops standing in
+   for every other question about the grammar. Retiring is the caller's
+   judgement and not a fact about the grammar, which is why a run that used it
+   can never print a proof - see the verdict below. *)
 let prove engine (precision : precision) pair_limit deadline survey_limit trace
-    =
+    (retired : (int * int * string, unit) Hashtbl.t) =
   let automaton = engine.automaton in
   let gotos = goto_edges automaton in
   let preds = predecessors automaton in
@@ -1834,6 +1854,39 @@ let prove engine (precision : precision) pair_limit deadline survey_limit trace
     | Some site -> site
     | None -> (left, right, "#")
   in
+  (* The site as something two runs at different precisions can compare. Only
+     the top entry of each stack is kept, because that is the entry a deepening
+     never changes: refinement lengthens what sits below it. The two states are
+     ordered so that a pair and its mirror name one site, the same way
+     [canonical] treats the stacks themselves. *)
+  let site_identity (left, right, lookahead) =
+    let top stack = match stack.suffix with state :: _ -> state | [] -> -1 in
+    let one = top left and other = top right in
+    if one <= other then (one, other, lookahead) else (other, one, lookahead)
+  in
+  let is_retired node =
+    Hashtbl.length retired > 0
+    && Hashtbl.mem retired (site_identity (accepting_site node))
+  in
+  (* A retired site takes its whole subtree with it. A child inherits
+     [diverged], and [accepting_site] climbs to the first ancestor that is not
+     diverged, so every node below a diverged one reports that node's site: the
+     subtree under a retired divergence cannot produce a candidate anywhere
+     else, and walking it is work that has no outcome. Stepping over the site
+     without pruning it was measured on Zane's grammar at 55 minutes and 1.3M
+     pairs after the retirement, with no second candidate and no end to the
+     phase.
+
+     Only diverged nodes are eligible. An undiverged node has no site yet --
+     [accepting_site] hands back its own stacks under "#" -- so asking whether
+     it is retired would prune on a triple that names something else.
+
+     One thing this can cost: pairs are deduplicated on first arrival, so a
+     triple first reached under a retired site is not pushed again from
+     elsewhere, and a site reachable only that way is not found. That is a
+     reason a retiring run reports what it looked at rather than a proof; it
+     already never claims one. *)
+  let prune_subtree ((_, _, diverged) as node) = diverged && is_retired node in
   (* The node the divergence was born at, rather than the triple describing it:
      the forward walk has to start somewhere it can walk down from. *)
   let divergence_origin node =
@@ -2125,7 +2178,13 @@ let prove engine (precision : precision) pair_limit deadline survey_limit trace
     then Hashtbl.replace sites (left, right, "#") ();
     if accepts_diverged then begin
       incr accepting;
-      if !candidate = None then candidate := Some node;
+      (* A pair at a retired site still counts as an accepting divergence --
+         it is as real as it ever was, and hiding it from the count would let a
+         retirement look like progress. It just stops being the answer. The
+         count does thin out below one, because the subtree is pruned rather
+         than walked, which is another reason it is a floor on a retiring
+         run. *)
+      if !candidate = None && not (is_retired node) then candidate := Some node;
       if surveying && !example_count < survey_limit then begin
         examples :=
           {
@@ -2136,7 +2195,7 @@ let prove engine (precision : precision) pair_limit deadline survey_limit trace
         incr example_count
       end
     end;
-    if surveying || !candidate = None then
+    if (surveying || !candidate = None) && not (prune_subtree node) then
       List.iter
         (fun token ->
           List.iter
@@ -2172,15 +2231,20 @@ let prove engine (precision : precision) pair_limit deadline survey_limit trace
   else
     match !candidate with
     | Some node ->
+        let site = accepting_site node in
         Abstract_candidate
-          ( List.rev (trail node),
-            explored,
-            {
-              example_tokens = List.rev (trail node);
-              example_site = describe_site (accepting_site node);
-            },
-            (if trace then describe_forward node else []),
-            candidate_refinements node )
+          {
+            candidate_tokens = List.rev (trail node);
+            candidate_pairs = explored;
+            candidate_example =
+              {
+                example_tokens = List.rev (trail node);
+                example_site = describe_site site;
+              };
+            candidate_forward = (if trace then describe_forward node else []);
+            candidate_requests = candidate_refinements node;
+            candidate_site = site_identity site;
+          }
     | None ->
         if !overflow then Pair_overflow explored
         else if ran_out_of_time then Prove_timeout explored
@@ -3003,6 +3067,7 @@ let prove_level = ref 0
 let survey_limit = ref 0
 let refine_max = ref 0
 let refine_rounds = ref 12
+let retire_after = ref 0
 let trace_forward = ref false
 let dump_classes = ref false
 
@@ -3084,6 +3149,12 @@ let options =
     ( "--prove-refine-rounds",
       Arg.Set_int refine_rounds,
       "N give up after N refinement rounds (default 12)" );
+    ( "--prove-retire",
+      Arg.Set_int retire_after,
+      "N with --prove-refine, stop pursuing a divergence site once N \
+       consecutive rounds of deepening have left the candidate at the same \
+       site, and continue with the rest of the grammar; a run that retired \
+       anything reports which sites and never reports a proof (0 disables)" );
     ( "--prove-trace",
       Arg.Set trace_forward,
       " with --prove, follow the reported candidate from its divergence site \
@@ -3155,6 +3226,11 @@ let main () =
     invalid_arg "--prove-refine cannot be combined with --prove-survey";
   if !refine_rounds < 1 then
     invalid_arg "--prove-refine-rounds must be at least 1";
+  if !retire_after < 0 then invalid_arg "--prove-retire must be non-negative";
+  (* Retiring is a decision about what refinement is failing to close, so it has
+     nothing to act on without refinement running. *)
+  if !retire_after > 0 && !refine_max = 0 then
+    invalid_arg "--prove-retire requires --prove-refine";
   if !trace_forward && !prove_level <= 0 then
     invalid_arg "--prove-trace requires --prove";
   (* A survey never reports a single candidate, so there is no path to follow;
@@ -3267,6 +3343,11 @@ let main () =
         | Some limit -> Printf.sprintf "%d nodes per depth" limit);
       if !prefix_tokens <> [] then
         Printf.printf "Prefix tokens: %s\n" (String.concat " " !prefix_tokens);
+      (* Sites refinement stopped pursuing, and the evidence for stopping. It
+         outlives the proof block because it changes what every verdict below
+         means: a run that stepped over a site has not answered it, and both
+         the report and the exit status have to keep saying so. *)
+      let retirements = ref [] in
       if !prove_level > 0 then begin
         (* The abstract phase is one sequential search, not a pool of workers,
            so dividing the budget by AMBIGUITY_JOBS would hand most of it to
@@ -3307,14 +3388,36 @@ let main () =
            requirement had been cut down. The deepest request is kept so the
            report can name the number to raise the ceiling to. *)
         let capped : (int, int) Hashtbl.t = Hashtbl.create 16 in
+        (* [retired] is what the search consults; [retirements], declared
+           outside this block, is what the report prints, in the order the
+           decisions were made -- the concretization search below is reached
+           by a retiring run too, and its verdict has to say so. *)
+        let retired : (int * int * string, unit) Hashtbl.t = Hashtbl.create 16 in
+        (* The site the previous round's candidate was born at, and how many
+           rounds in a row have landed on it. A refinement that deepens the
+           stacks behind a blind spot and is answered by the same blind spot has
+           bought nothing, and a site that answers that way every time is one no
+           depth in this abstraction reaches. The counter is the only evidence
+           available for that -- whether a blind spot is finite is not something
+           a run can decide -- so it is reported as a decision to stop looking
+           rather than as a property of the grammar. *)
+        let last_site = ref None in
+        let streak = ref 0 in
         let rec attempt () =
           let result =
             prove engine precision prove_limits.max_frontiers deadline
-              !survey_limit !trace_forward
+              !survey_limit !trace_forward retired
           in
           match result with
-          | Abstract_candidate (tokens, _, _, _, requests) when !refine_max > 0
-            ->
+          | Abstract_candidate candidate when !refine_max > 0 ->
+              let tokens = candidate.candidate_tokens in
+              let requests = candidate.candidate_requests in
+              let site = candidate.candidate_site in
+              if !last_site = Some site then incr streak
+              else begin
+                last_site := Some site;
+                streak := 1
+              end;
               (* What the chain asks for is the depth that would make each of
                  its guessed gotos exact. That is the right first request and
                  not always a sufficient one: a reduction consumes the entries
@@ -3357,18 +3460,73 @@ let main () =
                 stalled := Some reason;
                 result
               in
+              (* Why this site is not worth another round. Both reasons are
+                 about this site alone, which is what makes retiring it and
+                 carrying on meaningful; the round limit below is a budget for
+                 the whole run, so reaching it says nothing about any one site
+                 and still ends the loop. *)
+              let exhausted =
+                if deeper = [] then
+                  Some
+                    (Printf.sprintf
+                       "it survives every stack --prove-refine %d allows"
+                       !refine_max)
+                else if !retire_after > 0 && !streak >= !retire_after then
+                  Some
+                    (Printf.sprintf
+                       "%d consecutive round(s) of deepening left the \
+                        divergence at the same site"
+                       !streak)
+                else None
+              in
+              let retire reason =
+                let state, other, lookahead = site in
+                Hashtbl.replace retired site ();
+                retirements :=
+                  (site, reason, candidate.candidate_example) :: !retirements;
+                last_site := None;
+                streak := 0;
+                Printf.printf
+                  "Retired the divergence site at state%s %d%s on lookahead \
+                   %s: %s. Continuing with the rest of the grammar.\n"
+                  (if state = other then "" else "s")
+                  state
+                  (if state = other then "" else Printf.sprintf " and %d" other)
+                  lookahead reason;
+                flush stdout;
+                attempt ()
+              in
+              (* What the round limit is really bounding is abstract phases,
+                 and a retirement starts one exactly as a deepening does.
+                 Counting only deepenings would leave the limit unable to bite
+                 at all on a grammar with many blind spots: nothing increments
+                 [rounds], so a run could retire its way through one phase per
+                 site with the ceiling never reached. Both are charged to the
+                 same budget, while [rounds] stays a count of deepenings for
+                 the report, which is the number that describes the
+                 abstraction the run ended at. *)
+              let budget_left =
+                !rounds + List.length !retirements < !refine_rounds
+              in
               if requests = [] then
                 stop
                   "the candidate's chains never needed the abstraction to \
                    invent a goto and never stood on a stack it could not have \
                    rebuilt, so no retained stack rules it out"
-              else if deeper = [] then
-                stop
-                  (Printf.sprintf
-                     "the candidate survives every stack --prove-refine %d \
-                      allows"
-                     !refine_max)
-              else if !rounds >= !refine_rounds then
+              else if exhausted <> None then begin
+                (* This site is finished either way. The only question left is
+                   whether there is budget to retire it and go on. *)
+                let reason = Option.get exhausted in
+                if !retire_after > 0 && budget_left then retire reason
+                else if !retire_after > 0 then
+                  stop
+                    (Printf.sprintf
+                       "%s, and the round limit (%d) left no room to retire it \
+                        and carry on"
+                       reason !refine_rounds)
+                else stop reason
+              end
+              else if not budget_left then
                 stop
                   (Printf.sprintf "the round limit (%d) was reached"
                      !refine_rounds)
@@ -3439,7 +3597,38 @@ let main () =
                short can carry; the height stops being counted past %d.\n"
               !refused_stacks !tracked_height
         in
+        (* The retired sites are the part of a retiring run that is not in its
+           verdict: the verdict says the rest of the grammar came out clean,
+           and this says what "the rest" left out. Each one is printed with the
+           sentence that reached it and the conflict behind it, because a site
+           nobody can act on is not a useful thing to have stopped for. *)
+        let report_retirements () =
+          if !retirements <> [] then begin
+            let retirements = List.rev !retirements in
+            Printf.printf
+              "Retired %d divergence site(s), each after refinement stopped \
+               moving it. The grammar is unproven at these sites and nowhere \
+               else:\n"
+              (List.length retirements);
+            List.iteri
+              (fun index ((state, other, lookahead), reason, example) ->
+                Printf.printf "  %d. state%s %d%s on lookahead %s: %s\n"
+                  (index + 1)
+                  (if state = other then "" else "s")
+                  state
+                  (if state = other then ""
+                   else Printf.sprintf " and %d" other)
+                  lookahead reason;
+                Printf.printf "     reached by: %s\n"
+                  (String.concat " " example.example_tokens);
+                List.iter
+                  (fun line -> Printf.printf "     %s\n" line)
+                  example.example_site)
+              retirements
+          end
+        in
         let report_refinement () =
+          report_retirements ();
           if !rounds > 0 then
             Printf.printf "Refinement reached: %s\n" (precision_summary ());
           Option.iter
@@ -3448,6 +3637,28 @@ let main () =
           report_reachability ()
         in
         match attempt () with
+        | Proven pairs when !retirements <> [] ->
+            (* Everything the search was still allowed to look at came out
+               clean. That is a real result and a much sharper one than a
+               candidate, but it is not a proof: the retired sites were stepped
+               over, not answered, and a proof that quietly excluded them would
+               be the most dangerous line this tool could print.
+
+               It also does not end the run. Retiring a site drops the
+               candidate that would otherwise have been handed to the bounded
+               search, and if that site were a real ambiguity rather than a
+               blind spot, exiting here would be how the witness stopped being
+               reported. So a retiring run always goes on to concretize, and
+               the verdict at the bottom names the retired sites. *)
+            Printf.printf
+              "Closed everywhere the search was still allowed to look: \
+               outside the retired site(s), no diverging pair of accepting \
+               parses exists in the top-%d stack abstraction (%d abstract \
+               pairs explored).\n"
+              !prove_level pairs;
+            report_refinement ();
+            Printf.printf
+              "Attempting to concretize with the bounded search...\n\n"
         | Proven pairs ->
             Printf.printf
               "PROVEN UNAMBIGUOUS: no diverging pair of accepting parses \
@@ -3508,11 +3719,15 @@ let main () =
               timeout !prove_level pairs;
             report_refinement ();
             exit not_proven_status
-        | Abstract_candidate (tokens, pairs, example, forward, _) ->
+        | Abstract_candidate candidate ->
+            let tokens = candidate.candidate_tokens in
+            let example = candidate.candidate_example in
+            let forward = candidate.candidate_forward in
+            report_retirements ();
             Printf.printf
               "Abstract ambiguity candidate at level %d after %d pairs \
                (possibly spurious): %s\n"
-              !prove_level pairs
+              !prove_level candidate.candidate_pairs
               (String.concat " " tokens);
             (* Where it stalled, not just what it stalled on. A candidate
                sentence says nothing about which context the abstraction lost,
@@ -3596,11 +3811,27 @@ let main () =
             "Search ended at depth %d because %s; no complete ambiguity was found in %d explored frontiers (%d unique).\n"
             outcome.deepest termination outcome.explored outcome.unique;
           if !prove_level > 0 then begin
-            Printf.printf
-              "NOT PROVEN: the abstract candidate could not be concretized \
-               within the search bounds; the grammar is neither proven \
-               unambiguous nor shown ambiguous. Raising --prove may remove \
-               the spurious candidate.\n";
+            (* A retiring run reaches here having closed the abstract phase
+               everywhere it was still looking, so "the candidate could not be
+               concretized" would describe a candidate it does not have. What
+               is left open is exactly the retired list, and saying so is the
+               difference between a verdict a reader can act on and one that
+               sends them to raise --prove for no reason. *)
+            (if !retirements <> [] then
+               Printf.printf
+                 "NOT PROVEN: %d retired site(s) were stepped over rather \
+                  than answered, and the bounded search found no concrete \
+                  ambiguity at them; the grammar is unproven at those sites \
+                  and closed everywhere else. Raising --prove-refine, or \
+                  changing the grammar at those sites, is what would settle \
+                  them.\n"
+                 (List.length !retirements)
+             else
+               Printf.printf
+                 "NOT PROVEN: the abstract candidate could not be concretized \
+                  within the search bounds; the grammar is neither proven \
+                  unambiguous nor shown ambiguous. Raising --prove may remove \
+                  the spurious candidate.\n");
             exit not_proven_status
           end;
           Printf.printf "This is a bounded result, not a proof of unambiguity.\n";
