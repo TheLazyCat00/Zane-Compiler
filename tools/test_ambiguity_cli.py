@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 import argparse
 import os
+import queue
 import shutil
 import subprocess
+import threading
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from typing import TextIO
 import unittest
 
 from tools import ambiguity
@@ -584,6 +587,156 @@ class TerminalClassEngineTests(unittest.TestCase):
         tokens = witnesses[0].split(":", 1)[1].split()
         self.assertIn("A", tokens)
         self.assertNotIn("B", tokens)
+
+
+class StreamingOutputTests(unittest.TestCase):
+    """The engine's output has to arrive while a run is happening, not when it
+    ends.
+
+    Every wrapper reads it through a pipe -- `ambiguity` streams it to the
+    terminal and into the saved report, the sweep passes each level's through --
+    and on a pipe OCaml block-buffers stdout. A whole proof run's output used to
+    sit in that buffer until the process exited, so a report file stayed empty
+    for the run it was documenting, and a search that ran for an hour said
+    nothing while it did. Skipped when the engine binary or menhir is
+    unavailable, like the other end-to-end checks here."""
+
+    def setUp(self) -> None:
+        self.environment = engine_environment()
+        if self.environment is None:
+            self.skipTest(
+                "requires a built _build/default/tools/ambiguity_search.exe and menhir"
+            )
+        directory = TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.grammar = Path(directory.name) / "tiny.mly"
+        self.grammar.write_text(TINY_GRAMMAR, encoding="utf-8")
+
+    def engine(
+        self, *arguments: str, **overrides: str
+    ) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [str(ENGINE), *arguments, str(self.grammar)],
+            env={**self.environment, **overrides},
+            text=True,
+            capture_output=True,
+            timeout=120,
+        )
+
+    @staticmethod
+    def first_line(handle: TextIO, seconds: float) -> str | None:
+        """The first line, or None if none arrives within ``seconds``.
+
+        Read on a thread rather than with a plain `readline`, which would block
+        for as long as the run lasts -- exactly the state this test has to be
+        able to observe from the outside.
+        """
+        lines: queue.Queue[str] = queue.Queue()
+        reader = threading.Thread(
+            target=lambda: lines.put(handle.readline()), daemon=True
+        )
+        reader.start()
+        try:
+            return lines.get(timeout=seconds)
+        except queue.Empty:
+            return None
+
+    def test_the_first_line_arrives_before_the_run_ends(self) -> None:
+        # Zane's own grammar with a long deadline: the abstract phase is still
+        # walking when the first line is read, which is what makes the read
+        # evidence of flushing rather than of a run that happened to be over.
+        process = subprocess.Popen(
+            [
+                str(ENGINE),
+                "--prove", "2",
+                "--prove-survey", "1",
+                "--max-tokens", "8",
+                "--timeout", "60",
+                "--max-witnesses", "2",
+                str(ROOT / "lib" / "cst" / "parser.mly"),
+            ],
+            env={**self.environment, "AMBIGUITY_MEMORY_MB": "512"},
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+        )
+
+        def stop() -> None:
+            process.kill()
+            process.wait()
+            if process.stdout is not None:
+                process.stdout.close()
+
+        self.addCleanup(stop)
+        assert process.stdout is not None
+        line = self.first_line(process.stdout, 60)
+        self.assertIsNotNone(line, "no output arrived while the engine ran")
+        self.assertIn("Search constraints", line or "")
+        self.assertIsNone(
+            process.poll(), "the engine exited before the line could prove anything"
+        )
+
+    def test_progress_reaches_a_pipe(self) -> None:
+        # The first progress call of a run is never throttled, so one line is
+        # guaranteed as soon as a search phase starts -- no timing assumption.
+        result = self.engine(
+            "--prove", "2",
+            "--max-tokens", "24",
+            "--timeout", "5",
+            "--max-witnesses", "5",
+            AMBIGUITY_PROGRESS_SECONDS="0.05",
+        )
+        self.assertTrue(
+            any(line.startswith("●") for line in result.stderr.splitlines()),
+            result.stderr,
+        )
+
+    def test_progress_can_be_switched_off(self) -> None:
+        result = self.engine(
+            "--prove", "2",
+            "--max-tokens", "24",
+            "--timeout", "5",
+            "--max-witnesses", "5",
+            AMBIGUITY_PROGRESS_SECONDS="0",
+        )
+        self.assertNotIn("●", result.stderr)
+
+    def cadence(self, value: str) -> subprocess.CompletedProcess[str]:
+        return self.engine(
+            "--prove", "2",
+            "--max-tokens", "8",
+            "--timeout", "5",
+            "--max-witnesses", "5",
+            AMBIGUITY_PROGRESS_SECONDS=value,
+        )
+
+    def test_a_malformed_cadence_is_an_ordinary_error(self) -> None:
+        result = self.cadence("often")
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertIn(
+            "AMBIGUITY_PROGRESS_SECONDS must be a finite number", result.stderr
+        )
+        # Reported by the toplevel handler rather than as an uncaught exception.
+        # That handler clears the progress line first, and reading the setting
+        # a second time there is what used to turn the error into a crash.
+        self.assertNotIn("Fatal error", result.stderr)
+
+    def test_a_non_finite_cadence_is_refused_rather_than_obeyed(self) -> None:
+        # These parse as floats, so they used to be taken for a setting and
+        # then show no progress at all -- silently, and in two different ways.
+        # Every comparison against nan is false, so it read as switched off;
+        # nothing is ever as old as infinity, so a run reported progress as
+        # enabled and never printed a line. Neither is a cadence anyone asked
+        # for, so both are refused like any other bad setting.
+        for value in ("nan", "infinity", "-infinity"):
+            with self.subTest(cadence=value):
+                result = self.cadence(value)
+                self.assertEqual(result.returncode, 2, result.stderr)
+                self.assertIn(
+                    "AMBIGUITY_PROGRESS_SECONDS must be a finite number",
+                    result.stderr,
+                )
+                self.assertNotIn("Fatal error", result.stderr)
 
 
 if __name__ == "__main__":

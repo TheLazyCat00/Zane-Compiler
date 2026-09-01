@@ -531,6 +531,37 @@ nothing before the closing bracket says which.
 - `menhir --explain` — enumerates the conflict states that constitute the
   obligation ledger.
 
+### Watching a run
+
+Every tool here writes as it goes, so a run in progress is readable rather than
+a wait for a verdict. The engine flushes each line as it prints it, `ambiguity`
+streams the engine's output to the terminal and into `--output` line by line,
+and the sweep passes each level's output through under a `[level N]` prefix
+while the level runs. What ends up on disk is therefore always current: a run
+that is killed or interrupted leaves behind everything it had printed, not an
+empty file.
+
+Both long phases report their own throughput. The abstract phase prints how
+many stack pairs it has settled, how many are still queued, and how many
+accepting divergences it has found; the concretization search prints its depth,
+witness count, explored and unique frontiers, and resident memory. On a
+terminal these are one line rewritten in place several times a second.
+Elsewhere — under a wrapper, in a saved report, in CI — there is no cursor to
+move back to, so the same numbers go out as ordinary lines every ten seconds and
+stay in the log.
+
+`AMBIGUITY_PROGRESS_SECONDS` overrides that cadence; zero or less turns progress
+off entirely, for a caller that wants the verdict and nothing else. Anything
+that is not a finite number is refused rather than obeyed: `nan` and `infinity`
+parse as floats and would each be taken for a setting and then quietly show
+nothing, one reading as switched off and the other as enabled but never due. Unlike the
+four settings below it is optional, so it does not belong in
+`machine-config.txt` — it is a property of how a particular run is being
+watched, not of the machine. The sweep's `--quiet` (`just sweep GRAMMAR
+--quiet`) and `syntax-experiment --quiet` suppress the pass-through of the
+engine's output without touching what the sweep or the experiment prints
+itself.
+
 ## Sharpenings that were measured and rejected
 
 Two ways of giving the abstraction more stack look obviously right and are

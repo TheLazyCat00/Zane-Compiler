@@ -19,11 +19,13 @@ import os
 from pathlib import Path
 import re
 import shlex
+import signal
 import subprocess
 import sys
 import tempfile
+from threading import Thread
 import time
-from typing import Callable, Iterable
+from typing import Callable, Iterable, TextIO
 
 
 Transform = Callable[[str], str]
@@ -701,6 +703,13 @@ VARIANTS = (
 # process is reported as a failed case rather than mistaken for a result.
 EXIT_TIMED_OUT = 124
 
+# How long the readers draining a search's pipes are waited on once the search
+# is over. On a clean exit they finish at once, with the pipes.
+PUMP_GRACE_SECONDS = 5.0
+
+# What the engine starts a progress line with.
+PROGRESS_MARKER = "●"
+
 DERIVATIONS_RE = re.compile(r"Accepting derivations: (\d+)")
 FAMILIES_RE = re.compile(r"Found (\d+) complete ambiguity")
 EXPLORED_RE = re.compile(r"Explored (\d+) frontiers \((\d+) unique\); (\d+) conflict seeds")
@@ -731,8 +740,29 @@ def apply_variant(source: str, variant: Variant) -> str:
     return header + result
 
 
+def terminate(process: subprocess.Popen[str]) -> None:
+    """Kill the run and everything it forked, not just the process we started.
+
+    The engine forks workers of its own and shells out to menhir. Killing the
+    direct child alone leaves those behind: they go on burning a core and a
+    full memory budget, and they hold the inherited pipes open, which is
+    exactly what the readers then have to wait out. `start_new_session` on the
+    spawn puts the whole run in its own process group so there is one thing to
+    kill; without process groups (Windows) the direct kill is all there is.
+    """
+    try:
+        os.killpg(os.getpgid(process.pid), signal.SIGKILL)
+    except (AttributeError, OSError):
+        # No process groups here, or the group is already gone.
+        process.kill()
+    process.wait()
+
+
 def run_process(
-    command: list[str], env: dict[str, str] | None = None, timeout: float | None = None
+    command: list[str],
+    env: dict[str, str] | None = None,
+    timeout: float | None = None,
+    echo: str | None = None,
 ) -> tuple[int, str, str, float]:
     """Run ``command``, returning ``(code, stdout, stderr, seconds)``.
 
@@ -740,30 +770,94 @@ def run_process(
     engine enforces ``--timeout`` itself, but a wedged process would otherwise
     block its worker forever. On expiry the child is killed and the call
     reports a non-zero status rather than raising.
+
+    ``echo`` is a prefix under which every line is passed through to stderr as
+    it arrives. A search is minutes long and says what it is doing while it
+    runs; capturing it wholesale meant none of that was visible until the
+    variant was over. Several variants run at once, which is what the prefix is
+    for: it names the variant each line came from.
     """
     started = time.monotonic()
-    try:
-        completed = subprocess.run(
-            command, text=True, capture_output=True, env=env, timeout=timeout
-        )
-    except subprocess.TimeoutExpired as expired:
-        def decode(stream: str | bytes | None) -> str:
-            if stream is None:
-                return ""
-            if isinstance(stream, bytes):
-                return stream.decode("utf-8", "replace")
-            return stream
+    process = subprocess.Popen(
+        command,
+        text=True,
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        # Its own process group, so a search that has to be killed can be
+        # killed whole -- searches here really do run with AMBIGUITY_JOBS
+        # above one, so the engine really does fork. See [terminate].
+        start_new_session=True,
+    )
 
+    def pump(handle: TextIO, collected: list[str]) -> None:
+        for line in handle:
+            collected.append(line)
+            if echo is not None:
+                # One write per line: two threads per search, several searches
+                # at once, and interleaved halves of a line would be worse than
+                # no echo at all.
+                sys.stderr.write(f"{echo}{line}")
+                sys.stderr.flush()
+        handle.close()
+
+    out: list[str] = []
+    errors: list[str] = []
+    assert process.stdout is not None and process.stderr is not None
+    pumps = [
+        Thread(target=pump, args=(process.stdout, out), daemon=True),
+        Thread(target=pump, args=(process.stderr, errors), daemon=True),
+    ]
+    for thread in pumps:
+        thread.start()
+    timed_out = False
+    try:
+        process.wait(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        timed_out = True
+    except BaseException:
+        terminate(process)
+        raise
+    finally:
+        if timed_out:
+            terminate(process)
+        # A killed engine can leave forked workers holding the inherited pipes
+        # open, so the readers get a grace period rather than an unbounded
+        # join: waiting on them for as long as an orphan lives would be the
+        # very hang the process bound exists to prevent. They are daemons, so
+        # one still blocked dies with the run.
+        grace = time.monotonic() + PUMP_GRACE_SECONDS
+        for thread in pumps:
+            thread.join(max(0.0, grace - time.monotonic()))
+    if timed_out:
         return (
             EXIT_TIMED_OUT,
-            decode(expired.stdout),
+            "".join(out),
             (
-                decode(expired.stderr)
-                + f"search did not exit within {expired.timeout:.0f}s and was killed"
+                "".join(errors)
+                + f"search did not exit within {timeout:.0f}s and was killed"
             ),
             time.monotonic() - started,
         )
-    return completed.returncode, completed.stdout, completed.stderr, time.monotonic() - started
+    return (
+        process.returncode,
+        "".join(out),
+        "".join(errors),
+        time.monotonic() - started,
+    )
+
+
+def without_progress(text: str) -> str:
+    """``text`` with the engine's progress lines dropped.
+
+    They are on stderr, where a failed run looks for its explanation, and a
+    hundred heartbeats ahead of the real message would bury it.
+    """
+    return "".join(
+        line
+        for line in text.splitlines(keepends=True)
+        if not line.startswith(PROGRESS_MARKER)
+    )
 
 
 def process_timeout(args: argparse.Namespace) -> float:
@@ -787,7 +881,9 @@ def check_case(args: argparse.Namespace, grammar: Path, case: KnownCase, variant
     code, stdout, stderr, seconds = run_process(command, timeout=process_timeout(args))
     match = DERIVATIONS_RE.search(stdout)
     if code not in {0, 1} or match is None:
-        message = (stderr or stdout or f"search exited with status {code}").strip()
+        message = (
+            without_progress(stderr) or stdout or f"search exited with status {code}"
+        ).strip()
         return CaseResult(case.name, None, seconds, message, tokens)
     return CaseResult(case.name, int(match.group(1)), seconds, tokens=tokens)
 
@@ -815,10 +911,15 @@ def search_variant(args: argparse.Namespace, grammar: Path) -> SearchResult:
         str(args.max_witnesses),
     ]
     code, stdout, stderr, seconds = run_process(
-        command, env=environment, timeout=process_timeout(args)
+        command,
+        env=environment,
+        timeout=process_timeout(args),
+        echo=None if args.quiet else f"[{grammar.stem}] ",
     )
     if code not in {0, 1}:
-        message = (stderr or stdout or f"search exited with status {code}").strip()
+        message = (
+            without_progress(stderr) or stdout or f"search exited with status {code}"
+        ).strip()
         return SearchResult(None, None, None, None, None, None, [], seconds, message)
     return parse_search_output(stdout, seconds)
 
@@ -1044,6 +1145,62 @@ def select_variants(names: list[str] | None) -> list[Variant]:
     return [by_name[name] for name in names]
 
 
+def replace_atomically(path: Path, content: str) -> None:
+    """Write ``content`` to ``path`` without ever leaving it truncated.
+
+    `write_text` opens with "w", which empties the destination before the new
+    content lands. That window used to be entered once, at the very end of a
+    run; the reports are now rewritten after every variant, so a matrix that
+    runs for hours enters it once per variant -- and a stop inside it would
+    destroy the report of everything that had already finished, which is the
+    one thing writing them early exists to protect. `os.replace` is atomic, so
+    the destination is either the previous report or the new one. The engine
+    writes its own progress files the same way.
+    """
+    temporary = path.with_name(f"{path.name}.new")
+    try:
+        temporary.write_text(content, encoding="utf-8")
+        os.replace(temporary, path)
+    except BaseException:
+        temporary.unlink(missing_ok=True)
+        raise
+
+
+def write_reports(
+    args: argparse.Namespace, results: list[VariantResult]
+) -> tuple[Path, Path]:
+    """Write the JSON and Markdown reports for the variants finished so far.
+
+    Called after every variant, so the reports on disk always describe what has
+    actually been run rather than appearing only once the whole matrix is over.
+    The ordering is recomputed each time: the Pareto frontier and the ranking
+    are properties of the set, so a partial report is the correct report for
+    the variants in it, not a prefix of the final one.
+    """
+    ordered = sorted(results, key=metric)
+    mark_pareto(ordered)
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "bounds": {
+            "max_tokens": args.max_tokens,
+            "timeout": args.timeout,
+            "memory_mb": args.memory_mb,
+            "max_frontier_ratio": args.max_frontier_ratio,
+            "max_witnesses": args.max_witnesses,
+        },
+        "known_cases": [
+            {"name": case.name, "description": case.description}
+            for case in KNOWN_CASES
+        ],
+        "results": [asdict(result) for result in ordered],
+    }
+    json_path = args.output.with_suffix(".json")
+    markdown_path = args.output.with_suffix(".md")
+    replace_atomically(json_path, json.dumps(payload, indent=2) + "\n")
+    replace_atomically(markdown_path, render_markdown(args, ordered) + "\n")
+    return json_path, markdown_path
+
+
 def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(description=__doc__)
     result.add_argument("grammar", nargs="?", type=Path, default=Path("lib/cst/parser.mly"))
@@ -1061,6 +1218,14 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--timeout", type=float)
     result.add_argument("--max-witnesses", type=int)
     result.add_argument("--skip-known", action="store_true")
+    result.add_argument(
+        "--quiet",
+        action="store_true",
+        help=(
+            "do not echo each search's own output while it runs; the per-variant"
+            " status lines and the reports only"
+        ),
+    )
     result.add_argument(
         "--output",
         type=Path,
@@ -1201,28 +1366,13 @@ def main() -> int:
                     else "error"
                 )
                 print(f"[{len(results):02d}/{len(variants):02d}] {variant.name}: {status}", file=sys.stderr)
+                # Rewritten after every variant rather than once at the end. A
+                # full matrix is hours of search, and a run that is killed or
+                # interrupted part-way used to leave nothing at all behind --
+                # the variants that had finished were only ever in memory.
+                write_reports(args, results)
 
-        mark_pareto(results)
-        results.sort(key=metric)
-        args.output.parent.mkdir(parents=True, exist_ok=True)
-        payload = {
-            "bounds": {
-                "max_tokens": args.max_tokens,
-                "timeout": args.timeout,
-                "memory_mb": args.memory_mb,
-                "max_frontier_ratio": args.max_frontier_ratio,
-                "max_witnesses": args.max_witnesses,
-            },
-            "known_cases": [
-                {"name": case.name, "description": case.description}
-                for case in KNOWN_CASES
-            ],
-            "results": [asdict(result) for result in results],
-        }
-        json_path = args.output.with_suffix(".json")
-        markdown_path = args.output.with_suffix(".md")
-        json_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
-        markdown_path.write_text(render_markdown(args, results) + "\n", encoding="utf-8")
+        json_path, markdown_path = write_reports(args, results)
         print(f"JSON: {json_path}")
         print(f"Markdown: {markdown_path}")
         return 0 if all(result.search.error is None for result in results) else 2

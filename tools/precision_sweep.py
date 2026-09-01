@@ -17,6 +17,10 @@ whenever a reduction pops less than the retained depth, so a conflict whose
 competing reductions are W wide should stay unprovable until the level exceeds
 W. Sweeping across that predicted level is what confirms or kills the theory.
 
+Each level's own output is passed through as it arrives, under a `[level N]`
+prefix, so a sweep is readable while it runs rather than a row at a time;
+`--quiet` leaves only the table.
+
 Usage:
     python3 tools/precision_sweep.py GRAMMAR.mly [--levels 1-6] [--timeout 60]
     python3 tools/precision_sweep.py --corpus even-palindrome
@@ -32,12 +36,14 @@ import argparse
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from threading import Thread
 from typing import TextIO
 
 
@@ -57,6 +63,14 @@ NOT_PROVEN = 3
 # costs in the worst case, so the budget arithmetic below counts it too --
 # budgeting the engine timeout alone would under-count every level.
 PROCESS_SLACK_SECONDS = 120.0
+
+# How long the readers draining a level's pipes are waited on once the level
+# itself is over. On a clean exit they finish at once, because the pipes close
+# with the process. A killed engine is the case this exists for: it can leave
+# forked workers behind holding the inherited pipes open, and waiting on the
+# readers for as long as an orphan lives would reintroduce the very hang the
+# process bound is there to prevent.
+PUMP_GRACE_SECONDS = 5.0
 
 SURVEY_RE = re.compile(
     r"^Survey at level (\d+): (\d+) distinct divergence site\(s\), "
@@ -128,69 +142,154 @@ def site_block(stdout: str) -> list[str]:
     return []
 
 
+def terminate(process: subprocess.Popen[str]) -> None:
+    """Kill the run and everything it forked, not just the process we started.
+
+    The engine forks workers of its own and shells out to menhir. Killing the
+    direct child alone leaves those behind: they go on burning a core and a
+    full memory budget, and they hold the inherited pipes open, which is
+    exactly what the readers then have to wait out. `start_new_session` on the
+    spawn puts the whole run in its own process group so there is one thing to
+    kill; without process groups (Windows) the direct kill is all there is.
+    """
+    try:
+        os.killpg(os.getpgid(process.pid), signal.SIGKILL)
+    except (AttributeError, OSError):
+        # No process groups here, or the group is already gone.
+        process.kill()
+    process.wait()
+
+
+def stream(
+    command: list[str],
+    environment: dict[str, str],
+    timeout: float,
+    echo: str | None,
+) -> tuple[int, str, str, bool]:
+    """Run ``command``, echoing its output as it arrives.
+
+    A level is a whole proof run -- an abstract phase that can hold the entire
+    timeout, then a bounded search -- and capturing it wholesale meant the
+    sweep sat silent for a minute at a time and then printed one table row.
+    The engine says what it is doing while it does it, so the lines are passed
+    through to stderr the moment they arrive, prefixed with the level they
+    belong to; stdout stays the table alone, for a caller piping it somewhere.
+    They are accumulated as well, because the row itself is read back out of
+    them once the level ends.
+
+    Returns ``(status, stdout, stderr, timed_out)``. A level that outlasts its
+    process bound is killed and reported rather than raising, and whatever it
+    had already written is kept.
+    """
+    process = subprocess.Popen(
+        command,
+        env=environment,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        # Its own process group, so a level that has to be killed can be
+        # killed whole. See [terminate].
+        start_new_session=True,
+    )
+
+    def pump(handle: TextIO, collected: list[str]) -> None:
+        for line in handle:
+            collected.append(line)
+            if echo is not None:
+                sys.stderr.write(f"{echo}{line}")
+                sys.stderr.flush()
+        handle.close()
+
+    out: list[str] = []
+    errors: list[str] = []
+    assert process.stdout is not None and process.stderr is not None
+    pumps = [
+        Thread(target=pump, args=(process.stdout, out), daemon=True),
+        Thread(target=pump, args=(process.stderr, errors), daemon=True),
+    ]
+    for thread in pumps:
+        thread.start()
+    timed_out = False
+    try:
+        process.wait(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        timed_out = True
+    except BaseException:
+        # A sweep runs for many minutes; an interrupt must not leave a level
+        # behind still burning the machine.
+        terminate(process)
+        raise
+    finally:
+        if timed_out:
+            terminate(process)
+        grace = time.monotonic() + PUMP_GRACE_SECONDS
+        for thread in pumps:
+            thread.join(max(0.0, grace - time.monotonic()))
+    # The readers are daemons, so one still blocked on an orphan's copy of a
+    # pipe dies with the sweep rather than holding it up. `list.append` is
+    # atomic, so reading the collected lines out from under such a thread costs
+    # at worst a trailing line, never a corrupt one.
+    return process.returncode, "".join(out), "".join(errors), timed_out
+
+
 def run_level(
     grammar: Path,
     level: int,
     timeout: str,
     max_tokens: str,
     environment: dict[str, str],
+    echo: bool = True,
 ) -> Result:
     started = time.monotonic()
     # `--timeout` bounds the engine's own search phases, not the process around
     # them: a hang in startup, in the menhir invocation, or in cleanup would
     # block here forever and take the rest of the sweep with it.
     process_timeout = float(timeout) + PROCESS_SLACK_SECONDS
-    try:
-        completed = subprocess.run(
-            [
-                str(ENGINE),
-                "--prove",
-                str(level),
-                # One example is enough: the sweep asks whether the blind spot
-                # survives, and the site of the first survivor is what says why.
-                "--prove-survey",
-                "1",
-                "--max-tokens",
-                max_tokens,
-                "--timeout",
-                timeout,
-                "--max-witnesses",
-                "5",
-                str(grammar),
-            ],
-            env=environment,
-            text=True,
-            capture_output=True,
-            timeout=process_timeout,
-            check=False,
-        )
-    except subprocess.TimeoutExpired as expired:
-        captured = "".join(
-            part for part in (expired.stdout, expired.stderr) if part
-        )
+    status, out, errors, timed_out = stream(
+        [
+            str(ENGINE),
+            "--prove",
+            str(level),
+            # One example is enough: the sweep asks whether the blind spot
+            # survives, and the site of the first survivor is what says why.
+            "--prove-survey",
+            "1",
+            "--max-tokens",
+            max_tokens,
+            "--timeout",
+            timeout,
+            "--max-witnesses",
+            "5",
+            str(grammar),
+        ],
+        environment,
+        process_timeout,
+        f"[level {level}] " if echo else None,
+    )
+    if timed_out:
         return Result(
             level, BROKEN, None, None, None, None,
             time.monotonic() - started, [],
             f"the engine outlasted its process bound of {process_timeout:.0f}s "
-            f"without honouring its own {timeout}s timeout\n{captured}",
+            f"without honouring its own {timeout}s timeout\n{out}{errors}",
         )
     elapsed = time.monotonic() - started
-    match = SURVEY_RE.search(completed.stdout)
+    match = SURVEY_RE.search(out)
     if match is None:
         return Result(
-            level, completed.returncode, None, None, None, None, elapsed, [],
-            completed.stdout + completed.stderr,
+            level, status, None, None, None, None, elapsed, [],
+            out + errors,
         )
     return Result(
         level=level,
-        status=completed.returncode,
+        status=status,
         sites=int(match.group(2)),
         accepting=int(match.group(3)),
         pairs=int(match.group(4)),
         complete="incomplete" not in match.group(5),
         seconds=elapsed,
-        site_block=site_block(completed.stdout),
-        stdout=completed.stdout + completed.stderr,
+        site_block=site_block(out),
+        stdout=out + errors,
     )
 
 
@@ -262,6 +361,14 @@ def main() -> int:
         help=(
             "also write the table and its reading to this file, for a run "
             "whose terminal output is not kept"
+        ),
+    )
+    parser.add_argument(
+        "--quiet",
+        action="store_true",
+        help=(
+            "do not echo the engine's own output while a level runs; the table "
+            "alone. Progress goes to stderr, so it never reaches a piped table"
         ),
     )
     parser.add_argument(
@@ -347,6 +454,7 @@ def main() -> int:
             arguments.timeout,
             arguments.max_tokens,
             environment,
+            echo=not arguments.quiet,
         )
         results.append(result)
         if result.accepting is None:

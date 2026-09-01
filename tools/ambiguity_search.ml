@@ -2,6 +2,108 @@
    unresolved LR actions as GLR branches, caps derivation counts at two, and
    accepts a witness only when two derivations recognize the start symbol. *)
 
+(* Everything this tool prints is written as it is produced, not at the end.
+
+   A proof run is long -- an abstract phase that can hold the whole timeout,
+   then a bounded search that can run for an hour -- and it is nearly always
+   read through a pipe: `tools/ambiguity.py` folds stderr into stdout, streams
+   both to the terminal, and copies every line into the saved report. On a pipe
+   OCaml block-buffers stdout, so the survey, the retirements and the line
+   announcing that concretization has started all sat in a 64 KiB buffer until
+   the process exited, and the report file stayed empty for the whole run it
+   was meant to document. Flushing on every write costs one syscall per line,
+   on output no run produces much of. *)
+let printf fmt =
+  Printf.ksprintf
+    (fun text ->
+      print_string text;
+      flush stdout)
+    fmt
+
+let eprintf fmt =
+  Printf.ksprintf
+    (fun text ->
+      prerr_string text;
+      flush stderr)
+    fmt
+
+(* How progress is shown, and how often.
+
+   On a terminal it is one line rewritten in place several times a second.
+   Everywhere else there is no cursor to move back to and the stream is usually
+   being saved, so the same numbers go out as ordinary lines at a much slower
+   cadence. Showing nothing at all off a terminal -- which is what this used to
+   do -- is what made every wrapped run silent for its entire length: the
+   wrapper that streams the engine's output line by line was the one guaranteed
+   never to receive a line. AMBIGUITY_PROGRESS_SECONDS sets the cadence; zero
+   or less turns progress off, for a caller that wants the verdict and nothing
+   else. *)
+let progress_on_terminal = Unix.isatty Unix.stderr
+
+(* Read on first use rather than at module initialisation, so a malformed value
+   is reported by the same handler that reports every other bad setting --
+   "error: ..." and status 2 -- instead of an uncaught exception printed before
+   [main] has begun. *)
+let progress_interval =
+  lazy
+    (match Sys.getenv_opt "AMBIGUITY_PROGRESS_SECONDS" with
+    | None | Some "" -> if progress_on_terminal then 0.2 else 10.
+    | Some value -> (
+        match float_of_string_opt value with
+        (* [float_of_string_opt] accepts "nan" and "infinity", and neither is a
+           cadence. Both would be taken for a setting and then silently show no
+           progress at all: every comparison against nan is false, so it reads
+           as switched off, and nothing is ever as old as infinity, so a run
+           reports progress as enabled and then never prints a line.
+           [classify_float] rather than [Float.is_finite] because it is in
+           every version of the stdlib this builds under. *)
+        | Some seconds when classify_float seconds <> FP_nan
+                           && classify_float seconds <> FP_infinite ->
+            seconds
+        | _ ->
+            invalid_arg "AMBIGUITY_PROGRESS_SECONDS must be a finite number"))
+
+let progress_is_visible () = Lazy.force progress_interval > 0.
+
+(* One clock across every phase, so that handing over from the abstract phase
+   to the concretization search cannot produce two lines at once, and so a
+   phase that ends quickly does not leave the next one waiting out an interval
+   it never used. *)
+let last_progress_render = ref 0.
+
+let progress_due () =
+  progress_is_visible ()
+  && Unix.gettimeofday () -. !last_progress_render
+     >= Lazy.force progress_interval
+
+let show_progress_line text =
+  if progress_is_visible () then begin
+    last_progress_render := Unix.gettimeofday ();
+    if progress_on_terminal then eprintf "\r\027[2K%s" text
+    else eprintf "%s\n" text
+  end
+
+(* Only a terminal has a partial line to take back. Off one the progress lines
+   are ordinary output and stay in the log, which is the point of them.
+
+   Deliberately independent of the interval: this also runs from the toplevel
+   error handler, and a malformed AMBIGUITY_PROGRESS_SECONDS is one of the
+   errors that gets it there. Reading the setting here would raise a second
+   time, out of the handler, and turn a reported error into an uncaught
+   exception. *)
+let clear_progress () = if progress_on_terminal then eprintf "\r\027[2K"
+
+let compact_number value =
+  let value = float_of_int value in
+  if value >= 1_000_000_000. then Printf.sprintf "%.1fB" (value /. 1_000_000_000.)
+  else if value >= 1_000_000. then Printf.sprintf "%.1fM" (value /. 1_000_000.)
+  else if value >= 1_000. then Printf.sprintf "%.1fk" (value /. 1_000.)
+  else Printf.sprintf "%.0f" value
+
+let elapsed_clock seconds =
+  let seconds = int_of_float (max 0. seconds) in
+  Printf.sprintf "%02d:%02d" (seconds / 60) (seconds mod 60)
+
 module StringSet = Set.Make (String)
 module IntMap = Map.Make (Int)
 module IntSet = Set.Make (Int)
@@ -2152,6 +2254,36 @@ let prove engine (precision : precision) pair_limit deadline survey_limit trace
   in
   let start = { suffix = [ 0 ]; height = 1 } in
   push None (start, start, false);
+  (* The abstract phase used to run in silence: minutes on a real grammar,
+     often the whole timeout, with the verdict as the first line of output. A
+     reader watching it wants to know the same three things the concretization
+     search reports -- how much has been settled, how much is still queued, and
+     whether anything accepting has turned up -- so they go out on the same
+     channel, at the same cadence, and are cleared the same way.
+
+     [since_progress] keeps the extra clock read off the per-pair path. Every
+     pair costs a joint-outcome pass over every terminal class, so one check
+     per 128 of them is still far finer than the interval it feeds, and a phase
+     that never reaches 128 pairs is over long before a line would have been
+     due. *)
+  let phase_started = Unix.gettimeofday () in
+  let since_progress = ref 0 in
+  let report_progress () =
+    if progress_due () then
+      show_progress_line
+        (Printf.sprintf
+           "● abstract level %d | pairs %s | queued %s | accepting %d%s | %s"
+           (Array.fold_left max 0 precision)
+           (compact_number (Hashtbl.length parents))
+           (compact_number (Queue.length queue))
+           !accepting
+           (* Sites are only recorded while surveying, so a run that is not
+              surveying would report a standing zero that says nothing. *)
+           (if surveying then
+              Printf.sprintf " | sites %d" (Hashtbl.length sites)
+            else "")
+           (elapsed_clock (Unix.gettimeofday () -. phase_started)))
+  in
   (* The clock is read once per dequeued pair, as the concretization search
      reads it once per expanded frontier: a pair costs a joint-outcome pass
      over every terminal class, so the read does not show up beside it. *)
@@ -2162,6 +2294,11 @@ let prove engine (precision : precision) pair_limit deadline survey_limit trace
     && Unix.gettimeofday () < deadline
   do
     let (left, right, diverged) as node = Queue.take queue in
+    incr since_progress;
+    if !since_progress >= 128 then begin
+      since_progress := 0;
+      report_progress ()
+    end;
     (* EOF is a lookahead like any other, but it is not in [terminals] - it is
        the sentinel the joint outcomes take separately - so a pair that first
        parts ways on end of input would otherwise never have its site recorded
@@ -2212,6 +2349,7 @@ let prove engine (precision : precision) pair_limit deadline survey_limit trace
             (joint (left, right) token))
         terminals
   done;
+  clear_progress ();
   let explored = Hashtbl.length parents in
   (* A queue left with work in it is the only way past the loop other than a
      verdict, so it - not the clock - is what says the deadline cut the search
@@ -2431,15 +2569,6 @@ let resident_memory_bytes () =
     |> Option.value ~default:(managed_heap_bytes ())
   with _ -> managed_heap_bytes ()
 
-let progress_is_visible = Unix.isatty Unix.stderr
-
-let compact_number value =
-  let value = float_of_int value in
-  if value >= 1_000_000_000. then Printf.sprintf "%.1fB" (value /. 1_000_000_000.)
-  else if value >= 1_000_000. then Printf.sprintf "%.1fM" (value /. 1_000_000.)
-  else if value >= 1_000. then Printf.sprintf "%.1fk" (value /. 1_000.)
-  else Printf.sprintf "%.0f" value
-
 let memory_bar used budget =
   let width = 12 in
   let ratio = if budget <= 0. then 0. else min 1. (used /. budget) in
@@ -2448,7 +2577,7 @@ let memory_bar used budget =
 
 let render_progress ~started ~max_tokens ~memory_budget
     (entries : (bool * search_progress) list) =
-  if progress_is_visible && entries <> [] then begin
+  if entries <> [] && progress_due () then begin
     let has_active = List.exists fst entries in
     let depth =
       List.fold_left
@@ -2480,22 +2609,17 @@ let render_progress ~started ~max_tokens ~memory_budget
           if witness_depth = depth then count + 1 else count)
         profiles 0
     in
-    let elapsed = max 0. (Unix.gettimeofday () -. started) in
-    Printf.eprintf
-      "\r\027[2K● %d/%d | amb %d | explored %s | unique %s | RAM [%s] %.1f/%.1fG | %02d:%02d"
-      depth max_tokens at_depth (compact_number !explored)
-      (compact_number !unique)
-      (memory_bar !rss_bytes memory_budget)
-      (!rss_bytes /. 1024. /. 1024. /. 1024.)
-      (memory_budget /. 1024. /. 1024. /. 1024.)
-      (int_of_float elapsed / 60) (int_of_float elapsed mod 60);
-    flush stderr
-  end
-
-let clear_progress () =
-  if progress_is_visible then begin
-    Printf.eprintf "\r\027[2K";
-    flush stderr
+    let elapsed = Unix.gettimeofday () -. started in
+    show_progress_line
+      (Printf.sprintf
+         "● search %d/%d | amb %d | explored %s | unique %s | RAM [%s] \
+          %.1f/%.1fG | %s"
+         depth max_tokens at_depth (compact_number !explored)
+         (compact_number !unique)
+         (memory_bar !rss_bytes memory_budget)
+         (!rss_bytes /. 1024. /. 1024. /. 1024.)
+         (memory_budget /. 1024. /. 1024. /. 1024.)
+         (elapsed_clock elapsed))
   end
 
 let write_progress path (progress : search_progress) =
@@ -2565,9 +2689,10 @@ let unified_search engine initial ~max_tokens ~min_tokens ~nodes_per_depth
   let expanded_at_depth = ref 0 in
   let last_depth = ref 0 in
   let last_progress = ref 0. in
+  let interval = Lazy.force progress_interval in
   let emit_progress force =
     let now = Unix.gettimeofday () in
-    if show_progress && (force || now -. !last_progress >= 0.2) then begin
+    if show_progress && (force || now -. !last_progress >= interval) then begin
       last_progress := now;
       on_progress
         {
@@ -2855,8 +2980,8 @@ let parallel_unified_search engine initial ~jobs ~max_tokens ~min_tokens
       unified_search engine partitions.(0) ~max_tokens ~min_tokens
         ~nodes_per_depth ~timeout ~max_frontiers ~max_queue ~max_witnesses
         ~soft_heap_bytes ~hard_heap_bytes
-        ~show_progress:progress_is_visible ~on_progress:show conflict_distance
-        accept_distance
+        ~show_progress:(progress_is_visible ())
+        ~on_progress:show conflict_distance accept_distance
     in
     clear_progress ();
     ( {
@@ -2882,13 +3007,14 @@ let parallel_unified_search engine initial ~jobs ~max_tokens ~min_tokens
         match Unix.fork () with
         | 0 ->
             let report progress =
-              if progress_is_visible then write_progress progress_path progress
+              if progress_is_visible () then
+                write_progress progress_path progress
             in
             let result =
               unified_search engine initial ~max_tokens ~min_tokens
                 ~nodes_per_depth ~timeout ~max_frontiers ~max_queue
                 ~max_witnesses ~soft_heap_bytes ~hard_heap_bytes
-                ~show_progress:progress_is_visible ~on_progress:report
+                ~show_progress:(progress_is_visible ()) ~on_progress:report
                 conflict_distance accept_distance
             in
             let channel = open_out_bin output in
@@ -3183,6 +3309,10 @@ let main () =
     environment_float "AMBIGUITY_MAX_FRONTIER_RATIO"
   in
   let jobs = environment_int "AMBIGUITY_JOBS" in
+  (* Read here with the rest of the settings so a malformed cadence is refused
+     before the run starts, rather than at whatever moment the first progress
+     line happened to fall due. *)
+  ignore (Lazy.force progress_interval : float);
   Option.iter
     (fun value ->
       if value < 0 then invalid_arg "--max-tokens must be at least 0")
@@ -3291,14 +3421,14 @@ let main () =
         in
         let singletons = List.filter (fun tokens -> List.length tokens = 1) classes in
         let merged = List.filter (fun tokens -> List.length tokens > 1) classes in
-        Printf.printf "%d terminals in %d classes (%d merged, %d singleton).\n"
+        printf "%d terminals in %d classes (%d merged, %d singleton).\n"
           (StringSet.cardinal automaton.terminals)
           (List.length classes) (List.length merged) (List.length singletons);
         List.iter
-          (fun tokens -> Printf.printf "  { %s }\n" (String.concat " " tokens))
+          (fun tokens -> printf "  { %s }\n" (String.concat " " tokens))
           merged;
         if singletons <> [] then
-          Printf.printf "  singletons: %s\n"
+          printf "  singletons: %s\n"
             (String.concat " " (List.concat singletons));
         exit 0
       end;
@@ -3309,7 +3439,7 @@ let main () =
             !check_tokens
         in
         let count = accepted_count engine frontier in
-        Printf.printf "Accepting derivations: %d\n" count;
+        printf "Accepting derivations: %d\n" count;
         exit 0
       end;
       let max_tokens, timeout, max_witnesses = Option.get search_limits in
@@ -3334,7 +3464,7 @@ let main () =
           branched = derivations initial_frontier >= 2;
         }
       in
-      Printf.printf
+      printf
         "Search constraints: %d..%d total tokens; %d-token prefix; %s.\n"
         !min_tokens max_tokens prefix_depth
         (match !nodes_per_depth with
@@ -3342,7 +3472,7 @@ let main () =
         | Some 1 -> "1 node per depth"
         | Some limit -> Printf.sprintf "%d nodes per depth" limit);
       if !prefix_tokens <> [] then
-        Printf.printf "Prefix tokens: %s\n" (String.concat " " !prefix_tokens);
+        printf "Prefix tokens: %s\n" (String.concat " " !prefix_tokens);
       (* Sites refinement stopped pursuing, and the evidence for stopping. It
          outlives the proof block because it changes what every verdict below
          means: a run that stepped over a site has not answered it, and both
@@ -3359,7 +3489,7 @@ let main () =
           derive_memory_limits ~memory_mb ~max_frontier_ratio ~jobs:1
             ~max_tokens
         in
-        Printf.printf
+        printf
           "Proof budget: %d abstract pairs (single-threaded; the %d-worker \
            split does not apply).\n"
           prove_limits.max_frontiers jobs;
@@ -3486,14 +3616,13 @@ let main () =
                   (site, reason, candidate.candidate_example) :: !retirements;
                 last_site := None;
                 streak := 0;
-                Printf.printf
+                printf
                   "Retired the divergence site at state%s %d%s on lookahead \
                    %s: %s. Continuing with the rest of the grammar.\n"
                   (if state = other then "" else "s")
                   state
                   (if state = other then "" else Printf.sprintf " and %d" other)
                   lookahead reason;
-                flush stdout;
                 attempt ()
               in
               (* What the round limit is really bounding is abstract phases,
@@ -3535,7 +3664,7 @@ let main () =
                   (fun (state, depth) -> deepen precision state depth)
                   deeper;
                 incr rounds;
-                Printf.printf
+                printf
                   "Refinement round %d: deepened the stacks behind %s, \
                    retaining up to %d (%s).\n"
                   !rounds
@@ -3546,7 +3675,6 @@ let main () =
                         (fun (state, depth) ->
                           Printf.sprintf "state %d to %d" state depth)
                         deeper));
-                flush stdout;
                 attempt ()
               end
           | result -> result
@@ -3592,7 +3720,7 @@ let main () =
            from the pair count. *)
         let report_reachability () =
           if !refused_stacks > 0 then
-            Printf.printf
+            printf
               "Stack height: refused %d move(s) onto a state no stack that \
                short can carry; the height stops being counted past %d.\n"
               !refused_stacks !tracked_height
@@ -3605,24 +3733,24 @@ let main () =
         let report_retirements () =
           if !retirements <> [] then begin
             let retirements = List.rev !retirements in
-            Printf.printf
+            printf
               "Retired %d divergence site(s), each after refinement stopped \
                moving it. The grammar is unproven at these sites and nowhere \
                else:\n"
               (List.length retirements);
             List.iteri
               (fun index ((state, other, lookahead), reason, example) ->
-                Printf.printf "  %d. state%s %d%s on lookahead %s: %s\n"
+                printf "  %d. state%s %d%s on lookahead %s: %s\n"
                   (index + 1)
                   (if state = other then "" else "s")
                   state
                   (if state = other then ""
                    else Printf.sprintf " and %d" other)
                   lookahead reason;
-                Printf.printf "     reached by: %s\n"
+                printf "     reached by: %s\n"
                   (String.concat " " example.example_tokens);
                 List.iter
-                  (fun line -> Printf.printf "     %s\n" line)
+                  (fun line -> printf "     %s\n" line)
                   example.example_site)
               retirements
           end
@@ -3630,9 +3758,9 @@ let main () =
         let report_refinement () =
           report_retirements ();
           if !rounds > 0 then
-            Printf.printf "Refinement reached: %s\n" (precision_summary ());
+            printf "Refinement reached: %s\n" (precision_summary ());
           Option.iter
-            (fun summary -> Printf.printf "Refinement was capped: %s\n" summary)
+            (fun summary -> printf "Refinement was capped: %s\n" summary)
             (capped_summary ());
           report_reachability ()
         in
@@ -3650,17 +3778,17 @@ let main () =
                blind spot, exiting here would be how the witness stopped being
                reported. So a retiring run always goes on to concretize, and
                the verdict at the bottom names the retired sites. *)
-            Printf.printf
+            printf
               "Closed everywhere the search was still allowed to look: \
                outside the retired site(s), no diverging pair of accepting \
                parses exists in the top-%d stack abstraction (%d abstract \
                pairs explored).\n"
               !prove_level pairs;
             report_refinement ();
-            Printf.printf
+            printf
               "Attempting to concretize with the bounded search...\n\n"
         | Proven pairs ->
-            Printf.printf
+            printf
               "PROVEN UNAMBIGUOUS: no diverging pair of accepting parses \
                exists in the top-%d stack abstraction (%d abstract pairs \
                explored).\n"
@@ -3669,11 +3797,11 @@ let main () =
                a sharper abstraction than the level alone names, so the level
                alone does not identify it. *)
             if !rounds > 0 then
-              Printf.printf "Refinement: %s\n" (precision_summary ());
+              printf "Refinement: %s\n" (precision_summary ());
             report_reachability ();
             exit 0
         | Surveyed survey ->
-            Printf.printf
+            printf
               "Survey at level %d: %d distinct divergence site(s), %d \
                accepting abstract pair(s), %d pairs explored%s.\n"
               !prove_level survey.sites survey.accepting survey.survey_pairs
@@ -3681,10 +3809,10 @@ let main () =
                else " (incomplete: the counts are a floor)");
             List.iteri
               (fun index example ->
-                Printf.printf "  %d. %s\n" (index + 1)
+                printf "  %d. %s\n" (index + 1)
                   (String.concat " " example.example_tokens);
                 List.iter
-                  (fun line -> Printf.printf "     %s\n" line)
+                  (fun line -> printf "     %s\n" line)
                   example.example_site)
               survey.examples;
             (* The proof turns on whether any diverging pair reaches
@@ -3692,19 +3820,19 @@ let main () =
                diagnostic breakdown of the same thing, and gating the verdict on
                them would let any gap in site accounting print a false proof. *)
             if survey.accepting = 0 && survey.covered then begin
-              Printf.printf
+              printf
                 "PROVEN UNAMBIGUOUS: no diverging pair of accepting parses \
                  exists in the top-%d stack abstraction (%d abstract pairs \
                  explored).\n"
                 !prove_level survey.survey_pairs;
               exit 0
             end;
-            Printf.printf
+            printf
               "NOT PROVEN: the survey enumerates where the abstraction cannot \
                separate two parses; it does not concretize them.\n";
             exit not_proven_status
         | Pair_overflow pairs ->
-            Printf.printf
+            printf
               "NOT PROVEN: the abstract pair limit (%d) was reached at \
                abstraction level %d. Raise AMBIGUITY_MEMORY_MB or \
                AMBIGUITY_MAX_FRONTIER_RATIO, or lower --prove.\n"
@@ -3712,7 +3840,7 @@ let main () =
             report_refinement ();
             exit not_proven_status
         | Prove_timeout pairs ->
-            Printf.printf
+            printf
               "NOT PROVEN: the timeout (%gs) expired during the abstract \
                phase at level %d, after %d pairs. Raise --timeout, or lower \
                --prove.\n"
@@ -3724,7 +3852,7 @@ let main () =
             let example = candidate.candidate_example in
             let forward = candidate.candidate_forward in
             report_retirements ();
-            Printf.printf
+            printf
               "Abstract ambiguity candidate at level %d after %d pairs \
                (possibly spurious): %s\n"
               !prove_level candidate.candidate_pairs
@@ -3734,23 +3862,23 @@ let main () =
                and after a refinement has run it is the only way to see whether
                deepening moved the blind spot or merely paid for it. *)
             List.iter
-              (fun line -> Printf.printf "  %s\n" line)
+              (fun line -> printf "  %s\n" line)
               example.example_site;
-            List.iter (fun line -> Printf.printf "  %s\n" line) forward;
+            List.iter (fun line -> printf "  %s\n" line) forward;
             (* Why refinement gave up is the part worth reading. A candidate
                that outlived an abstraction made exact along its own path is
                evidence of a real ambiguity, and reads very differently from
                one that only ran out of rounds or depth. *)
             Option.iter
               (fun reason ->
-                Printf.printf "Refinement stopped after %d round(s): %s.\n"
+                printf "Refinement stopped after %d round(s): %s.\n"
                   !rounds reason;
-                Printf.printf "Refinement reached: %s\n" (precision_summary ()))
+                printf "Refinement reached: %s\n" (precision_summary ()))
               !stalled;
             (* Printed whether or not refinement stalled, because it is the one
                line that says the ceiling itself was the constraint. *)
             Option.iter
-              (fun summary -> Printf.printf "Refinement was capped: %s\n" summary)
+              (fun summary -> printf "Refinement was capped: %s\n" summary)
               (capped_summary ());
             (* A surviving candidate is exactly where the reader wants to know
                how much the height test was doing, because it is the line that
@@ -3758,7 +3886,7 @@ let main () =
                looked and the moves were real". Leaving it off this path made
                the test look inert on every run that did not end in a proof. *)
             report_reachability ();
-            Printf.printf
+            printf
               "Attempting to concretize with the bounded search...\n\n"
       end;
       (* Only the concretization search runs workers, and only the code below
@@ -3770,7 +3898,7 @@ let main () =
       let memory_limits =
         derive_memory_limits ~memory_mb ~max_frontier_ratio ~jobs ~max_tokens
       in
-      Printf.printf
+      printf
         "Memory budget: %d MiB total across %d worker(s); workers compact at %.0f MiB and stop admitting frontiers at %.0f MiB each (10%% reserved); per-worker limits are %d queued frontiers and %d retained dedup frontiers (ratio %g).\n"
         memory_mb jobs
         (memory_limits.soft_heap_bytes /. 1024. /. 1024.)
@@ -3807,7 +3935,7 @@ let main () =
       in
       match outcome.witnesses with
       | [] ->
-          Printf.printf
+          printf
             "Search ended at depth %d because %s; no complete ambiguity was found in %d explored frontiers (%d unique).\n"
             outcome.deepest termination outcome.explored outcome.unique;
           if !prove_level > 0 then begin
@@ -3818,7 +3946,7 @@ let main () =
                difference between a verdict a reader can act on and one that
                sends them to raise --prove for no reason. *)
             (if !retirements <> [] then
-               Printf.printf
+               printf
                  "NOT PROVEN: %d retired site(s) were stepped over rather \
                   than answered, and the bounded search found no concrete \
                   ambiguity at them; the grammar is unproven at those sites \
@@ -3827,34 +3955,34 @@ let main () =
                   them.\n"
                  (List.length !retirements)
              else
-               Printf.printf
+               printf
                  "NOT PROVEN: the abstract candidate could not be concretized \
                   within the search bounds; the grammar is neither proven \
                   unambiguous nor shown ambiguous. Raising --prove may remove \
                   the spurious candidate.\n");
             exit not_proven_status
           end;
-          Printf.printf "This is a bounded result, not a proof of unambiguity.\n";
+          printf "This is a bounded result, not a proof of unambiguity.\n";
           exit 0
       | witnesses ->
-          Printf.printf "Found %d complete ambiguity %s.\n"
+          printf "Found %d complete ambiguity %s.\n"
             (List.length witnesses)
             (if List.length witnesses = 1 then "family" else "families");
           List.iteri
             (fun index (profile, witness) ->
-              Printf.printf "\n%d. Tokens (%d): %s\n   Source: %s\n"
+              printf "\n%d. Tokens (%d): %s\n   Source: %s\n"
                 (index + 1) (List.length witness) (String.concat " " witness)
                 (render automaton witness);
-              Printf.printf "   Conflict origins: %s\n"
+              printf "   Conflict origins: %s\n"
                 (profile
                 |> List.map (fun (state, token) ->
                        Printf.sprintf "state %d on %s" state token)
                 |> String.concat ", "))
             witnesses;
-          Printf.printf "\n";
-          Printf.printf "Explored %d frontiers (%d unique); %d conflict seeds.\n"
+          printf "\n";
+          printf "Explored %d frontiers (%d unique); %d conflict seeds.\n"
             outcome.explored outcome.unique conflict_seeds;
-          Printf.printf "Search ended at depth %d because %s.\n"
+          printf "Search ended at depth %d because %s.\n"
             outcome.deepest termination;
           (* Concretizing the abstract candidate settles the proof: the
              witnesses above are the ambiguity the level-K abstraction

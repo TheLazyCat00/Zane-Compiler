@@ -49,6 +49,12 @@ _build/syntax-experiment/report.md
 _build/syntax-experiment/report.json
 ```
 
+Both are rewritten after every variant finishes, not once at the end, so a
+matrix that is interrupted part-way still leaves a report of the variants that
+did run. Each search's own output is passed through to stderr while it runs,
+prefixed with the variant it belongs to, since several run at once; `--quiet`
+turns that pass-through off and leaves only the per-variant status lines.
+
 Generated grammars normally live only for the duration of a run. To keep them
 for inspection, ask for a directory to write them into:
 
