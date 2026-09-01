@@ -19,6 +19,7 @@ import os
 from pathlib import Path
 import re
 import shlex
+import signal
 import subprocess
 import sys
 import tempfile
@@ -739,6 +740,24 @@ def apply_variant(source: str, variant: Variant) -> str:
     return header + result
 
 
+def terminate(process: subprocess.Popen[str]) -> None:
+    """Kill the run and everything it forked, not just the process we started.
+
+    The engine forks workers of its own and shells out to menhir. Killing the
+    direct child alone leaves those behind: they go on burning a core and a
+    full memory budget, and they hold the inherited pipes open, which is
+    exactly what the readers then have to wait out. `start_new_session` on the
+    spawn puts the whole run in its own process group so there is one thing to
+    kill; without process groups (Windows) the direct kill is all there is.
+    """
+    try:
+        os.killpg(os.getpgid(process.pid), signal.SIGKILL)
+    except (AttributeError, OSError):
+        # No process groups here, or the group is already gone.
+        process.kill()
+    process.wait()
+
+
 def run_process(
     command: list[str],
     env: dict[str, str] | None = None,
@@ -765,6 +784,10 @@ def run_process(
         env=env,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
+        # Its own process group, so a search that has to be killed can be
+        # killed whole -- searches here really do run with AMBIGUITY_JOBS
+        # above one, so the engine really does fork. See [terminate].
+        start_new_session=True,
     )
 
     def pump(handle: TextIO, collected: list[str]) -> None:
@@ -793,13 +816,11 @@ def run_process(
     except subprocess.TimeoutExpired:
         timed_out = True
     except BaseException:
-        process.kill()
-        process.wait()
+        terminate(process)
         raise
     finally:
         if timed_out:
-            process.kill()
-            process.wait()
+            terminate(process)
         # A killed engine can leave forked workers holding the inherited pipes
         # open, so the readers get a grace period rather than an unbounded
         # join: waiting on them for as long as an orphan lives would be the
@@ -1124,6 +1145,27 @@ def select_variants(names: list[str] | None) -> list[Variant]:
     return [by_name[name] for name in names]
 
 
+def replace_atomically(path: Path, content: str) -> None:
+    """Write ``content`` to ``path`` without ever leaving it truncated.
+
+    `write_text` opens with "w", which empties the destination before the new
+    content lands. That window used to be entered once, at the very end of a
+    run; the reports are now rewritten after every variant, so a matrix that
+    runs for hours enters it once per variant -- and a stop inside it would
+    destroy the report of everything that had already finished, which is the
+    one thing writing them early exists to protect. `os.replace` is atomic, so
+    the destination is either the previous report or the new one. The engine
+    writes its own progress files the same way.
+    """
+    temporary = path.with_name(f"{path.name}.new")
+    try:
+        temporary.write_text(content, encoding="utf-8")
+        os.replace(temporary, path)
+    except BaseException:
+        temporary.unlink(missing_ok=True)
+        raise
+
+
 def write_reports(
     args: argparse.Namespace, results: list[VariantResult]
 ) -> tuple[Path, Path]:
@@ -1154,10 +1196,8 @@ def write_reports(
     }
     json_path = args.output.with_suffix(".json")
     markdown_path = args.output.with_suffix(".md")
-    json_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
-    markdown_path.write_text(
-        render_markdown(args, ordered) + "\n", encoding="utf-8"
-    )
+    replace_atomically(json_path, json.dumps(payload, indent=2) + "\n")
+    replace_atomically(markdown_path, render_markdown(args, ordered) + "\n")
     return json_path, markdown_path
 
 

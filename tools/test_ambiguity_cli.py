@@ -701,20 +701,42 @@ class StreamingOutputTests(unittest.TestCase):
         )
         self.assertNotIn("●", result.stderr)
 
-    def test_a_malformed_cadence_is_an_ordinary_error(self) -> None:
-        result = self.engine(
+    def cadence(self, value: str) -> subprocess.CompletedProcess[str]:
+        return self.engine(
             "--prove", "2",
             "--max-tokens", "8",
             "--timeout", "5",
             "--max-witnesses", "5",
-            AMBIGUITY_PROGRESS_SECONDS="often",
+            AMBIGUITY_PROGRESS_SECONDS=value,
         )
+
+    def test_a_malformed_cadence_is_an_ordinary_error(self) -> None:
+        result = self.cadence("often")
         self.assertEqual(result.returncode, 2, result.stderr)
-        self.assertIn("AMBIGUITY_PROGRESS_SECONDS must be a number", result.stderr)
+        self.assertIn(
+            "AMBIGUITY_PROGRESS_SECONDS must be a finite number", result.stderr
+        )
         # Reported by the toplevel handler rather than as an uncaught exception.
         # That handler clears the progress line first, and reading the setting
         # a second time there is what used to turn the error into a crash.
         self.assertNotIn("Fatal error", result.stderr)
+
+    def test_a_non_finite_cadence_is_refused_rather_than_obeyed(self) -> None:
+        # These parse as floats, so they used to be taken for a setting and
+        # then show no progress at all -- silently, and in two different ways.
+        # Every comparison against nan is false, so it read as switched off;
+        # nothing is ever as old as infinity, so a run reported progress as
+        # enabled and never printed a line. Neither is a cadence anyone asked
+        # for, so both are refused like any other bad setting.
+        for value in ("nan", "infinity", "-infinity"):
+            with self.subTest(cadence=value):
+                result = self.cadence(value)
+                self.assertEqual(result.returncode, 2, result.stderr)
+                self.assertIn(
+                    "AMBIGUITY_PROGRESS_SECONDS must be a finite number",
+                    result.stderr,
+                )
+                self.assertNotIn("Fatal error", result.stderr)
 
 
 if __name__ == "__main__":

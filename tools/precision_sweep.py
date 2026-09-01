@@ -36,6 +36,7 @@ import argparse
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import time
@@ -141,6 +142,24 @@ def site_block(stdout: str) -> list[str]:
     return []
 
 
+def terminate(process: subprocess.Popen[str]) -> None:
+    """Kill the run and everything it forked, not just the process we started.
+
+    The engine forks workers of its own and shells out to menhir. Killing the
+    direct child alone leaves those behind: they go on burning a core and a
+    full memory budget, and they hold the inherited pipes open, which is
+    exactly what the readers then have to wait out. `start_new_session` on the
+    spawn puts the whole run in its own process group so there is one thing to
+    kill; without process groups (Windows) the direct kill is all there is.
+    """
+    try:
+        os.killpg(os.getpgid(process.pid), signal.SIGKILL)
+    except (AttributeError, OSError):
+        # No process groups here, or the group is already gone.
+        process.kill()
+    process.wait()
+
+
 def stream(
     command: list[str],
     environment: dict[str, str],
@@ -168,6 +187,9 @@ def stream(
         text=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
+        # Its own process group, so a level that has to be killed can be
+        # killed whole. See [terminate].
+        start_new_session=True,
     )
 
     def pump(handle: TextIO, collected: list[str]) -> None:
@@ -195,13 +217,11 @@ def stream(
     except BaseException:
         # A sweep runs for many minutes; an interrupt must not leave a level
         # behind still burning the machine.
-        process.kill()
-        process.wait()
+        terminate(process)
         raise
     finally:
         if timed_out:
-            process.kill()
-            process.wait()
+            terminate(process)
         grace = time.monotonic() + PUMP_GRACE_SECONDS
         for thread in pumps:
             thread.join(max(0.0, grace - time.monotonic()))

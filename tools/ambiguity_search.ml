@@ -50,8 +50,18 @@ let progress_interval =
     | None | Some "" -> if progress_on_terminal then 0.2 else 10.
     | Some value -> (
         match float_of_string_opt value with
-        | Some seconds -> seconds
-        | None -> invalid_arg "AMBIGUITY_PROGRESS_SECONDS must be a number"))
+        (* [float_of_string_opt] accepts "nan" and "infinity", and neither is a
+           cadence. Both would be taken for a setting and then silently show no
+           progress at all: every comparison against nan is false, so it reads
+           as switched off, and nothing is ever as old as infinity, so a run
+           reports progress as enabled and then never prints a line.
+           [classify_float] rather than [Float.is_finite] because it is in
+           every version of the stdlib this builds under. *)
+        | Some seconds when classify_float seconds <> FP_nan
+                           && classify_float seconds <> FP_infinite ->
+            seconds
+        | _ ->
+            invalid_arg "AMBIGUITY_PROGRESS_SECONDS must be a finite number"))
 
 let progress_is_visible () = Lazy.force progress_interval > 0.
 

@@ -551,7 +551,10 @@ move back to, so the same numbers go out as ordinary lines every ten seconds and
 stay in the log.
 
 `AMBIGUITY_PROGRESS_SECONDS` overrides that cadence; zero or less turns progress
-off entirely, for a caller that wants the verdict and nothing else. Unlike the
+off entirely, for a caller that wants the verdict and nothing else. Anything
+that is not a finite number is refused rather than obeyed: `nan` and `infinity`
+parse as floats and would each be taken for a setting and then quietly show
+nothing, one reading as switched off and the other as enabled but never due. Unlike the
 four settings below it is optional, so it does not belong in
 `machine-config.txt` — it is a property of how a particular run is being
 watched, not of the machine. The sweep's `--quiet` (`just sweep GRAMMAR
