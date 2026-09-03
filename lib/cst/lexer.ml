@@ -72,17 +72,10 @@ let rec token buf =
   | "import"                    -> IMPORT
   | "implicit"                  -> IMPLICIT
   | "init"                      -> INIT
-  | "if"                        -> IF
-  | "elif"                      -> ELIF
-  | "else"                      -> ELSE
-  | "guard"                     -> GUARD
   | "match"                     -> MATCH
   | "and"                       -> AND
   | "or"                        -> OR
   | "spawn"                     -> SPAWN
-  | "loop"                      -> LOOP
-  | "from"                      -> FROM
-  | "to"                        -> TO
   | "true"                      -> TRUE
   | "false"                     -> FALSE
   | "this"                      -> THIS

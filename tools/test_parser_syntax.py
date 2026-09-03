@@ -13,14 +13,21 @@ class ParserSyntaxTests(unittest.TestCase):
         if not PARSER_ACCEPT.exists():
             self.skipTest("requires built parser_accept executable")
 
-    def assert_parses(self, source: str) -> None:
-        parsed = subprocess.run(
+    def run_parser(self, source: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
             [str(PARSER_ACCEPT), source],
             text=True,
             capture_output=True,
             timeout=30,
         )
+
+    def assert_parses(self, source: str) -> None:
+        parsed = self.run_parser(source)
         self.assertEqual(parsed.returncode, 0, parsed.stdout + parsed.stderr)
+
+    def assert_rejects(self, source: str) -> None:
+        parsed = self.run_parser(source)
+        self.assertNotEqual(parsed.returncode, 0, parsed.stdout + parsed.stderr)
 
     def test_named_field_and_implicit_constructors(self) -> None:
         self.assert_parses(
@@ -41,7 +48,7 @@ class ParserSyntaxTests(unittest.TestCase):
             '''
         )
 
-    def test_guest_types_subscripts_assignment_guard_and_spawn(self) -> None:
+    def test_guest_types_subscripts_assignment_and_spawn(self) -> None:
         self.assert_parses(
             '''
             type Node = #struct { next &Node; }
@@ -50,13 +57,42 @@ class ParserSyntaxTests(unittest.TestCase):
 
             Unit work(this Node) mut {
                 this.next = &this;
-                guard true;
-                guard true { std$print("ok"); }
+                guard(true);
                 spawn run();
                 return Unit();
             }
             '''
         )
+
+    def test_control_flow_is_calls_carrying_block_arguments(self) -> None:
+        self.assert_parses(
+            '''
+            Unit walk(values IntList) {
+                index Int = Int(1);
+                index!to(values:size()) {
+                    guard(values[index] < Int(0));
+                    std$print(values[index]);
+                }
+
+                ran Bool = if(values:size() == Int(0)) {
+                    std$print("empty");
+                };
+                ran!elif({ resolve values:size() < Int(4); }) {
+                    std$print("short");
+                }
+                ran:else() {
+                    std$print("long");
+                }
+
+                twice({ std$print("a"); }, { std$print("b"); });
+                return Unit();
+            }
+            '''
+        )
+
+    def test_a_trailing_block_closes_a_call_statement(self) -> None:
+        self.assert_rejects("Unit use() { run() { std$print(\"once\"); }; }")
+        self.assert_rejects("Unit use() { run() { } { } }")
 
     def test_match_enum_map_type_members_pipe_and_inequality(self) -> None:
         self.assert_parses(
