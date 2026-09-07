@@ -1,12 +1,25 @@
-let rec expr_shape (expr : Cst.Nodes.Expr.t) =
+let parts name shapes = name ^ "(" ^ String.concat ", " shapes ^ ")"
+
+(* A block argument renders as [block] wherever it sits, so a shape says which
+   call a block joined and in which position, which is the grouping question a
+   trailing block raises. *)
+let rec arg_shape (arg : Cst.Nodes.Call_arg.t) =
+  match arg with
+  | Cst.Nodes.Call_arg.Value value -> expr_shape value
+  | Cst.Nodes.Call_arg.Block _ -> "block"
+
+and expr_shape (expr : Cst.Nodes.Expr.t) =
   match expr with
   | Cst.Nodes.Expr.BoolLit _ -> "bool"
   | Cst.Nodes.Expr.NameExpr _ -> "name"
   | Cst.Nodes.Expr.TypeMember _ -> "type_member"
   | Cst.Nodes.Expr.DotAccess { target; _ } -> "dot(" ^ expr_shape target ^ ")"
   | Cst.Nodes.Expr.Parenthized inner -> "paren(" ^ expr_shape inner ^ ")"
-  | Cst.Nodes.Expr.VerbCall (Cst.Nodes.Verb_call.Func { callee; _ }) ->
-      "call(" ^ expr_shape callee ^ ")"
+  | Cst.Nodes.Expr.VerbCall (Cst.Nodes.Verb_call.Func { callee; args; _ }) ->
+      parts "call" (expr_shape callee :: List.map arg_shape args)
+  | Cst.Nodes.Expr.VerbCall
+      (Cst.Nodes.Verb_call.Meth { callee; this; args; _ }) ->
+      parts "meth" (expr_shape this :: expr_shape callee :: List.map arg_shape args)
   | Cst.Nodes.Expr.VerbCall
       (Cst.Nodes.Verb_call.Constructor { name = { member = Some _; _ }; _ }) ->
       "named_ctor"
@@ -22,6 +35,8 @@ let rec expr_shape (expr : Cst.Nodes.Expr.t) =
       "lambda(" ^ expr_shape body ^ ")"
   | Cst.Nodes.Expr.Spawn call ->
       "spawn(" ^ expr_shape (Cst.Nodes.Expr.VerbCall call) ^ ")"
+  | Cst.Nodes.Expr.Match { scrutinees; _ } ->
+      parts "match" (List.map expr_shape scrutinees)
   | Cst.Nodes.Expr.Ref value -> "ref(" ^ expr_shape value ^ ")"
   | _ -> "other"
 

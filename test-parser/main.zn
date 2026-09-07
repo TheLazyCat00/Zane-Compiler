@@ -5,7 +5,8 @@
 /// also the parser's fixture, so it reaches on purpose for most of the shapes
 /// the grammar accepts: enums and the maps hung off them, variants and `match`,
 /// value and reference types, the constructor forms, methods, operators,
-/// subscripts, lambdas, generics, abort handlers, `spawn`, and the loops.
+/// subscripts, lambdas, generics, abort handlers, `spawn`, and the block
+/// arguments everything that reads as control flow is built from.
 package main;
 
 import std;
@@ -159,9 +160,15 @@ Environment.of(names Array<String, 4>, values Array<Float, 4>) => init{
 
 /// A read-only method, called with `:`. It aborts rather than returning a
 /// sentinel, so every caller has to say what an unknown name means.
+///
+/// Counted repetition is a `mut` method on the counter handed a block, not a
+/// construct: the counter is an ordinary local the block captures, and the
+/// range it walks is inclusive from the first position, which is 1.
 Float?String lookup(this Environment, wanted String) {
-	loop index from 0 to this._count - 1 {
-		if this.names[index] == wanted {
+	index Int = Int(1);
+	index!to(this._count) {
+		// `if` is a call too: its block is the one trailing its arguments.
+		if(this.names[index] == wanted) {
 			return this.values[index];
 		}
 	}
@@ -171,15 +178,15 @@ Float?String lookup(this Environment, wanted String) {
 
 /// A mutating method, declared `mut` and called with `!`.
 Unit bind(this Environment, wanted String, value Float) mut {
-	// `guard` leaves the scope when its condition holds, after running the
-	// block attached to it.
-	guard 4 <= this._count {
+	if(4 <= this._count) {
 		std$print("environment is full");
 		return Unit();
 	}
 
-	this.names[this._count] = wanted;
-	this.values[this._count] = value;
+	// Positions run 1 through the size, so the slot after the last live one
+	// is `_count + 1`.
+	this.names[this._count + 1] = wanted;
+	this.values[this._count + 1] = value;
 	this._count = this._count + 1;
 	return Unit();
 }
@@ -192,7 +199,7 @@ type Cursor = #struct {
 	position Int;
 }
 
-Cursor(env &Environment) => init{ env, position = Int(0) };
+Cursor(env &Environment) => init{ env, position = Int(1) };
 
 /// Reading through a guest is ordinary access; the subscript above resolves
 /// the same way it does on a host.
@@ -233,7 +240,7 @@ Float?String evaluate(node Expr, env &Environment) {
 /// An enum scrutinee matches the same way a variant does, minus the binders.
 Float?String apply(op Operator, left Float, right Float) {
 	empty Bool = right == Float(0);
-	if empty and Operator.div == op {
+	if(empty and Operator.div == op) {
 		abort "division by zero";
 	}
 
@@ -283,7 +290,7 @@ Pair<T> ~(value Pair<T Type>) => Pair(~value.left, ~value.right);
 
 /// A verb introduces a number parameter the same way, inside a parameter's
 /// own type.
-T first(values Array<T Type, n Number>) => values[0];
+T first(values Array<T Type, n Number>) => values[1];
 
 /// A concept-typed parameter accepts a source literal and lowers it.
 String quote(text @concepts$Text) => "\"" + String(text) + "\"";
@@ -292,18 +299,23 @@ String quote(text @concepts$Text) => "\"" + String(text) + "\"";
 // Reporting
 // ---------------------------------------------------------------------------
 
-/// An `if` chain. Peers compare with `==` like any other value, so a branch
-/// on one needs no `match`.
+/// A branching chain. Nothing here is grammar: `guard` is a verb over the exit
+/// intrinsic, and `if`, `elif` and `else` are verbs taking a block. The chain
+/// is held together by the `Bool` the first one returns and the later ones
+/// read, so it is a run of ordinary calls rather than one construct.
+///
+/// The `elif` condition is written as a block, which picks the overload that
+/// defers it: it runs only if no earlier branch matched.
 Unit announce(entry Report) {
-	guard entry.span.length < 1;
+	guard(entry.span.length < 1);
 
-	if Severity.failure == entry.severity {
+	ran Bool = if(Severity.failure == entry.severity) {
 		std$print("stopped: " + entry:render());
-	}
-	elif Severity.warning == entry.severity {
+	};
+	ran!elif({ resolve Severity.warning == entry.severity; }) {
 		std$print("carrying on: " + entry:render());
 	}
-	else {
+	ran:else() {
 		std$print(entry:render());
 	}
 
@@ -358,9 +370,10 @@ Unit main() {
 	spread Int = Operator.mul.precedence - Operator.add.precedence;
 
 	// A subscript expression reaches through the declaration above, and the
-	// counted loop is inclusive at both ends.
+	// counted repetition is inclusive at both ends, and starts at 1.
 	total Float = Float(0);
-	loop index from 0 to 3 {
+	index Int = Int(1);
+	index!to(4) {
 		total = total + env[index];
 	}
 
@@ -399,7 +412,7 @@ Unit main() {
 	spawn std$print(total);
 	spawn evaluate(program, &env) ?? Float(0);
 
-	guard settled {
+	if(settled) {
 		std$print("settled");
 		return Unit();
 	}

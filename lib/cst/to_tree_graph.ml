@@ -90,6 +90,9 @@ and type_to_node (x: Nodes.Type_expr.t) = match x with
 and abort_field abort_handle =
   ("abort", Option.fold ~none:(Leaf "none") ~some:abort_handle_to_node abort_handle)
 
+(* Optional fields are appended in source order rather than consed onto the
+   front, here and everywhere below, so the list reads the way the construct
+   does. *)
 and field_arg_to_node (x: Nodes.Field_arg.t) =
   let fs = [("name", Leaf x.name)] in
   let fs = match x.value with
@@ -98,18 +101,26 @@ and field_arg_to_node (x: Nodes.Field_arg.t) =
   in
   fields fs
 
+and call_arg_to_node (x: Nodes.Call_arg.t) = match x with
+  | Value x -> expr_to_node x
+  | Block stats -> group "block" (fields [("stat", map_seq stat_to_node stats)])
+
+and constructor_args_to_node (x: Nodes.Constructor_args.t) = match x with
+  | Positional args -> map_seq call_arg_to_node args
+  | Fields args -> group "fields" (map_seq field_arg_to_node args)
+
 and verb_call_to_node (x: Nodes.Verb_call.t) = match x with
   | Func { callee; args; abort_handle } ->
       group "func_call" (fields [
         ("callee", expr_to_node callee);
-        ("args", map_seq expr_to_node args);
+        ("args", map_seq call_arg_to_node args);
         abort_field abort_handle;
       ])
   | Meth { callee; this; args; abort_handle; is_mut } ->
       group "meth_call" (fields [
         ("callee", expr_to_node callee);
         ("this", expr_to_node this);
-        ("args", map_seq expr_to_node args);
+        ("args", map_seq call_arg_to_node args);
         ("is_mut", Leaf (string_of_bool is_mut));
         abort_field abort_handle;
       ])
@@ -119,12 +130,8 @@ and verb_call_to_node (x: Nodes.Verb_call.t) = match x with
         | Some member -> fs @ [("member", Leaf member)]
         | None -> fs
       in
-      let args = match args with
-        | Nodes.Constructor_args.Positional args -> map_seq expr_to_node args
-        | Nodes.Constructor_args.Fields args -> group "fields" (map_seq field_arg_to_node args)
-      in
       group "ctor_call" (fields (fs @ [
-        ("args", args);
+        ("args", constructor_args_to_node args);
         abort_field abort_handle;
       ]))
   | Op { op; left; right; abort_handle } ->
@@ -260,47 +267,6 @@ and constructor_field_to_node (x: Nodes.Constructor_field.t) =
   in
   fields fs
 
-and elif_to_fields (x: Nodes.Cond_block.t) =
-  fields [
-    ("cond", expr_to_node x.cond);
-    ("block", map_seq stat_to_node x.block);
-  ]
-
-(* The optional fields below are appended in source order rather than consed
-   onto the front, so the list reads the way the construct does. *)
-and cond_seq_to_node (x: Nodes.Cond_seq.t) =
-  let else_ = match x.else_ with
-    | Some x -> [("else", fields [("block", map_seq stat_to_node x)])]
-    | None   -> []
-  in
-  fields ([
-    ("if", fields [
-      ("cond", expr_to_node x.if_.cond);
-      ("block", map_seq stat_to_node x.if_.block);
-    ]);
-    ("elif", map_seq elif_to_fields x.elifs_);
-  ] @ else_)
-
-and loop_to_node (x: Nodes.Loop.t) =
-  let start = match x.start with
-    | Some x -> [("start", expr_to_node x)]
-    | None   -> []
-  in
-  let fs = start @ [
-    ("stats", map_seq stat_to_node x.body);
-    ("end", expr_to_node x.end_);
-    ("binder", Leaf x.binder);
-  ] in
-  fields fs
-
-and guard_to_node (x: Nodes.Guard.t) =
-  let fs = [("cond", expr_to_node x.cond)] in
-  let fs = match x.body with
-    | Some body -> fs @ [("body", map_seq stat_to_node body)]
-    | None -> fs
-  in
-  fields fs
-
 and stat_to_node (x: Nodes.Stat.t) = match x with
   | VerbCall x -> verb_call_to_node x
   | Spawn x    -> group "spawn_stat" (verb_call_to_node x)
@@ -313,9 +279,6 @@ and stat_to_node (x: Nodes.Stat.t) = match x with
   | Abort x    -> group "abort_stat"   (expr_to_node x)
   | Ret x      -> group "ret_stat"     (expr_to_node x)
   | Resolve x  -> group "resolve_stat" (expr_to_node x)
-  | Guard x    -> group "guard" (guard_to_node x)
-  | CondSeq x  -> cond_seq_to_node x
-  | Loop x     -> group "loop" (loop_to_node x)
 
 and body_to_node (x: Nodes.Body.t) = match x with
   | Longhand x ->
@@ -388,11 +351,8 @@ and decl_to_node (x: Nodes.Decl.t) = match x with
         | Some member -> fs @ [("member", Leaf member)]
         | None -> fs
       in
-      let args = match args with
-        | Nodes.Constructor_args.Positional args -> map_seq expr_to_node args
-        | Nodes.Constructor_args.Fields args -> group "fields" (map_seq field_arg_to_node args)
-      in
-      group "var_decl_shorthand" (fields (fs @ [("args", args)]))
+      group "var_decl_shorthand"
+        (fields (fs @ [("args", constructor_args_to_node args)]))
   | Type x ->
       group "type_decl" (fields [
         ("name",   Leaf x.name);

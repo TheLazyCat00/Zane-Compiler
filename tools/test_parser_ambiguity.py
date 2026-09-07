@@ -150,6 +150,52 @@ class ParserGrammarAmbiguityTests(unittest.TestCase):
             "ref(paren(lambda(bool)))",
         )
 
+    def test_a_trailing_block_joins_the_outer_call(self) -> None:
+        self.assert_grouping(
+            "UIDENT LIDENT LPAREN RPAREN LCURLY ABORT "
+            "LIDENT LPAREN FALSE LPAREN RPAREN RPAREN LCURLY RCURLY "
+            "SEMICOLON RCURLY EOF",
+            "Int length() { abort value(false()) { }; }",
+            "call(name, call(bool), block)",
+        )
+
+    def test_both_spellings_of_a_block_argument_are_arguments(self) -> None:
+        self.assert_grouping(
+            "UIDENT LIDENT LPAREN RPAREN LCURLY ABORT "
+            "LIDENT LPAREN LCURLY ABORT FALSE SEMICOLON RCURLY RPAREN "
+            "LCURLY RCURLY SEMICOLON RCURLY EOF",
+            "Int length() { abort value({ abort false; }) { }; }",
+            "call(name, block, block)",
+        )
+
+    def test_a_trailing_block_reaches_a_method_call(self) -> None:
+        self.assert_grouping(
+            "UIDENT LIDENT LPAREN RPAREN LCURLY ABORT "
+            "LIDENT LPAREN RPAREN COLON LIDENT LPAREN RPAREN LCURLY RCURLY "
+            "SEMICOLON RCURLY EOF",
+            "Int length() { abort value():length() { }; }",
+            "meth(call(name), name, block)",
+        )
+
+    def test_a_match_keeps_the_brace_that_holds_its_arms(self) -> None:
+        self.assert_grouping(
+            "UIDENT LIDENT LPAREN RPAREN LCURLY ABORT "
+            "MATCH LIDENT LPAREN RPAREN LCURLY RCURLY SEMICOLON RCURLY EOF",
+            "Int length() { abort match value() { }; }",
+            "match(call(name))",
+        )
+
+    def test_a_scrutinee_takes_a_block_only_when_the_arms_still_have_one(
+        self,
+    ) -> None:
+        self.assert_grouping(
+            "UIDENT LIDENT LPAREN RPAREN LCURLY ABORT "
+            "MATCH LIDENT LPAREN RPAREN LCURLY RCURLY LCURLY RCURLY "
+            "SEMICOLON RCURLY EOF",
+            "Int length() { abort match value() { } { }; }",
+            "match(call(name, block))",
+        )
+
     def test_bare_type_member_has_one_value_reading(self) -> None:
         self.assert_grouping(
             "UIDENT LIDENT LPAREN RPAREN LCURLY ABORT "

@@ -114,17 +114,26 @@ and Field_arg : sig
   }
 end = Field_arg
 
+(* An argument written at a call site. A block argument is a run of statements
+   the callee runs, and it is spelled here rather than in [Expr.t] because it is
+   never a value: the grammar admits one only in an argument position. *)
+and Call_arg : sig
+  type t =
+    | Value of Expr.t
+    | Block of Stat.t list
+end = Call_arg
+
 and Constructor_args : sig
   type t =
-    | Positional of Expr.t list
+    | Positional of Call_arg.t list
     | Fields of Field_arg.t list
 end = Constructor_args
 
 (* needs grouping because then we can unify the abort handling *)
 and Verb_call : sig
   type t =
-    | Func        of { callee: Expr.t; args: Expr.t list; abort_handle: Abort_handle.t option; }
-    | Meth        of { callee: Expr.t; this: Expr.t; args: Expr.t list; abort_handle: Abort_handle.t option; is_mut: bool; }
+    | Func        of { callee: Expr.t; args: Call_arg.t list; abort_handle: Abort_handle.t option; }
+    | Meth        of { callee: Expr.t; this: Expr.t; args: Call_arg.t list; abort_handle: Abort_handle.t option; is_mut: bool; }
     | Constructor of { name: Constructor_name.t; args: Constructor_args.t; abort_handle: Abort_handle.t option; }
     | Op          of { op: Operator.t; left: Expr.t; right: Expr.t; abort_handle: Abort_handle.t option; }
     | Flip        of { value: Expr.t; abort_handle: Abort_handle.t option; }
@@ -209,37 +218,6 @@ and Constructor_params : sig
     | Fields of Constructor_field.t list
 end = Constructor_params
 
-and Cond_block : sig
-  type t = {
-    cond : Expr.t;
-    block : Stat.t list;
-  }
-end = Cond_block
-
-and Cond_seq : sig
-  type t = {
-    if_ : Cond_block.t;
-    elifs_ : Cond_block.t list;
-    else_ : Stat.t list option;
-  }
-end = Cond_seq
-
-and Loop : sig
-  type t = {
-    start : Expr.t option;
-    end_ : Expr.t;
-    binder : string;
-    body : Stat.t list;
-  }
-end = Loop
-
-and Guard : sig
-  type t = {
-    cond : Expr.t;
-    body : Stat.t list option;
-  }
-end = Guard
-
 and Match_pattern : sig
   type t = {
     binder : string option;
@@ -271,9 +249,6 @@ and Stat : sig
     | Abort of Expr.t
     | Ret of Expr.t
     | Resolve of Expr.t
-    | Guard of Guard.t
-    | CondSeq of Cond_seq.t
-    | Loop of Loop.t
 end = Stat
 
 and Body : sig

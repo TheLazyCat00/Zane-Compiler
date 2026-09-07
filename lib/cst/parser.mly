@@ -108,18 +108,11 @@ let constructor_expr name args =
 %token IMPORT      "import"
 %token IMPLICIT    "implicit"
 %token INIT        "init"
-%token IF          "if"
-%token ELIF        "elif"
-%token ELSE        "else"
-%token GUARD       "guard"
 %token MATCH       "match"
 %token AND         "and"
 %token OR          "or"
 %token SPAWN       "spawn"
 %token TRUE        "true"
-%token LOOP        "loop"
-%token FROM        "from"
-%token TO          "to"
 %token FALSE       "false"
 %token THIS        "this"
 %token MUT         "mut"
@@ -163,6 +156,10 @@ let constructor_expr name args =
 
    The rule is the same at the top level and inside a body, so moving a
    declaration between them does not change how it is spelled.
+
+   A call statement follows it too: one that ends in a trailing block is closed
+   by that block and takes no terminator, while every other call statement
+   takes `;`.
 
    The spec separates statements by newline instead; see
    docs/spec-divergences.md. *)
@@ -285,8 +282,23 @@ type_expr:
       ({ Nodes.Field_arg.name; value } : Nodes.Field_arg.t)
     }
 
+(* A braced run of statements handed to a call and run by the callee. It is not
+   an expression: it may be written only where a call takes arguments, which is
+   what keeps a block from being stored, returned, or bound to a symbol. *)
+%inline block_arg:
+  | "{" stats=list(stat) "}" {
+      Nodes.Call_arg.Block stats
+    }
+
+%inline call_arg:
+  | value=expr { Nodes.Call_arg.Value value }
+  | block=block_arg { block }
+
+%inline call_args:
+  | args=separated_list(",", call_arg) { args }
+
 %inline constructor_args:
-  | "(" args=separated_list(",", expr) ")" {
+  | "(" args=call_args ")" {
       Nodes.Constructor_args.Positional args
     }
   | "{" args=separated_list(",", field_arg) "}" {
@@ -579,27 +591,51 @@ abort_ret_type:
   | ":" { false }
   | "!" { true }
 
-verb_call:
-  | receiver=func_callee "(" args=separated_list(",", expr) ")" {
+(* At most one of a call's block arguments may trail its closing `)`, where it
+   still reads as the last argument. The two spellings are the same call, so
+   the productions below take the tail as a parameter and build one node.
+
+   A constructor call is left out of this rule, because `Foo() { ... }` already
+   spells a constructor declaration with a block body; a constructor takes its
+   blocks in the argument list. See docs/spec-divergences.md. *)
+%inline no_trailing_block:
+  | { ([] : Nodes.Call_arg.t list) }
+
+%inline trailing_block:
+  | block=block_arg { [ block ] }
+
+computed_call(trailer):
+  | receiver=func_callee "(" args=call_args ")" trailing=trailer {
       fun abort_handle -> Nodes.Verb_call.Func {
         callee = receiver;
-        args;
+        args = args @ trailing;
         abort_handle;
       }
     }
-  | receiver=app part=meth_part "(" args=separated_list(",", expr) ")" {
+  | receiver=app part=meth_part "(" args=call_args ")" trailing=trailer {
       let is_mut, callee = part in
       fun abort_handle -> Nodes.Verb_call.Meth {
         callee;
         this = receiver;
-        args;
+        args = args @ trailing;
         abort_handle;
         is_mut;
       }
     }
+
+verb_call:
+  | call=computed_call(no_trailing_block) { call }
   | name=constructor_name args=constructor_args {
       fun abort_handle -> Nodes.Verb_call.Constructor { name; args; abort_handle }
     }
+
+(* A call closed by a trailing block. It is an expression rather than a postfix
+   base, so a further postfix reaches what such a call produces only through
+   parentheses. `spawn` takes a bare [verb_call] and so cannot reach one at all,
+   which is where "a verb declaring a block parameter is never spawned" falls
+   out of the grammar rather than being written as a rule. *)
+block_call:
+  | call=computed_call(trailing_block) { call }
 
 %inline operator:
   | op=comparison_decl_op { op }
@@ -710,6 +746,7 @@ app:
 
 expr:
   | app=app { app }
+  | call=block_call { Nodes.Expr.VerbCall (call None) }
   | value=spawn_expr { value }
   | func_lambda=func_lambda(body) { Nodes.Expr.FuncLambda func_lambda }
   | meth_lambda=meth_lambda(body) { Nodes.Expr.MethLambda meth_lambda }
@@ -803,6 +840,12 @@ stat:
   | call=verb_call abort_handle=ioption(abort_handle) ";" {
       Nodes.Stat.VerbCall (call abort_handle)
     }
+  (* Closed by its own trailing block, so it takes no terminator. An abort
+     handler is written where the call's value is bound, since a handler brings
+     a terminator question of its own. *)
+  | call=block_call {
+      Nodes.Stat.VerbCall (call None)
+    }
   | SPAWN call=verb_call abort_handle=ioption(abort_handle) ";" {
       Nodes.Stat.Spawn (call abort_handle)
     }
@@ -814,38 +857,6 @@ stat:
     }
   | RESOLVE value=expr ";" {
       Nodes.Stat.Resolve value
-    }
-  | GUARD cond=expr ";" {
-      Nodes.Stat.Guard { cond; body = None }
-    }
-  | GUARD cond=expr "{" body=list(stat) "}" {
-      Nodes.Stat.Guard { cond; body = Some body }
-    }
-  | if_=if_ elifs_=list(elif_) else_=ioption(else_) {
-      Nodes.Stat.CondSeq Nodes.Cond_seq.{ if_; elifs_; else_ }
-    }
-  | loop=loop {
-      Nodes.Stat.Loop loop
-    }
-
-%inline if_:
-  | IF cond=expr "{" block=list(stat) "}" {
-      { Nodes.Cond_block.cond; block }
-    }
-
-%inline elif_:
-  | ELIF cond=expr "{" block=list(stat) "}" {
-      { Nodes.Cond_block.cond; block }
-    }
-
-%inline else_:
-  | ELSE "{" statements=list(stat) "}" {
-      statements
-    }
-
-%inline loop:
-  | LOOP binder=LIDENT start=ioption(preceded(FROM, expr)) TO end_=expr "{" statements=list(stat) "}" {
-      ({ Nodes.Loop.start; end_; binder; body = statements } : Nodes.Loop.t)
     }
 
 %inline param_type:
