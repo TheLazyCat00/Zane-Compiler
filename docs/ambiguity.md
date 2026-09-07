@@ -96,6 +96,24 @@ intended reading point opposite ways here. Settling that is a language
 decision, and until it is settled these states carry neither a precedence
 resolution nor a transience argument.
 
+What the grammar does today is pinned by three witnesses, each accepted by
+exactly one derivation, so the fork is resolved rather than ambiguous on them:
+
+```sh
+ambiguity check LIDENT UIDENT EQUAL MATCH LIDENT LPAREN RPAREN LCURLY RCURLY LCURLY LIDENT THICK_ARROW INT SEMICOLON RCURLY SEMICOLON EOF
+```
+
+`x Int = match f() { } { a => 1; };` is accepted, and reads the first brace as
+the call's block and the second as the arms. `x Int = match f() { a => 1; };`
+is accepted the only way it can be, since `a => 1;` is not a statement and so
+cannot be the call's block. `x Int = match f() { a => 1; } { };` is rejected
+for the same reason, once the arms are spent there is nothing left to take the
+last brace. The first of the three is what block arguments added: before them
+it was rejected. That every arm list which is not also a statement list escapes
+the fork is the shape a transience argument would have to take, and it is not
+one yet — the case where a brace's contents read as both has not been ruled
+out.
+
 There were twelve more, on `[`, and all twelve were one adjacency: an enum
 map's type was a `type_expr`, whose own run of verb-type suffixes had to be
 closed before the entry list's bracket could be shifted. Which kind a bracket
