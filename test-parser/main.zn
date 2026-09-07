@@ -183,8 +183,10 @@ Unit bind(this Environment, wanted String, value Float) mut {
 		return Unit();
 	}
 
-	this.names[this._count] = wanted;
-	this.values[this._count] = value;
+	// Positions run 1 through the size, so the slot after the last live one
+	// is `_count + 1`.
+	this.names[this._count + 1] = wanted;
+	this.values[this._count + 1] = value;
 	this._count = this._count + 1;
 	return Unit();
 }
@@ -197,7 +199,7 @@ type Cursor = #struct {
 	position Int;
 }
 
-Cursor(env &Environment) => init{ env, position = Int(0) };
+Cursor(env &Environment) => init{ env, position = Int(1) };
 
 /// Reading through a guest is ordinary access; the subscript above resolves
 /// the same way it does on a host.
@@ -288,7 +290,7 @@ Pair<T> ~(value Pair<T Type>) => Pair(~value.left, ~value.right);
 
 /// A verb introduces a number parameter the same way, inside a parameter's
 /// own type.
-T first(values Array<T Type, n Number>) => values[0];
+T first(values Array<T Type, n Number>) => values[1];
 
 /// A concept-typed parameter accepts a source literal and lowers it.
 String quote(text @concepts$Text) => "\"" + String(text) + "\"";
