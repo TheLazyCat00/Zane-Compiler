@@ -1,12 +1,10 @@
-# Refinement diagnostic, base level 1, ceiling 9
+# Refinement diagnostic, base level 1, ceiling 9 -- completed
 #
-# Engine: tools/ambiguity_search.ml, built with ocamlopt 4.14.1 outside the
-# project toolchain; Menhir 20231231. State numbers are Menhir-version
-# sensitive, so re-read them with `just explain --state N` under the same
-# Menhir before citing them.
+# Engine: tools/ambiguity_search.ml built with ocamlopt 4.14.1; Menhir 20231231.
+# State numbers are Menhir-version sensitive.
 # Grammar: lib/cst/parser.mly at 27d6b4c.
 # Command: ambiguity_search.exe lib/cst/parser.mly --prove 1 --prove-refine 9 --prove-refine-rounds 14 --prove-retire 3 --max-tokens 16 --timeout 2400 --max-witnesses 5
-# Killed by a container restart after round 10, so it reports no verdict.
+# Ran to its own verdict. Supersedes the interrupted run of the same shape.
 #
 Search constraints: 0..16 total tokens; 0-token prefix; breadth-first scheduling.
 Proof budget: 6316128 abstract pairs (single-threaded; the 4-worker split does not apply).
@@ -23,7 +21,7 @@ Retired the divergence site at state 325 on lookahead LPAREN: 3 consecutive roun
 Refinement round 9: deepened the stacks behind UIDENT LCURLY RCURLY LCURLY THIS LPAREN RPAREN LCURLY RCURLY SEMICOLON EOF, retaining up to 9 (state 856 to 9, state 127 to 8, state 855 to 9, state 851 to 9, state 854 to 9, state 853 to 9, state 852 to 9).
 Refinement round 10: deepened the stacks behind LIDENT UIDENT EQUAL LBRACKET TILDE UIDENT DOT LIDENT LCURLY RCURLY SEMICOLON EOF, retaining up to 9 (state 143 to 9, state 145 to 5, state 142 to 8, state 163 to 7, state 126 to 6).
 Refinement round 11: deepened the stacks behind LIDENT UIDENT LPAREN LCURLY LIDENT LPAREN UIDENT LBRACKET NUMBER RBRACKET SEMICOLON EOF, retaining up to 9 (state 52 to 9, state 58 to 9, state 12 to 9, state 48 to 9, state 53 to 9, state 482 to 9, state 77 to 9, state 47 to 9, state 73 to 9, state 57 to 8, state 324 to 2, state 46 to 9, state 320 to 8).
-NOT PROVEN: the timeout (2400s) expired during the abstract phase at level 1, after 556937 pairs. Raise --timeout, or lower --prove.
+NOT PROVEN: the timeout (2400s) expired during the abstract phase at level 1, after 558517 pairs. Raise --timeout, or lower --prove.
 Retired 2 divergence site(s), each after refinement stopped moving it. The grammar is unproven at these sites and nowhere else:
   1. state 192 on lookahead LCURLY: 3 consecutive round(s) of deepening left the divergence at the same site
      reached by: UIDENT LCURLY RCURLY LCURLY THIS RPAREN LCURLY RCURLY SEMICOLON EOF
