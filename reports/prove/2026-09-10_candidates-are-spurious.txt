@@ -1,0 +1,30 @@
+# Concretising the prover's candidates
+#
+# Engine: tools/ambiguity_search.ml built with ocamlopt 4.14.1; Menhir 20231231.
+# Grammar: lib/cst/parser.mly at 4ec14bd.
+# Command: ambiguity check <tokens>   (--check-tokens, a real GLR recognizer)
+#
+# Every candidate the abstraction reported was fed back to the recognizer.
+# "Accepting derivations" is 0 rejected, 1 accepted and unambiguous, 2+
+# ambiguous. All four come back 0: the sentences are not ambiguous, they are
+# not accepted at all. The pairs are spurious, which is what the engine's own
+# "(possibly spurious)" label allows for.
+
+  0   LIDENT UIDENT LPAREN LIDENT LPAREN UIDENT LBRACKET RBRACKET SEMICOLON EOF
+      site 325, surviving candidate at sweep level 4
+  0   LIDENT UIDENT LPAREN LIDENT LPAREN UIDENT RPAREN SEMICOLON EOF
+      site 325, candidate at level 1 and the subject of the forward trace
+  0   LIDENT UIDENT LPAREN LIDENT LPAREN UIDENT LBRACKET AMPERSAND UIDENT SEMICOLON EOF
+      site 325, candidate at refinement round 8, the round before it retired
+  0   UIDENT LCURLY RCURLY LCURLY THIS RPAREN LCURLY RCURLY SEMICOLON EOF
+      site 192, the candidate reported when it retired
+
+# Controls, same binary and invocation:
+  1   LIDENT UIDENT EQUAL INT SEMICOLON EOF                     (x Int = 1;)
+  1   LIDENT UIDENT EQUAL MATCH LIDENT LPAREN RPAREN LCURLY LIDENT THICK_ARROW INT SEMICOLON RCURLY SEMICOLON EOF
+  0   LPAREN LPAREN SEMICOLON EOF                               (not a program)
+
+# This is consistent with every proof run so far exiting 3 (not proven) and
+# never 1 (a concrete ambiguous sentence was found): the concretization search
+# that follows the abstract phase has never turned a candidate into a witness.
+# It is evidence about these candidates, not a proof about the grammar.
